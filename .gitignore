@@ -1,0 +1,46 @@
+# =============================================
+# FocusLife Hub — .gitignore
+# =============================================
+
+# ── Environment ──
+.env
+.env.*
+!.env.example
+
+# ── Docker ──
+docker-compose.override.yml
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ── IDE ──
+.vscode/
+.idea/
+*.iml
+.project
+.classpath
+.settings/
+
+# ── Build outputs ──
+dist/
+build/
+target/
+*.log
+
+# ── Dependencies ──
+node_modules/
+
+# ── Java ──
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+.mvn/wrapper/maven-wrapper.jar
+
+# ── Misc ──
+*.pid
+*.seed
+*.pid.lock
