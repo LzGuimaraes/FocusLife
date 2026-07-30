@@ -1,0 +1,8 @@
+/* FocusLife Hub — App-level styles */
+/* Utility classes and print styles */
+
+@media print {
+  aside, header { display: none !important; }
+  main { margin-left: 0 !important; padding: 0 !important; }
+}
+

@@ -17,7 +17,7 @@ services:
       retries: 5
 
   backend:
-    build: ./FocusLifeHub
+    build: ./backend
     container_name: focuslife-api
     environment:
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
@@ -31,7 +31,7 @@ services:
         condition: service_healthy
 
   frontend:
-    build: ./FocusLifeHubFront
+    build: ./frontend
     container_name: focuslife-web
     ports:
       - "${FRONTEND_PORT}:80"
