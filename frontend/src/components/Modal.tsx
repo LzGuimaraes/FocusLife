@@ -28,10 +28,10 @@ export default function Modal({ open, onClose, title, children, onSubmit, submit
       }}>
         <div style={{ padding: "clamp(14px, 2.5vw, 20px) clamp(16px, 3vw, 24px)", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "white", zIndex: 1 }}>
           <h2 style={{ fontSize: "clamp(16px, 2vw, 18px)", fontWeight: 700, color: "#0f172a", margin: 0 }}>{title}</h2>
-          <button onClick={onClose}
-            style={{ background: "var(--color-bg)", border: "none", borderRadius: "var(--radius-sm)", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: "18px", color: "var(--color-text-secondary)", transition: "all var(--transition-fast)" }}
+          <button onClick={onClose} aria-label="Fechar"
+            style={{ background: "#f1f5f9", border: "none", borderRadius: "8px", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: "16px", color: "#64748b", transition: "all 0.15s ease" }}
             onMouseEnter={e => { e.currentTarget.style.background = "#e2e8f0"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "var(--color-bg)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "#f1f5f9"; }}
           >✕</button>
         </div>
 
@@ -40,13 +40,15 @@ export default function Modal({ open, onClose, title, children, onSubmit, submit
           {onSubmit && (
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "8px" }}>
               <button type="button" onClick={onClose}
-                style={{ padding: "10px 20px", background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", cursor: "pointer", fontSize: "14px", fontWeight: 500, color: "var(--color-text-secondary)", transition: "all var(--transition-fast)" }}>
+                style={{ padding: "10px 20px", background: "#f1f5f9", border: "1.5px solid #e2e8f0", borderRadius: "10px", cursor: "pointer", fontSize: "14px", fontWeight: 500, color: "#64748b", transition: "all 0.15s ease" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#e2e8f0"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "#f1f5f9"; }}>
                 Cancelar
               </button>
               <button type="submit"
-                style={{ padding: "10px 24px", background: "var(--color-primary)", color: "white", border: "none", borderRadius: "var(--radius-md)", cursor: "pointer", fontSize: "14px", fontWeight: 600, transition: "all var(--transition-fast)" }}
-                onMouseEnter={e => { e.currentTarget.style.background = "var(--color-primary-hover)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "var(--color-primary)"; }}>
+                style={{ padding: "10px 24px", background: "#6366f1", color: "white", border: "none", borderRadius: "10px", cursor: "pointer", fontSize: "14px", fontWeight: 600, transition: "all 0.15s ease" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#4f46e5"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "#6366f1"; e.currentTarget.style.transform = "translateY(0)"; }}>
                 {submitLabel || "Salvar"}
               </button>
             </div>
@@ -56,22 +58,3 @@ export default function Modal({ open, onClose, title, children, onSubmit, submit
     </div>
   );
 }
-
-/* Shared input styles */
-export const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "11px 14px", fontSize: "14px",
-  border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)",
-  background: "var(--color-bg)", color: "var(--color-text)",
-  outline: "none", transition: "all var(--transition-fast)",
-};
-
-export const labelStyle: React.CSSProperties = {
-  fontSize: "13px", fontWeight: 600, color: "var(--color-text-secondary)",
-  marginBottom: "2px", display: "block",
-};
-
-export const selectStyle: React.CSSProperties = {
-  ...inputStyle, cursor: "pointer", appearance: "none" as const,
-  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
-  backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center", paddingRight: "36px",
-};

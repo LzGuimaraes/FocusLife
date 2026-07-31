@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { TrendingUp, Receipt, Pencil, Trash2, FolderOpen, DollarSign, Briefcase } from "lucide-react";
 import api from "../api/api";
 import Layout from "../components/Layout";
 import Modal from "../components/Modal";
 import { Input, Select } from "../components/Form";
+import { Button } from "../components/Shared";
+import { Card, StatCard, Badge } from "../components/Shared";
 import { PageHeader, CardGrid, EmptyState, Spinner } from "../components/UI";
 
 type TipoCarteira = "INVESTIMENTO" | "DESPESAS";
@@ -13,9 +16,9 @@ interface FormData { nome: string; moeda: string; tipoCarteira: TipoCarteira; }
 const moedaS: Record<string, string> = { BRL: "R$", USD: "$", EUR: "€", GBP: "£", JPY: "¥" };
 type Errors = Partial<Record<keyof FormData, string>>;
 
-const tipoInfo: Record<TipoCarteira, { icon: string; label: string; color: string; bg: string; desc: string; btnColor: string }> = {
-  INVESTIMENTO: { icon: "📈", label: "Investimentos", color: "#8b5cf6", bg: "#f5f3ff", desc: "Renda Fixa, Ações, FIIs, ETFs, Cripto", btnColor: "#8b5cf6" },
-  DESPESAS: { icon: "📋", label: "Despesas", color: "#ef4444", bg: "#fef2f2", desc: "Contas e gastos mensais", btnColor: "#ef4444" },
+const tipoInfo: Record<TipoCarteira, { icon: typeof TrendingUp; label: string; color: string; bg: string; desc: string }> = {
+  INVESTIMENTO: { icon: TrendingUp, label: "Investimentos", color: "#6366f1", bg: "#eef2ff", desc: "Renda Fixa, Ações, FIIs, ETFs, Cripto" },
+  DESPESAS: { icon: Receipt, label: "Despesas", color: "#ef4444", bg: "#fef2f2", desc: "Contas e gastos mensais" },
 };
 
 export default function Financas() {
@@ -46,39 +49,54 @@ export default function Financas() {
     <Layout>
       <PageHeader icon="💰" title="Carteiras" subtitle="Gerencie suas carteiras de investimentos e despesas" actionLabel="Nova Carteira" onAction={() => openModal()} />
 
+      {/* ── Stats Row ── */}
       {!loading && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "clamp(8px, 1.5vw, 14px)", marginBottom: "20px" }} className="animate-fade-in">
-          {[{ icon: "📈", label: "Investimentos", value: invest.length, color: "#8b5cf6", bg: "#f5f3ff" },{ icon: "📋", label: "Despesas", value: despesas.length, color: "#ef4444", bg: "#fef2f2" },{ icon: "💼", label: "Total", value: financas.length, color: "#6366f1", bg: "#eef2ff" }].map((s, i) => (
-            <div key={i} style={{ background: "white", borderRadius: "12px", padding: "clamp(14px, 2vw, 18px)", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", display: "flex", flexDirection: "column", gap: "4px", borderLeft: `4px solid ${s.color}` }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}><span style={{ fontSize: "18px" }}>{s.icon}</span><span style={{ fontSize: "12px", fontWeight: 600, color: "#64748b" }}>{s.label}</span></div>
-              <span style={{ fontSize: "22px", fontWeight: 800, color: s.color }}>{s.value}</span>
-            </div>
-          ))}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))", gap: "12px", marginBottom: "24px" }} className="animate-fade-in">
+          <StatCard icon={<TrendingUp size={18} />} label="Investimentos" value={invest.length.toString()} color="#6366f1" />
+          <StatCard icon={<Receipt size={18} />} label="Despesas" value={despesas.length.toString()} color="#ef4444" />
+          <StatCard icon={<Briefcase size={18} />} label="Total" value={financas.length.toString()} color="#10b981" />
         </div>
       )}
 
-      {loading ? <Spinner text="Carregando carteiras..." /> : financas.length === 0 ? <EmptyState icon="💼" title="Nenhuma carteira" text="Crie sua primeira carteira!" actionLabel="Criar Carteira" onAction={() => openModal()} /> :
-        <CardGrid>{financas.map(f => { const ti = tipoInfo[f.tipoCarteira]; return (
-          <div key={f.id} style={{ ...cardStyle, borderLeftColor: ti.color, cursor: "pointer" }}
-            onClick={() => navigate(`/financas/carteiras/${f.id}`)}
-            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 12px 30px rgba(0,0,0,0.12)"; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.05)"; }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "12px", gap: "6px" }}>
-              <span style={{ fontSize: "12px", fontWeight: 700, padding: "5px 12px", borderRadius: "var(--radius-full)", background: ti.bg, color: ti.color }}>{ti.icon} {ti.label}</span>
-              <span style={{ fontSize: "11px", fontWeight: 600, background: "#ecfdf5", color: "#10b981", padding: "4px 10px", borderRadius: "var(--radius-full)" }}>{moedaS[f.moeda] || f.moeda}</span>
-            </div>
-            <h3 style={{ fontSize: "18px", fontWeight: 700, marginBottom: "4px" }}>{f.nome}</h3>
-            <p style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "16px" }}>{ti.desc}</p>
-            <div style={{ display: "flex", gap: "8px", marginTop: "auto", flexWrap: "wrap" }}
-              onClick={e => e.stopPropagation()}>
-              <button onClick={() => navigate(`/financas/carteiras/${f.id}`)} style={{ ...btnSm, background: ti.bg, color: ti.color, fontWeight: 600 }}>📂 Abrir</button>
-              <button onClick={() => openModal(f)} style={btnSm}>✏️ Editar</button>
-              <button onClick={() => handleDelete(f.id)} style={{ ...btnSm, background: "#fee2e2", color: "#ef4444" }}>🗑</button>
-            </div>
-          </div>
-        );})}</CardGrid>
-      }
+      {loading ? <Spinner text="Carregando carteiras..." /> : financas.length === 0 ? (
+        <EmptyState icon="💼" title="Nenhuma carteira" text="Crie sua primeira carteira!" actionLabel="Criar Carteira" onAction={() => openModal()} />
+      ) : (
+        <CardGrid>
+          {financas.map(f => {
+            const ti = tipoInfo[f.tipoCarteira];
+            const Icon = ti.icon;
+            return (
+              <Card key={f.id} accent={ti.color} onClick={() => navigate(`/financas/carteiras/${f.id}`)}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "14px" }}>
+                  <Badge color={ti.color} bg={ti.bg}>
+                    <Icon size={13} /> {ti.label}
+                  </Badge>
+                  <Badge color="#059669" bg="#ecfdf5">
+                    <DollarSign size={12} /> {moedaS[f.moeda] || f.moeda}
+                  </Badge>
+                </div>
+                <h3 style={{ fontSize: "17px", fontWeight: 700, color: "#0f172a", marginBottom: "4px" }}>{f.nome}</h3>
+                <p style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "18px" }}>{ti.desc}</p>
+                <div style={{ display: "flex", gap: "8px", marginTop: "auto" }}
+                  onClick={e => e.stopPropagation()}>
+                  <Button variant="secondary" size="sm" onClick={() => navigate(`/financas/carteiras/${f.id}`)}>
+                    <FolderOpen size={13} /> Abrir
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => openModal(f)}>
+                    <Pencil size={13} />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleDelete(f.id)}
+                    style={{ color: "#ef4444" }}>
+                    <Trash2 size={13} />
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
+        </CardGrid>
+      )}
 
+      {/* ── Modal ── */}
       <Modal open={showModal} onClose={closeModal} title={editing ? "Editar Carteira" : "Nova Carteira"} onSubmit={handleSubmit} submitLabel="Salvar">
         <Input label="Nome da Carteira" value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} placeholder="Ex: Carteira Principal" error={errors.nome} />
         <Select label="Tipo da Carteira" value={form.tipoCarteira} onChange={e => setForm({ ...form, tipoCarteira: e.target.value as TipoCarteira })}>
@@ -92,6 +110,3 @@ export default function Financas() {
     </Layout>
   );
 }
-
-const cardStyle: React.CSSProperties = { background: "white", borderRadius: "14px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", transition: "all 0.25s ease", display: "flex", flexDirection: "column", borderLeft: "5px solid #10b981" };
-const btnSm: React.CSSProperties = { padding: "7px 14px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 600, background: "#f1f5f9", color: "#64748b", transition: "all 0.15s ease" };
