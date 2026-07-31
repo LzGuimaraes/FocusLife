@@ -19,7 +19,8 @@ services:
       - traefik.enable=true
       - traefik.docker.network=proxy
 
-      - traefik.http.routers.backend.rule=Host(`lzguimaraes.com.br`) && PathPrefix(`/api`)
+      # 🔽 MUDANÇA AQUI: agora o backend responde ao subdomínio api.lzguimaraes.com.br
+      - traefik.http.routers.backend.rule=Host(`api.lzguimaraes.com.br`)
       - traefik.http.routers.backend.entrypoints=websecure
       - traefik.http.routers.backend.tls.certresolver=letsencrypt
 
@@ -41,6 +42,7 @@ services:
       - traefik.enable=true
       - traefik.docker.network=proxy
 
+      # Frontend continua no domínio principal
       - traefik.http.routers.frontend.rule=Host(`lzguimaraes.com.br`)
       - traefik.http.routers.frontend.entrypoints=websecure
       - traefik.http.routers.frontend.tls.certresolver=letsencrypt
