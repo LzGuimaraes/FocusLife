@@ -2,20 +2,38 @@ services:
   backend:
     build: ./backend
     container_name: focuslife-api
+
     environment:
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
-    ports:
-      - "${BACKEND_PORT}:8080"
+
     restart: unless-stopped
+
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.backend.rule=Host(`lzguimaraes.com.br`) && PathPrefix(`/api`)
+      - traefik.http.routers.backend.entrypoints=websecure
+      - traefik.http.routers.backend.tls.certresolver=letsencrypt
+
+      - traefik.http.services.backend.loadbalancer.server.port=8080
 
   frontend:
     build: ./frontend
     container_name: focuslife-web
-    ports:
-      - "${FRONTEND_PORT}:80"
+
     depends_on:
       - backend
+
     restart: unless-stopped
+
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.frontend.rule=Host(`lzguimaraes.com.br`)
+      - traefik.http.routers.frontend.entrypoints=websecure
+      - traefik.http.routers.frontend.tls.certresolver=letsencrypt
+
+      - traefik.http.services.frontend.loadbalancer.server.port=80
