@@ -6,11 +6,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.CrossOrigin;
 
 import java.time.LocalDateTime;
 
-@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:5173", "https://focus-life-hub-front.vercel.app"})
 @ControllerAdvice
 public class GlobalExceptionHandler {
 

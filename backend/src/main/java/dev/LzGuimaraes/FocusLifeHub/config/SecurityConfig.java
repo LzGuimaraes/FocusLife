@@ -3,8 +3,8 @@ package dev.LzGuimaraes.FocusLifeHub.config;
 import jakarta.servlet.DispatcherType;
 
 import java.util.Arrays;
-import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -26,7 +26,10 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    private SecurityFilter securityFilter;
+    private final SecurityFilter securityFilter;
+
+    @Value("${cors.allowed-origins:http://localhost:3000,http://localhost:5173}")
+    private String allowedOrigins;
 
     public SecurityConfig(SecurityFilter securityFilter) {
         this.securityFilter = securityFilter;
@@ -49,12 +52,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        
-        configuration.setAllowedOrigins(List.of(
-            "https://focus-life-hub-front.vercel.app",
-            "http://localhost:3000",
-            "http://localhost:5173"
-        ));
+
+        configuration.setAllowedOrigins(
+            java.util.Arrays.asList(allowedOrigins.split(","))
+        );
         
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
         

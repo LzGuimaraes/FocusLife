@@ -8,6 +8,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,https://lzguimaraes.com.br}
 
     restart: unless-stopped
 
