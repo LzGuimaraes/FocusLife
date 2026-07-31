@@ -11,8 +11,12 @@ services:
 
     restart: unless-stopped
 
+    networks:
+      - proxy
+
     labels:
       - traefik.enable=true
+      - traefik.docker.network=proxy
 
       - traefik.http.routers.backend.rule=Host(`lzguimaraes.com.br`) && PathPrefix(`/api`)
       - traefik.http.routers.backend.entrypoints=websecure
@@ -29,11 +33,19 @@ services:
 
     restart: unless-stopped
 
+    networks:
+      - proxy
+
     labels:
       - traefik.enable=true
+      - traefik.docker.network=proxy
 
       - traefik.http.routers.frontend.rule=Host(`lzguimaraes.com.br`)
       - traefik.http.routers.frontend.entrypoints=websecure
       - traefik.http.routers.frontend.tls.certresolver=letsencrypt
 
       - traefik.http.services.frontend.loadbalancer.server.port=80
+
+networks:
+  proxy:
+    external: true
