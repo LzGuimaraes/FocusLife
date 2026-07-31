@@ -1,0 +1,49 @@
+name: Deploy VPS
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy na VPS
+        uses: appleboy/ssh-action@v1.2.0
+
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          passphrase: ${{ secrets.VPS_SSH_PASSPHRASE }}
+
+          script: |
+            set -e
+
+            echo "Entrando no projeto..."
+
+            cd /opt/focuslife
+
+            echo "Atualizando repositório..."
+
+            git fetch origin
+
+            git reset --hard origin/main
+
+            echo "Parando containers antigos..."
+
+            docker compose down
+
+            echo "Construindo novas imagens..."
+
+            docker compose up -d --build
+
+            echo "Limpando imagens antigas..."
+
+            docker image prune -af
+
+            echo "Deploy concluído!"
