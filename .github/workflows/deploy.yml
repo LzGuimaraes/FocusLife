@@ -11,6 +11,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Validar secrets obrigatórios
+        shell: bash
+        env:
+          SPRING_DATASOURCE_URL: ${{ secrets.SPRING_DATASOURCE_URL }}
+          SPRING_DATASOURCE_USERNAME: ${{ secrets.SPRING_DATASOURCE_USERNAME }}
+          SPRING_DATASOURCE_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          CORS_ALLOWED_ORIGINS: ${{ secrets.CORS_ALLOWED_ORIGINS }}
+        run: |
+          set -euo pipefail
+          echo "==> Validando secrets obrigatórios..."
+          for var in SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD JWT_SECRET CORS_ALLOWED_ORIGINS; do
+            if [ -z "${!var}" ]; then
+              echo "::error::$var está vazio. Configure o secret no GitHub (Settings → Secrets and variables → Actions)."
+              exit 1
+            fi
+            echo "  OK: $var configurado"
+          done
+          if [[ "$CORS_ALLOWED_ORIGINS" != http* ]]; then
+            echo "::error::CORS_ALLOWED_ORIGINS está malformado ('$CORS_ALLOWED_ORIGINS'). Use apenas a lista de origens, ex.: http://localhost:3000,https://focus.lzguimaraes.com.br"
+            exit 1
+          fi
+          echo "==> Todos os secrets estão corretos. Prosseguindo com o deploy."
+
       - name: Deploy na VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
