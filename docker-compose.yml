@@ -5,48 +5,32 @@ services:
 
     environment:
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,https://lzguimaraes.com.br}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,https://focus.lzguimaraes.com.br}
 
     restart: unless-stopped
-
     networks:
       - proxy
-
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
-
-      # 🔽 MUDANÇA AQUI: agora o backend responde ao subdomínio api.lzguimaraes.com.br
-      - traefik.http.routers.backend.rule=Host(`api.lzguimaraes.com.br`)
+      - traefik.http.routers.backend.rule=Host(`apifocus.lzguimaraes.com.br`)
       - traefik.http.routers.backend.entrypoints=websecure
       - traefik.http.routers.backend.tls.certresolver=letsencrypt
-
       - traefik.http.services.backend.loadbalancer.server.port=8080
 
   frontend:
     build: ./frontend
     container_name: focuslife-web
-
-    depends_on:
-      - backend
-
     restart: unless-stopped
-
     networks:
       - proxy
-
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
-
-      # Frontend continua no domínio principal
-      - traefik.http.routers.frontend.rule=Host(`lzguimaraes.com.br`)
+      - traefik.http.routers.frontend.rule=Host(`focus.lzguimaraes.com.br`)
       - traefik.http.routers.frontend.entrypoints=websecure
       - traefik.http.routers.frontend.tls.certresolver=letsencrypt
-
       - traefik.http.services.frontend.loadbalancer.server.port=80
 
 networks:
