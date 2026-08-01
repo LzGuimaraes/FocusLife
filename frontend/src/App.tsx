@@ -13,6 +13,7 @@ import Materias from "./pages/Materias";
 import Metas from "./pages/Metas";
 import Estudos from "./pages/Estudos";
 import ComoFunciona from "./pages/ComoFunciona";
+import Admin from "./pages/Admin";
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/metas" element={<PrivateRoute><Metas /></PrivateRoute>} />
           <Route path="/estudos" element={<PrivateRoute><Estudos /></PrivateRoute>} />
           <Route path="/como-funciona" element={<PrivateRoute><ComoFunciona /></PrivateRoute>} />
+          <Route path="/admin" element={<PrivateRoute requireAdmin><Admin /></PrivateRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

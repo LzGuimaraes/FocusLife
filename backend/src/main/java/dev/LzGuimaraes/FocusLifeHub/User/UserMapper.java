@@ -12,10 +12,12 @@ public class UserMapper {
         if (user == null) {
             return null;
         }
+        String role = user.getRole() != null ? user.getRole().name() : "USER";
         return new UserResponseDTO(
             user.getId(),
             user.getNome(),
-            user.getEmail()
+            user.getEmail(),
+            role
         );
     }
 }

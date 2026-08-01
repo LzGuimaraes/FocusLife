@@ -5,7 +5,7 @@ import { useAuth } from "../auth/AuthProvider";
 
 interface LayoutProps { children: ReactNode; }
 
-const navItems = [
+const baseNavItems = [
   { path: "/dashboard", label: "Dashboard", icon: "🏠", color: "#6366f1" },
   { path: "/tarefas",   label: "Tarefas",   icon: "✓",  color: "#06b6d4" },
   { path: "/materias",  label: "Matérias",  icon: "📝", color: "#ec4899" },
@@ -21,6 +21,12 @@ export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+
+  const isAdmin = user?.role === "ADMIN";
+  const navItems = [
+    ...baseNavItems,
+    ...(isAdmin ? [{ path: "/admin", label: "Admin", icon: "🛡️", color: "#ef4444" }] : []),
+  ];
 
   useEffect(() => {
     const onResize = () => setIsDesktop(window.innerWidth >= 1024);
