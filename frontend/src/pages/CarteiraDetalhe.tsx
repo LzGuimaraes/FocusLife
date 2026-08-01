@@ -49,6 +49,7 @@ export default function CarteiraDetalhe() {
   const [editing, setEditing] = useState<Ativo | null>(null);
   const [form, setForm] = useState<FormData>(emptyForm);
   const [errors, setErrors] = useState<Errors>({});
+  const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
 
   useEffect(() => {
     api.get("/financas/all?page=0&size=100").then(r => {
@@ -139,6 +140,11 @@ export default function CarteiraDetalhe() {
               style={{ padding: "8px 32px 8px 12px", fontSize: "13px", border: "1.5px solid #e2e8f0", borderRadius: "8px", background: "white", color: "#0f172a", cursor: "pointer", appearance: "none", backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1.5 3h9z'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 10px center", fontWeight: 500 }}>
               {todasCarteiras.map(f => <option key={f.id} value={f.id}>{f.tipoCarteira === "INVESTIMENTO" ? "📈" : "📋"} {f.nome}</option>)}
             </select>
+            {/* Alternância de visualização: Cards ↔ Lista */}
+            <div style={{ display: "flex", gap: "4px", background: "#eef2f7", padding: "3px", borderRadius: "10px", alignSelf: "center" }}>
+              <button onClick={() => setViewMode("cards")} style={viewBtn(viewMode === "cards")} aria-label="Visualizar em cards">▦ Cards</button>
+              <button onClick={() => setViewMode("list")} style={viewBtn(viewMode === "list")} aria-label="Visualizar em lista">☰ Lista</button>
+            </div>
             <button onClick={() => openModal()}
               style={{ padding: "10px 18px", background: isInvest ? "#8b5cf6" : "#ef4444", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: 600, transition: "all 0.15s ease", whiteSpace: "nowrap" }}
               onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)"; }}
@@ -183,6 +189,7 @@ export default function CarteiraDetalhe() {
       {/* ── Lista de Ativos ── */}
       {loading ? <Spinner text={`Carregando ${isInvest ? "investimentos" : "despesas"}...`} /> :
         ativos.length === 0 ? <EmptyState icon={isInvest ? "📈" : "📋"} title={`Nenhum ${itemLabel.toLowerCase()}`} text={`Crie seu primeiro ${itemLabel.toLowerCase()} nesta carteira!`} actionLabel={`Criar ${itemLabel}`} onAction={() => openModal()} /> :
+        viewMode === "cards" ? (
         <CardGrid>{ativos.map(a => {
           const ci = catInfo[a.categoriaInvestimento as CatInvest];
           const isConta = a.categoria === "CONTA";
@@ -212,7 +219,64 @@ export default function CarteiraDetalhe() {
               </div>
             </div>
           );
-        })}</CardGrid>
+        })}
+        </CardGrid>
+        ) : (
+          <div className="animate-fade-in" style={{ background: "white", borderRadius: "12px", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", overflow: "hidden" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc" }}>
+                    <th style={thStyle}>Ativo</th>
+                    <th style={thStyle}>Detalhes</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Valor</th>
+                    <th style={thStyle}>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ativos.map(a => {
+                    const ci = catInfo[a.categoriaInvestimento as CatInvest];
+                    const isConta = a.categoria === "CONTA";
+                    const isInv = a.categoria === "INVESTIMENTO";
+                    const temQtd = isInv && a.quantidade != null && a.valorUnitario != null;
+                    return (
+                      <tr key={a.id} style={{ borderTop: "1px solid #f1f5f9" }}>
+                        <td style={tdStyle}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                            <span style={{ fontWeight: 600, color: "#0f172a" }}>{a.nome}</span>
+                            {isInv && ci && <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 9px", borderRadius: "var(--radius-full)", background: ci.bg, color: ci.color }}>{ci.icon} {ci.label}</span>}
+                            {isConta && <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 9px", borderRadius: "var(--radius-full)", background: "#dbeafe", color: "#1d4ed8" }}>💳 Conta</span>}
+                            {isConta && <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 9px", borderRadius: "var(--radius-full)", background: a.pago ? "#d1fae5" : "#fef3c7", color: a.pago ? "#047857" : "#b45309" }}>{a.pago ? "✅ Pago" : "⏳ Pendente"}</span>}
+                          </div>
+                        </td>
+                        <td style={tdStyle}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                            {temQtd && <span style={{ fontSize: "12px", color: "#64748b" }}>📦 {a.quantidade} un · 💵 {fmt(a.valorUnitario, moeda)}/un</span>}
+                            {isInv && a.precoAtual != null && (
+                              <span style={{ fontSize: "12px", fontWeight: 600, color: a.precoAtual >= (a.valorUnitario || 0) ? "#10b981" : "#ef4444" }}>📊 Atual: {fmt(a.precoAtual, moeda)}</span>
+                            )}
+                            {isInv && !temQtd && a.precoAtual == null && a.instituicao && <span style={{ fontSize: "12px", color: "#64748b" }}>🏦 {a.instituicao}</span>}
+                            {isInv && !temQtd && a.precoAtual == null && a.dataAplicacao && <span style={{ fontSize: "12px", color: "#64748b" }}>🗓 {a.dataAplicacao}</span>}
+                          </div>
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>
+                          <span style={{ fontSize: "15px", fontWeight: 800, color: isConta ? (a.pago ? "#10b981" : "#f59e0b") : "#10b981", whiteSpace: "nowrap" }}>{fmt(a.saldo, moeda)}</span>
+                        </td>
+                        <td style={tdStyle}>
+                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                            {isConta && <button onClick={() => togglePago(a)} style={{ ...btnSm, background: a.pago ? "#fef3c7" : "#d1fae5", color: a.pago ? "#b45309" : "#047857", fontWeight: 700 }}>{a.pago ? "↩ Desmarcar" : "✓ Pagar"}</button>}
+                            <button onClick={() => openModal(a)} style={btnSm}>✏️ Editar</button>
+                            <button onClick={() => handleDelete(a.id)} style={{ ...btnSm, background: "#fee2e2", color: "#ef4444" }}>🗑</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
       }
 
       {/* ── Modal ── */}
@@ -252,3 +316,6 @@ export default function CarteiraDetalhe() {
 
 const cardStyle: React.CSSProperties = { background: "white", borderRadius: "12px", padding: "20px", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", transition: "all 0.25s ease", display: "flex", flexDirection: "column", borderLeft: "4px solid #6366f1" };
 const btnSm: React.CSSProperties = { padding: "7px 14px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 600, background: "#f1f5f9", color: "#64748b" };
+const viewBtn = (active: boolean): React.CSSProperties => ({ padding: "7px 14px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 600, background: active ? "white" : "transparent", color: active ? "#6366f1" : "#64748b", boxShadow: active ? "0 1px 3px rgba(0,0,0,0.12)" : "none", transition: "all 0.15s ease" });
+const thStyle: React.CSSProperties = { padding: "12px 16px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" };
+const tdStyle: React.CSSProperties = { padding: "12px 16px", borderTop: "1px solid #f1f5f9", verticalAlign: "middle" };

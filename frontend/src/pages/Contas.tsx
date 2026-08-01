@@ -50,6 +50,7 @@ export default function Contas() {
   
   
   const [filterFinanca, setFilterFinanca] = useState("all");
+  const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
   const [form, setForm] = useState<FormData>(emptyForm);
   const [errors, setErrors] = useState<Errors>({});
 
@@ -181,10 +182,17 @@ export default function Contas() {
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "20px" }}>
         <button onClick={() => setFilterFinanca("all")} style={fb(filterFinanca === "all")}>Todas</button>
         {financas.map(f => (<button key={f.id} onClick={() => setFilterFinanca(f.id.toString())} style={fb(filterFinanca === f.id.toString())}>{f.tipoCarteira === "INVESTIMENTO" ? "📈" : "📋"} {f.nome}</button>))}
+
+        {/* Alternância de visualização: Cards ↔ Lista */}
+        <div style={{ marginLeft: "auto", display: "flex", gap: "4px", background: "#eef2f7", padding: "3px", borderRadius: "10px" }}>
+          <button onClick={() => setViewMode("cards")} style={viewBtn(viewMode === "cards")} aria-label="Visualizar em cards">▦ Cards</button>
+          <button onClick={() => setViewMode("list")} style={viewBtn(viewMode === "list")} aria-label="Visualizar em lista">☰ Lista</button>
+        </div>
       </div>
 
       {loading ? <Spinner text="Carregando..." /> : ativos.length === 0 ? <EmptyState icon="💳" title="Nenhum ativo" text="Crie seu primeiro ativo!" actionLabel="Criar Ativo" onAction={() => openModal()} /> :
-        <CardGrid>{ativos.map(a => {
+        viewMode === "cards" ? (
+          <CardGrid>{ativos.map(a => {
           const moeda = getMoeda(a.financas_id);
           const ci = catInfo[a.categoriaInvestimento as CatInvest];
           const isConta = a.categoria === "CONTA";
@@ -216,7 +224,65 @@ export default function Contas() {
               </div>
             </div>
           );
-        })}</CardGrid>
+        })}
+          </CardGrid>
+        ) : (
+          <div className="animate-fade-in" style={{ background: "white", borderRadius: "12px", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", overflow: "hidden" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc" }}>
+                    <th style={thStyle}>Ativo</th>
+                    <th style={thStyle}>Detalhes</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Valor</th>
+                    <th style={thStyle}>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ativos.map(a => {
+                    const moeda = getMoeda(a.financas_id);
+                    const ci = catInfo[a.categoriaInvestimento as CatInvest];
+                    const isConta = a.categoria === "CONTA";
+                    const isInvest = a.categoria === "INVESTIMENTO";
+                    const temQtd = isInvest && a.quantidade != null && a.valorUnitario != null;
+                    return (
+                      <tr key={a.id} style={{ borderTop: "1px solid #f1f5f9" }}>
+                        <td style={tdStyle}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                            <span style={{ fontWeight: 600, color: "#0f172a" }}>{a.nome}</span>
+                            {isInvest && ci && <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 9px", borderRadius: "var(--radius-full)", background: ci.bg, color: ci.color }}>{ci.icon} {ci.label}</span>}
+                            {isConta && <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 9px", borderRadius: "var(--radius-full)", background: "#dbeafe", color: "#1d4ed8" }}>💳 Conta</span>}
+                            {isConta && <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 9px", borderRadius: "var(--radius-full)", background: a.pago ? "#d1fae5" : "#fef3c7", color: a.pago ? "#047857" : "#b45309" }}>{a.pago ? "✅ Pago" : "⏳ Pendente"}</span>}
+                          </div>
+                        </td>
+                        <td style={tdStyle}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                            {temQtd && <span style={{ fontSize: "12px", color: "#64748b" }}>📦 {a.quantidade} un · 💵 {fmt(a.valorUnitario, moeda)}/un</span>}
+                            {isInvest && a.precoAtual != null && (
+                              <span style={{ fontSize: "12px", fontWeight: 600, color: a.precoAtual >= (a.valorUnitario || 0) ? "#10b981" : "#ef4444" }}>📊 Atual: {fmt(a.precoAtual, moeda)}</span>
+                            )}
+                            {isInvest && !temQtd && a.precoAtual == null && a.instituicao && <span style={{ fontSize: "12px", color: "#64748b" }}>🏦 {a.instituicao}</span>}
+                            {isInvest && !temQtd && a.precoAtual == null && a.dataAplicacao && <span style={{ fontSize: "12px", color: "#64748b" }}>🗓 {a.dataAplicacao}</span>}
+                          </div>
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>
+                          <span style={{ fontSize: "15px", fontWeight: 800, color: isConta ? (a.pago ? "#10b981" : "#f59e0b") : "#10b981", whiteSpace: "nowrap" }}>{fmt(a.saldo, moeda)}</span>
+                        </td>
+                        <td style={tdStyle}>
+                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                            {isConta && <button onClick={() => togglePago(a)} style={{ ...btnSm, background: a.pago ? "#fef3c7" : "#d1fae5", color: a.pago ? "#b45309" : "#047857", fontWeight: 700 }}>{a.pago ? "↩ Desmarcar" : "✓ Pagar"}</button>}
+                            <button onClick={() => openModal(a)} style={btnSm}>✏️ Editar</button>
+                            <button onClick={() => handleDelete(a.id)} style={{ ...btnSm, background: "#fee2e2", color: "#ef4444" }}>🗑</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
       }
 
       {/* ── Modal ── */}
@@ -336,5 +402,8 @@ export default function Contas() {
 }
 
 const fb = (active: boolean): React.CSSProperties => ({ padding: "7px 16px", borderRadius: "var(--radius-full)", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 500, background: active ? "#6366f1" : "white", color: active ? "white" : "#64748b", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" });
+const viewBtn = (active: boolean): React.CSSProperties => ({ padding: "7px 14px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 600, background: active ? "white" : "transparent", color: active ? "#6366f1" : "#64748b", boxShadow: active ? "0 1px 3px rgba(0,0,0,0.12)" : "none", transition: "all 0.15s ease" });
+const thStyle: React.CSSProperties = { padding: "12px 16px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" };
+const tdStyle: React.CSSProperties = { padding: "12px 16px", borderTop: "1px solid #f1f5f9", verticalAlign: "middle" };
 const cardStyle: React.CSSProperties = { background: "white", borderRadius: "12px", padding: "20px", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", transition: "all 0.25s ease", display: "flex", flexDirection: "column", borderLeft: "4px solid #6366f1" };
 const btnSm: React.CSSProperties = { padding: "7px 14px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 600, background: "#f1f5f9", color: "#64748b" };
