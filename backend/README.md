@@ -15,7 +15,7 @@ Backend em Java com Spring Boot para gerenciar estudos, tarefas, metas, finança
 - Rotas públicas: POST /auth/login, POST /auth/register.
 - Demais rotas exigem autenticação.
 - O token é enviado em cookie httpOnly ("jwt"). O filtro também aceita Authorization: Bearer <token>.
-- CORS permitido para: https://focus-life-hub-front.vercel.app.
+- CORS permitido para: http://localhost:3000, http://localhost:5173, https://focus.lzguimaraes.com.br.
 
 Variáveis de ambiente necessárias (application.properties):
 - SPRING_DATASOURCE_URL
