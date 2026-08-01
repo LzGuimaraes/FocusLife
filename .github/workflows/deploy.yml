@@ -35,6 +35,19 @@ jobs:
           fi
           echo "==> Todos os secrets estão corretos. Prosseguindo com o deploy."
 
+      - name: Diagnosticar conectividade com a VPS
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          echo "Runner IP: $(curl -s https://api.ipify.org)"
+          if timeout 10 bash -c "cat < /dev/null > /dev/tcp/${VPS_HOST}/22"; then
+            echo "Porta 22 acessível"
+          else
+            echo "Porta 22 bloqueada (timeout) - verificar firewall do provedor"
+            exit 1
+          fi
+
       - name: Deploy na VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
