@@ -35,7 +35,8 @@ export default function Modal({ open, onClose, title, children, onSubmit, submit
           >✕</button>
         </div>
 
-        <form onSubmit={onSubmit} style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
+        {/* IMPORTANTE: preventDefault impede o envio nativo do <form>, que recarregava a página e abortava a requisição axios em andamento */}
+        <form onSubmit={(e) => { e.preventDefault(); onSubmit?.(e); }} style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
           {children}
           {onSubmit && (
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "8px" }}>

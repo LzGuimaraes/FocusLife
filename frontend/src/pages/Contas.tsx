@@ -93,7 +93,7 @@ export default function Contas() {
       const ci = catInfo[form.categoriaInvestimento as CatInvest];
       if (ci?.autoCalc) {
         payload.valorUnitario = parseFloat(form.valorUnitario) || 0;
-        payload.quantidade = parseInt(form.quantidade) || 0;
+        payload.quantidade = parseFloat(form.quantidade) || 0;
       } else {
         payload.saldo = parseFloat(form.saldo) || 0;
       }
