@@ -140,7 +140,14 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
     const { focused, hovered, setFocused, setHovered } = useFieldState();
     const isErr = !!error; const isOk = !!success && !isErr; const isDis = !!disabled;
     const filter = (raw: string): string => {
-      if (decimal || highPrecision) { let clean = raw.replace(/[^0-9.]/g, ""); const parts = clean.split("."); if (parts.length > 2) clean = parts[0] + "." + parts.slice(1).join(""); if (parts.length === 2) { const max = highPrecision ? 8 : 2; if (parts[1].length > max) clean = parts[0] + "." + parts[1].slice(0, max); } return clean; }
+      if (decimal || highPrecision) {
+        // Aceita "." ou "," como separador decimal e normaliza a vírgula para "."
+        let clean = raw.replace(/[^0-9.,]/g, "").replace(/,/g, ".");
+        const parts = clean.split(".");
+        if (parts.length > 2) clean = parts[0] + "." + parts.slice(1).join("");
+        if (parts.length === 2) { const max = highPrecision ? 8 : 2; if (parts[1].length > max) clean = parts[0] + "." + parts[1].slice(0, max); }
+        return clean;
+      }
       return raw.replace(/[^0-9]/g, "");
     };
     return (
