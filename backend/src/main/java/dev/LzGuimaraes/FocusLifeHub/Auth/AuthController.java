@@ -2,12 +2,15 @@ package dev.LzGuimaraes.FocusLifeHub.Auth;
 
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import jakarta.mail.MessagingException;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,11 +18,18 @@ import org.springframework.web.bind.annotation.*;
 
 import dev.LzGuimaraes.FocusLifeHub.User.UserModel;
 import dev.LzGuimaraes.FocusLifeHub.User.UserRepository;
+import dev.LzGuimaraes.FocusLifeHub.User.dto.request.ForgotPasswordRequest;
 import dev.LzGuimaraes.FocusLifeHub.User.dto.request.LoginRequest;
 import dev.LzGuimaraes.FocusLifeHub.User.dto.request.RegisterUserRequest;
+import dev.LzGuimaraes.FocusLifeHub.User.dto.request.ResetPasswordRequest;
 import dev.LzGuimaraes.FocusLifeHub.User.dto.response.LoginResponse;
-import dev.LzGuimaraes.FocusLifeHub.User.dto.response.RegisterUserResponse;
+import dev.LzGuimaraes.FocusLifeHub.User.dto.response.MessageResponse;
 import dev.LzGuimaraes.FocusLifeHub.config.TokenConfig;
+import dev.LzGuimaraes.FocusLifeHub.Auth.MailService;
+
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/auth")
@@ -28,16 +38,21 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final TokenConfig tokenConfig;
+    private final MailService mailService;
 
-    public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, TokenConfig tokenConfig) {
+    @Value("${app.frontend.url:https://focus.lzguimaraes.com.br}")
+    private String frontendUrl;
+
+    public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, TokenConfig tokenConfig, MailService mailService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.tokenConfig = tokenConfig;
+        this.mailService = mailService;
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(
+    public ResponseEntity<?> login(
             @Valid @RequestBody LoginRequest request,
             HttpServletResponse response
     ) {
@@ -46,44 +61,159 @@ public class AuthController {
                 request.password()
         );
 
-        Authentication authentication = authenticationManager.authenticate(userAndPass);
-        UserModel user = (UserModel) authentication.getPrincipal();
+        try {
+            Authentication authentication = authenticationManager.authenticate(userAndPass);
+            UserModel user = (UserModel) authentication.getPrincipal();
 
-        String token = tokenConfig.generateToken(user);
+            String token = tokenConfig.generateToken(user);
+            ResponseCookie jwtCookie = ResponseCookie.from("jwt", token)
+                    .httpOnly(true)
+                    .secure(true)
+                    .sameSite("None")
+                    .path("/")
+                    .maxAge(7 * 24 * 60 * 60)
+                    .build();
 
-        ResponseCookie jwtCookie = ResponseCookie.from("jwt", token)
-            .httpOnly(true)
-            .secure(true) // Alterar sempre em Prod para "true"
-            .sameSite("None")// Alterar em prod
-            .path("/")
-            .maxAge(7 * 24 * 60 * 60)
-            .build();
-
-        response.addHeader(HttpHeaders.SET_COOKIE, jwtCookie.toString());
-
-
-        return ResponseEntity.ok(new LoginResponse("Login successful"));
+            response.addHeader(HttpHeaders.SET_COOKIE, jwtCookie.toString());
+            return ResponseEntity.ok(new LoginResponse("Login successful"));
+        } catch (DisabledException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new MessageResponse("Conta não ativada. Verifique seu e-mail e confirme a ativação."));
+        }
     }
 
     @PostMapping("/register")
-    public ResponseEntity<RegisterUserResponse> register(@Valid @RequestBody RegisterUserRequest request) {
+    public ResponseEntity<MessageResponse> register(@Valid @RequestBody RegisterUserRequest request) throws MessagingException {
+        if (userRepository.existsByEmail(request.email())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new MessageResponse("Este e-mail já está em uso."));
+        }
+
         UserModel newUser = new UserModel();
         newUser.setNome(request.name());
         newUser.setEmail(request.email());
         newUser.setPassword(passwordEncoder.encode(request.password()));
+        newUser.setEnabled(false);
+        newUser.setActivationCode(UUID.randomUUID().toString());
 
         userRepository.save(newUser);
 
+        String activationLink = String.format("%s/auth/activate?code=%s", frontendUrl, newUser.getActivationCode());
+        String body = "<html>"
+                + "<body style=\"margin:0;padding:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#334155;\">"
+                + "<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;margin:0 auto;padding:24px;background:#ffffff;border-radius:16px;box-shadow:0 10px 30px rgba(15,23,42,0.08);\">"
+                + "<tr><td style=\"text-align:center;padding-bottom:24px;\">"
+                + "<h1 style=\"margin:0;color:#0f172a;font-size:26px;\">Bem-vindo ao FocusLife Hub</h1>"
+                + "</td></tr>"
+                + "<tr><td style=\"padding-bottom:16px;\">"
+                + "<p style=\"margin:0 0 16px;line-height:1.7;color:#475569;\">Olá " + newUser.getNome() + ",</p>"
+                + "<p style=\"margin:0 0 24px;line-height:1.7;color:#475569;\">Sua conta foi criada com sucesso. Para começar a usar o FocusLife Hub, confirme seu endereço de e-mail clicando no botão abaixo.</p>"
+                + "</td></tr>"
+                + "<tr><td style=\"text-align:center;padding-bottom:28px;\">"
+                + "<a href=\"" + activationLink + "\" style=\"display:inline-block;padding:14px 26px;background:#4f46e5;color:#fff;text-decoration:none;border-radius:12px;font-weight:700;\">Ativar conta</a>"
+                + "</td></tr>"
+                + "<tr><td style=\"padding-bottom:16px;\">"
+                + "<p style=\"margin:0 0 8px;line-height:1.7;color:#475569;\">Se o botão acima não funcionar, copie e cole o link abaixo no seu navegador:</p>"
+                + "<p style=\"word-break:break-all;color:#2563eb;\"><a href=\"" + activationLink + "\" style=\"color:#2563eb;text-decoration:none;\">" + activationLink + "</a></p>"
+                + "</td></tr>"
+                + "<tr><td style=\"padding-top:16px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:13px;\">"
+                + "<p style=\"margin:0;\">Se você não solicitou essa conta, ignore este e-mail. Essa mensagem foi enviada automaticamente.</p>"
+                + "</td></tr>"
+                + "</table>"
+                + "</body></html>";
+
+        mailService.sendHtml(newUser.getEmail(), "Ative sua conta no FocusLife Hub", body);
+
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new RegisterUserResponse(
-                        newUser.getNome(),
-                        newUser.getEmail()
-                ));
+                .body(new MessageResponse("Usuário criado. Verifique seu e-mail para ativar a conta."));
     }
-    
+
+    @GetMapping("/activate")
+    public ResponseEntity<MessageResponse> activateAccount(@RequestParam("code") String code) {
+        Optional<UserModel> optionalUser = userRepository.findByActivationCode(code);
+        if (optionalUser.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new MessageResponse("Código de ativação inválido ou expirado."));
+        }
+
+        UserModel user = optionalUser.get();
+        if (Boolean.TRUE.equals(user.getEnabled())) {
+            return ResponseEntity.ok(new MessageResponse("Conta já ativada."));
+        }
+
+        user.setEnabled(true);
+        user.setActivationCode(null);
+        userRepository.save(user);
+
+        return ResponseEntity.ok(new MessageResponse("Conta ativada com sucesso. Agora você pode entrar."));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<MessageResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) throws MessagingException {
+        Optional<UserModel> optionalUser = userRepository.findByEmail(request.email());
+        if (optionalUser.isEmpty()) {
+            return ResponseEntity.ok(new MessageResponse("Se houver uma conta associada a este e-mail, você receberá instruções para redefinir a senha."));
+        }
+
+        UserModel user = optionalUser.get();
+        user.setResetPasswordToken(UUID.randomUUID().toString());
+        user.setResetPasswordTokenExpiration(Instant.now().plusSeconds(3600));
+        userRepository.save(user);
+
+        String resetLink = String.format("%s/auth/reset-password?token=%s", frontendUrl, user.getResetPasswordToken());
+        String body = "<html>"
+                + "<body style=\"margin:0;padding:0;font-family:Arial,sans-serif;background:#f4f7fb;color:#334155;\">"
+                + "<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;margin:0 auto;padding:24px;background:#ffffff;border-radius:16px;box-shadow:0 10px 30px rgba(15,23,42,0.08);\">"
+                + "<tr><td style=\"text-align:center;padding-bottom:24px;\">"
+                + "<h1 style=\"margin:0;color:#0f172a;font-size:26px;\">Redefinição de senha</h1>"
+                + "</td></tr>"
+                + "<tr><td style=\"padding-bottom:16px;\">"
+                + "<p style=\"margin:0 0 16px;line-height:1.7;color:#475569;\">Olá " + user.getNome() + ",</p>"
+                + "<p style=\"margin:0 0 24px;line-height:1.7;color:#475569;\">Recebemos uma solicitação para redefinir sua senha. Clique no botão abaixo para continuar:</p>"
+                + "</td></tr>"
+                + "<tr><td style=\"text-align:center;padding-bottom:28px;\">"
+                + "<a href=\"" + resetLink + "\" style=\"display:inline-block;padding:14px 26px;background:#4f46e5;color:#fff;text-decoration:none;border-radius:12px;font-weight:700;\">Redefinir senha</a>"
+                + "</td></tr>"
+                + "<tr><td style=\"padding-bottom:16px;\">"
+                + "<p style=\"margin:0 0 8px;line-height:1.7;color:#475569;\">Se o botão acima não funcionar, copie e cole o link abaixo no seu navegador:</p>"
+                + "<p style=\"word-break:break-all;color:#2563eb;\"><a href=\"" + resetLink + "\" style=\"color:#2563eb;text-decoration:none;\">" + resetLink + "</a></p>"
+                + "</td></tr>"
+                + "<tr><td style=\"padding-top:16px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:13px;\">"
+                + "<p style=\"margin:0;\">Se você não solicitou essa alteração, ignore este e-mail. Essa mensagem foi enviada automaticamente.</p>"
+                + "</td></tr>"
+                + "</table>"
+                + "</body></html>";
+
+        mailService.sendHtml(user.getEmail(), "Redefinição de senha FocusLife Hub", body);
+
+        return ResponseEntity.ok(new MessageResponse("Se houver uma conta associada a este e-mail, você receberá instruções para redefinir a senha."));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        Optional<UserModel> optionalUser = userRepository.findByResetPasswordToken(request.token());
+        if (optionalUser.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new MessageResponse("Token inválido ou expirado."));
+        }
+
+        UserModel user = optionalUser.get();
+        if (user.getResetPasswordTokenExpiration() == null || user.getResetPasswordTokenExpiration().isBefore(Instant.now())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new MessageResponse("Token inválido ou expirado."));
+        }
+
+        user.setPassword(passwordEncoder.encode(request.password()));
+        user.setResetPasswordToken(null);
+        user.setResetPasswordTokenExpiration(null);
+        userRepository.save(user);
+
+        return ResponseEntity.ok(new MessageResponse("Senha redefinida com sucesso. Você já pode entrar com a nova senha."));
+    }
+
     @PostMapping("/logout")
     public ResponseEntity<?> logout(HttpServletResponse response) {
-            ResponseCookie deleteCookie = ResponseCookie.from("jwt", "")
+        ResponseCookie deleteCookie = ResponseCookie.from("jwt", "")
                 .httpOnly(true)
                 .secure(true)
                 .sameSite("None")
@@ -91,8 +221,7 @@ public class AuthController {
                 .maxAge(0)
                 .build();
 
-            response.addHeader(HttpHeaders.SET_COOKIE, deleteCookie.toString());
-
-            return ResponseEntity.ok("Logout successful");
+        response.addHeader(HttpHeaders.SET_COOKIE, deleteCookie.toString());
+        return ResponseEntity.ok(new MessageResponse("Logout successful"));
     }
 }

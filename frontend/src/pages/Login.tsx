@@ -61,9 +61,12 @@ export default function Login() {
             {isLoading ? "Entrando..." : "Entrar"}
           </button>
         </form>
-        <div style={{ textAlign: "center" }}>
-          <span style={{ fontSize: "13px", color: "#64748b" }}>Não tem uma conta? </span>
-          <button onClick={() => navigate("/auth/register")} disabled={isLoading} style={{ background: "none", border: "none", color: "#6366f1", cursor: "pointer", fontSize: "13px", fontWeight: 600, padding: 0 }}>Criar conta</button>
+        <div style={{ textAlign: "center", display: "grid", gap: "10px" }}>
+          <button onClick={() => navigate("/auth/forgot-password")} disabled={isLoading} style={{ background: "none", border: "none", color: "#6366f1", cursor: "pointer", fontSize: "13px", fontWeight: 600, padding: 0 }}>Esqueceu a senha?</button>
+          <div>
+            <span style={{ fontSize: "13px", color: "#64748b" }}>Não tem uma conta? </span>
+            <button onClick={() => navigate("/auth/register")} disabled={isLoading} style={{ background: "none", border: "none", color: "#6366f1", cursor: "pointer", fontSize: "13px", fontWeight: 600, padding: 0 }}>Criar conta</button>
+          </div>
         </div>
       </div>
     </div>

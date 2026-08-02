@@ -8,6 +8,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.Instant;
 import dev.LzGuimaraes.FocusLifeHub.Metas.MetasModel;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
@@ -33,6 +34,10 @@ public class UserModel implements UserDetails {
     private String nome;
     private String email;
     private String password;
+    private Boolean enabled = false;
+    private String activationCode;
+    private String resetPasswordToken;
+    private Instant resetPasswordTokenExpiration;
 
     @Enumerated(EnumType.STRING)
     private Role role = Role.USER;
@@ -74,6 +79,7 @@ public class UserModel implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return true; 
+        return enabled != null && enabled;
     }
 }
+

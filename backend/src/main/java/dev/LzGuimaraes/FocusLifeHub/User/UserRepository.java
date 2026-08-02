@@ -9,5 +9,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface UserRepository extends JpaRepository<UserModel, Long> {
     Optional<UserDetails> findUserByEmail(String username);
+    Optional<UserModel> findByEmail(String email);
+    Optional<UserModel> findByActivationCode(String activationCode);
+    Optional<UserModel> findByResetPasswordToken(String resetPasswordToken);
     boolean existsByEmail(String email);
 }

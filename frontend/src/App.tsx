@@ -4,6 +4,9 @@ import { AuthProvider } from "./auth/AuthProvider";
 import { PrivateRoute } from "./auth/PrivateRoute";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import ActivateAccount from "./pages/ActivateAccount";
 import Dashboard from "./pages/Dashboard";
 import Financas from "./pages/Financas";
 import CarteiraDetalhe from "./pages/CarteiraDetalhe";
@@ -24,6 +27,9 @@ export default function App() {
           <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/auth/login" element={<Login />} />
           <Route path="/auth/register" element={<Register />} />
+          <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+          <Route path="/auth/reset-password" element={<ResetPassword />} />
+          <Route path="/auth/activate" element={<ActivateAccount />} />
           <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/financas" element={<PrivateRoute><Financas /></PrivateRoute>} />
           <Route path="/financas/carteiras/:id" element={<PrivateRoute><CarteiraDetalhe /></PrivateRoute>} />
