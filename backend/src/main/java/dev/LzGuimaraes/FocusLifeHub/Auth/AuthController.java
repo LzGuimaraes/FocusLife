@@ -5,6 +5,8 @@ import jakarta.validation.Valid;
 import jakarta.mail.MessagingException;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
@@ -34,6 +36,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
@@ -83,7 +86,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<MessageResponse> register(@Valid @RequestBody RegisterUserRequest request) throws MessagingException {
+    public ResponseEntity<MessageResponse> register(@Valid @RequestBody RegisterUserRequest request) {
         if (userRepository.existsByEmail(request.email())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new MessageResponse("Este e-mail já está em uso."));
@@ -122,7 +125,13 @@ public class AuthController {
                 + "</table>"
                 + "</body></html>";
 
-        mailService.sendHtml(newUser.getEmail(), "Ative sua conta no FocusLife Hub", body);
+        try {
+            mailService.sendHtml(newUser.getEmail(), "Ative sua conta no FocusLife Hub", body);
+        } catch (MessagingException ex) {
+            log.error("Falha ao enviar email de ativação", ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new MessageResponse("Usuário criado, mas houve um problema ao enviar o email de ativação. Tente novamente mais tarde."));
+        }
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new MessageResponse("Usuário criado. Verifique seu e-mail para ativar a conta."));
