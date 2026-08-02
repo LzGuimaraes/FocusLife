@@ -92,11 +92,13 @@ public class ContasService {
             throw new IllegalArgumentException("Carteiras de Investimento só aceitam ativos do tipo INVESTIMENTO.");
         }
 
-        // Calcular saldo automaticamente para categorias com quantidade × valorUnitario
+        // Saldo atual = Preço Atual × Quantidade (se preço atual informado); senão Preço Médio × Quantidade
         if (dto.categoria() == CategoriaAtivo.INVESTIMENTO
                 && dto.categoriaInvestimento() != null
                 && dto.quantidade() != null && dto.valorUnitario() != null) {
-            ativo.setSaldo(dto.valorUnitario() * dto.quantidade());
+            float qtd = dto.quantidade();
+            float preco = dto.precoAtual() != null ? dto.precoAtual() : dto.valorUnitario();
+            ativo.setSaldo(preco * qtd);
         } else {
             float saldoInicial = dto.saldo() != null ? dto.saldo() : 0f;
             ativo.setSaldo(Math.abs(saldoInicial));
@@ -139,11 +141,13 @@ public class ContasService {
         ativo.setVencimento(dto.vencimento());
         ativo.setRentabilidade(dto.rentabilidade());
 
-        // Recalcular saldo se houver quantidade × valorUnitario
+        // Saldo atual = Preço Atual × Quantidade (se preço atual informado); senão Preço Médio × Quantidade
         if (dto.categoria() == CategoriaAtivo.INVESTIMENTO
                 && dto.categoriaInvestimento() != null
                 && dto.quantidade() != null && dto.valorUnitario() != null) {
-            ativo.setSaldo(dto.valorUnitario() * dto.quantidade());
+            float qtd = dto.quantidade();
+            float preco = dto.precoAtual() != null ? dto.precoAtual() : dto.valorUnitario();
+            ativo.setSaldo(preco * qtd);
         } else if (dto.saldo() != null) {
             ativo.setSaldo(Math.abs(dto.saldo()));
         }
