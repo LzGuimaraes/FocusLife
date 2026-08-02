@@ -365,7 +365,7 @@ export default function Contas() {
                   {form.valorUnitario && form.quantidade && (
                     <div style={{ padding: "10px 14px", background: "#ecfdf5", borderRadius: "10px", border: "1.5px solid #10b981", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontSize: "13px", fontWeight: 600, color: "#047857" }}>💰 Valor da Posição</span>
-                      <span style={{ fontSize: "18px", fontWeight: 800, color: "#10b981" }}>{fmt(parseFloat(form.valorUnitario) * parseInt(form.quantidade || "0"), "BRL")}</span>
+                      <span style={{ fontSize: "18px", fontWeight: 800, color: "#10b981" }}>{fmt(parseFloat(form.valorUnitario) * parseFloat(form.quantidade || "0"), "BRL")}</span>
                     </div>
                   )}
                 </>

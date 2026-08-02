@@ -139,20 +139,27 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
     const autoId = useId(); const inputId = id || autoId; const errId = `${inputId}-err`; const hId = `${inputId}-hint`;
     const { focused, hovered, setFocused, setHovered } = useFieldState();
     const isErr = !!error; const isOk = !!success && !isErr; const isDis = !!disabled;
+    // Mantém o valor como string durante toda a edição (só converte para número no submit).
+    // highPrecision: permite qualquer quantidade de casas decimais (ex.: 0.00777279).
+    // decimal (moeda): limita a 2 casas decimais.
     const filter = (raw: string): string => {
       if (decimal || highPrecision) {
         // Aceita "." ou "," como separador decimal e normaliza a vírgula para "."
         let clean = raw.replace(/[^0-9.,]/g, "").replace(/,/g, ".");
-        const parts = clean.split(".");
-        if (parts.length > 2) clean = parts[0] + "." + parts.slice(1).join("");
-        if (parts.length === 2) { const max = highPrecision ? 8 : 2; if (parts[1].length > max) clean = parts[0] + "." + parts[1].slice(0, max); }
+        // Garante apenas um separador decimal
+        const dot = clean.indexOf(".");
+        if (dot !== -1) {
+          const intPart = clean.slice(0, dot);
+          const decPart = clean.slice(dot + 1).replace(/\./g, "");
+          clean = `${intPart}.${highPrecision ? decPart : decPart.slice(0, 2)}`;
+        }
         return clean;
       }
       return raw.replace(/[^0-9]/g, "");
     };
     return (
       <Field label={label} htmlFor={inputId} required={required} hint={hint} error={error} success={success} errorId={errId} hintId={hId}>
-        <input ref={ref} id={inputId} type="text" inputMode={decimal || highPrecision ? "decimal" : "numeric"} value={value} onChange={e => onChange(filter(e.target.value))} disabled={isDis} readOnly={readOnly} aria-invalid={isErr} aria-describedby={isErr ? errId : hint ? hId : undefined} aria-required={required}
+        <input ref={ref} id={inputId} type="text" step={highPrecision ? "any" : decimal ? "0.01" : "1"} inputMode={decimal || highPrecision ? "decimal" : "numeric"} value={value} onChange={e => onChange(filter(e.target.value))} disabled={isDis} readOnly={readOnly} aria-invalid={isErr} aria-describedby={isErr ? errId : hint ? hId : undefined} aria-required={required}
           style={fieldCss({ focused, hovered, isError: isErr, isSuccess: isOk, isDisabled: isDis })}
           onFocus={e => { setFocused(true); onFocus?.(e); }} onBlur={e => { setFocused(false); onBlur?.(e); }}
           onMouseEnter={e => { setHovered(true); onMouseEnter?.(e); }} onMouseLeave={e => { setHovered(false); onMouseLeave?.(e); }}
