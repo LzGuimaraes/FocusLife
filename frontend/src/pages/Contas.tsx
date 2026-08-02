@@ -5,6 +5,7 @@ import Layout from "../components/Layout";
 import Modal from "../components/Modal";
 import { Input, Select, NumberInput, DateInput } from "../components/Form";
 import { PageHeader, CardGrid, EmptyState, Spinner } from "../components/UI";
+import { InvestInfo, totalInvestido, saldoAtual, lucro, rentabilidade, fmtPct, fmtSigned } from "../components/InvestInfo";
 
 type Categoria = "CONTA" | "INVESTIMENTO";
 type CatInvest = "RENDA_FIXA" | "TESOURO_DIRETO" | "ACOES" | "FIIS" | "ETFS" | "CRIPTOMOEDAS";
@@ -28,11 +29,6 @@ interface FormData {
 const moedaS: Record<string, string> = { BRL: "R$", USD: "$", EUR: "€", GBP: "£", JPY: "¥" };
 const fmt = (v: number | undefined | null, m: string) => v != null ? `${moedaS[m] || m} ${v.toFixed(2)}` : "-";
 const pct = (parte: number, total: number) => total > 0 ? ((parte / total) * 100).toFixed(1) : "0.0";
-
-// Saldo atual do ativo = Preço Atual × Quantidade (usa Preço Médio como fallback quando não há preço atual)
-const saldoAtual = (a: Ativo): number => a.categoria === "INVESTIMENTO" && a.quantidade != null && a.valorUnitario != null
-  ? (a.precoAtual ?? a.valorUnitario) * a.quantidade
-  : (a.saldo ?? 0);
 
 const catInfo: Record<CatInvest, { icon: string; label: string; color: string; bg: string; autoCalc: boolean }> = {
   RENDA_FIXA:       { icon: "📊", label: "Renda Fixa",       color: "#3b82f6", bg: "#dbeafe", autoCalc: false },
@@ -130,12 +126,15 @@ export default function Contas() {
   /* ── Sumários ── */
   const contas = ativos.filter(a => a.categoria === "CONTA");
   const investimentos = ativos.filter(a => a.categoria === "INVESTIMENTO");
-  const totalInvest = investimentos.reduce((s, a) => s + saldoAtual(a), 0);
+  const totalInvestidoCarteira = investimentos.reduce((s, a) => s + totalInvestido(a), 0);
+  const valorAtualCarteira = investimentos.reduce((s, a) => s + saldoAtual(a), 0);
+  const lucroTotal = valorAtualCarteira - totalInvestidoCarteira;
+  const rentTotal = totalInvestidoCarteira > 0 ? ((valorAtualCarteira - totalInvestidoCarteira) / totalInvestidoCarteira) * 100 : 0;
   const totalContas = contas.reduce((s, a) => s + (a.saldo || 0), 0);
   const contasPagas = contas.filter(a => a.pago).reduce((s, a) => s + (a.saldo || 0), 0);
   const contasNaoPagas = contas.filter(a => !a.pago).reduce((s, a) => s + (a.saldo || 0), 0);
 
-  // Distribuição por categoria de investimento
+  // Distribuição por categoria de investimento (por valor de mercado atual)
   const distCategorias = (Object.keys(catInfo) as CatInvest[]).map(ci => {
     const items = investimentos.filter(a => a.categoriaInvestimento === ci);
     const total = items.reduce((s, a) => s + saldoAtual(a), 0);
@@ -143,7 +142,12 @@ export default function Contas() {
   }).filter(d => d.items.length > 0);
 
   const summaryCards = walletType === "INVESTIMENTO"
-    ? [{ icon: "💰", label: "Patrimônio Total", value: fmt(totalInvest, "BRL"), color: "#10b981", bg: "#ecfdf5" }, ...distCategorias.slice(0, 3).map(d => ({ icon: d.icon, label: d.label, value: fmt(d.total, "BRL"), color: d.color, bg: d.bg }))]
+    ? [
+        { icon: "💰", label: "Total Investido", value: fmt(totalInvestidoCarteira, "BRL"), color: "#6366f1", bg: "#eef2ff" },
+        { icon: "📈", label: "Valor Atual da Carteira", value: fmt(valorAtualCarteira, "BRL"), color: "#10b981", bg: "#ecfdf5" },
+        { icon: lucroTotal >= 0 ? "📈" : "📉", label: "Lucro/Prejuízo Total", value: fmtSigned(lucroTotal, "BRL"), color: lucroTotal >= 0 ? "#10b981" : "#ef4444", bg: lucroTotal >= 0 ? "#ecfdf5" : "#fef2f2" },
+        { icon: "🎯", label: "Rentabilidade Total", value: fmtPct(rentTotal), color: rentTotal > 0 ? "#10b981" : rentTotal < 0 ? "#ef4444" : "#64748b", bg: rentTotal > 0 ? "#ecfdf5" : rentTotal < 0 ? "#fef2f2" : "#f1f5f9" },
+      ]
     : [{ icon: "📋", label: "Contas do Mês", value: fmt(totalContas, "BRL"), color: "#6366f1", bg: "#eef2ff" },{ icon: "✅", label: "Pagas", value: fmt(contasPagas, "BRL"), color: "#10b981", bg: "#d1fae5" },{ icon: "⏳", label: "Pendentes", value: fmt(contasNaoPagas, "BRL"), color: "#f59e0b", bg: "#fef3c7" }];
 
   return (
@@ -171,9 +175,9 @@ export default function Contas() {
                   <div key={d.key} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <span style={{ fontSize: "13px", fontWeight: 600, color: d.color, minWidth: "110px" }}>{d.icon} {d.label}</span>
                     <div style={{ flex: 1, height: "10px", background: "#f1f5f9", borderRadius: "5px", overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${Math.min(100, parseFloat(pct(d.total, totalInvest)))}%`, background: d.color, borderRadius: "5px", transition: "width 0.5s ease" }} />
+                      <div style={{ height: "100%", width: `${Math.min(100, parseFloat(pct(d.total, valorAtualCarteira)))}%`, background: d.color, borderRadius: "5px", transition: "width 0.5s ease" }} />
                     </div>
-                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", minWidth: "65px", textAlign: "right" }}>{pct(d.total, totalInvest)}%</span>
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a", minWidth: "65px", textAlign: "right" }}>{pct(d.total, valorAtualCarteira)}%</span>
                     <span style={{ fontSize: "12px", color: "#64748b", minWidth: "80px", textAlign: "right" }}>{fmt(d.total, "BRL")}</span>
                   </div>
                 ))}
@@ -212,28 +216,7 @@ export default function Contas() {
                 {isConta && (<span style={{ fontSize: "11px", fontWeight: 700, padding: "4px 10px", borderRadius: "var(--radius-full)", background: a.pago ? "#d1fae5" : "#fef3c7", color: a.pago ? "#047857" : "#b45309" }}>{a.pago ? "✅ Pago" : "⏳ Pendente"}</span>)}
               </div>
               <h3 style={{ fontSize: "16px", fontWeight: 600, marginBottom: "6px" }}>{a.nome}</h3>
-              {isInvest && a.quantidade != null && a.valorUnitario != null && (
-                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "6px" }}>
-                  <span style={{ fontSize: "11px", color: "#64748b" }}>📦 {a.quantidade} un.</span>
-                  <span style={{ fontSize: "11px", color: "#64748b" }}>💵 {fmt(a.valorUnitario, moeda)}/un.</span>
-                </div>
-              )}
-              {isInvest && a.precoAtual != null && (
-                <div style={{ marginBottom: "6px" }}><span style={{ fontSize: "11px", fontWeight: 600, color: a.precoAtual >= (a.valorUnitario || 0) ? "#10b981" : "#ef4444" }}>📊 Atual: {fmt(a.precoAtual, moeda)}</span></div>
-              )}
-              {/* Indicadores: Total Investido e Saldo Atual */}
-              {isInvest && a.quantidade != null && a.valorUnitario != null && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "5px", marginBottom: "12px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "11px", color: "#64748b" }}>💰 Total Investido</span>
-                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#334155" }}>{fmt(a.valorUnitario * a.quantidade, moeda)}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "11px", color: "#64748b" }}>📈 Saldo Atual</span>
-                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#10b981" }}>{fmt((a.precoAtual ?? a.valorUnitario) * a.quantidade, moeda)}</span>
-                  </div>
-                </div>
-              )}
+              <InvestInfo ativo={a} moeda={moeda} />
               <p style={{ fontSize: "20px", fontWeight: 800, color: isConta ? (a.pago ? "#10b981" : "#f59e0b") : "#10b981", marginBottom: "14px" }}>{fmt(saldoAtual(a), moeda)}</p>
               <div style={{ display: "flex", gap: "8px", marginTop: "auto", flexWrap: "wrap" }}>
                 {isConta && (<button onClick={() => togglePago(a)} style={{ ...btnSm, background: a.pago ? "#fef3c7" : "#d1fae5", color: a.pago ? "#b45309" : "#047857", fontWeight: 700 }}>{a.pago ? "↩ Desmarcar" : "✓ Pagar"}</button>)}
@@ -279,8 +262,10 @@ export default function Contas() {
                             {isInvest && a.precoAtual != null && (
                               <span style={{ fontSize: "12px", fontWeight: 600, color: a.precoAtual >= (a.valorUnitario || 0) ? "#10b981" : "#ef4444" }}>📊 Atual: {fmt(a.precoAtual, moeda)}</span>
                             )}
-                            {isInvest && temQtd && <span style={{ fontSize: "12px", color: "#475569" }}>💰 Total Investido: <b>{fmt(a.valorUnitario! * a.quantidade!, moeda)}</b></span>}
-                            {isInvest && temQtd && <span style={{ fontSize: "12px", color: "#475569" }}>📈 Saldo Atual: <b style={{ color: "#10b981" }}>{fmt((a.precoAtual ?? a.valorUnitario!) * a.quantidade!, moeda)}</b></span>}
+                            {isInvest && temQtd && <span style={{ fontSize: "12px", color: "#475569" }}>💰 Total Investido: <b>{fmt(totalInvestido(a), moeda)}</b></span>}
+                            {isInvest && temQtd && <span style={{ fontSize: "12px", color: "#475569" }}>📈 Saldo Atual: <b style={{ color: "#10b981" }}>{fmt(saldoAtual(a), moeda)}</b></span>}
+                            {isInvest && temQtd && <span style={{ fontSize: "12px", color: "#475569" }}>📊 Lucro/Prejuízo: <b style={{ color: lucro(a) > 0 ? "#10b981" : lucro(a) < 0 ? "#ef4444" : "#64748b" }}>{fmtSigned(lucro(a), moeda)}</b></span>}
+                            {isInvest && temQtd && (() => { const r = rentabilidade(a); const c = r > 0 ? "#10b981" : r < 0 ? "#ef4444" : "#64748b"; const arrow = r > 0 ? "▲" : r < 0 ? "▼" : "•"; return <span style={{ fontSize: "12px", fontWeight: 700, color: c }}>🎯 Rentabilidade: {arrow} {fmtPct(r)}</span>; })()}
                             {isInvest && !temQtd && a.precoAtual == null && a.instituicao && <span style={{ fontSize: "12px", color: "#64748b" }}>🏦 {a.instituicao}</span>}
                             {isInvest && !temQtd && a.precoAtual == null && a.dataAplicacao && <span style={{ fontSize: "12px", color: "#64748b" }}>🗓 {a.dataAplicacao}</span>}
                           </div>
