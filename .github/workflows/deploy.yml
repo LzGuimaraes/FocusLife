@@ -19,20 +19,32 @@ jobs:
           SPRING_DATASOURCE_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           CORS_ALLOWED_ORIGINS: ${{ secrets.CORS_ALLOWED_ORIGINS }}
+          SPRING_MAIL_USERNAME: ${{ secrets.SPRING_MAIL_USERNAME }}
+          SPRING_MAIL_PASSWORD: ${{ secrets.SPRING_MAIL_PASSWORD }}
+          SPRING_MAIL_FROM: ${{ secrets.SPRING_MAIL_FROM }}
+          APP_FRONTEND_URL: ${{ secrets.APP_FRONTEND_URL }}
+          APP_BACKEND_URL: ${{ secrets.APP_BACKEND_URL }}
         run: |
           set -euo pipefail
           echo "==> Validando secrets obrigatórios..."
-          for var in SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD JWT_SECRET CORS_ALLOWED_ORIGINS; do
+          for var in SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD JWT_SECRET CORS_ALLOWED_ORIGINS SPRING_MAIL_USERNAME SPRING_MAIL_PASSWORD SPRING_MAIL_FROM APP_FRONTEND_URL APP_BACKEND_URL; do
             if [ -z "${!var}" ]; then
-              echo "::error::$var está vazio. Configure o secret no GitHub (Settings → Secrets and variables → Actions)."
-              exit 1
+              echo "  MISSING: $var"
+            else
+              echo "  SET: $var"
             fi
-            echo "  OK: $var configurado"
           done
-          if [[ "$CORS_ALLOWED_ORIGINS" != http* ]]; then
-            echo "::error::CORS_ALLOWED_ORIGINS está malformado ('$CORS_ALLOWED_ORIGINS'). Use apenas a lista de origens, ex.: http://localhost:3000,https://focus.lzguimaraes.com.br"
+          echo "==> Resultado da validação de variáveis de ambiente acima."
+          echo "==> Verificando formatação de CORS_ALLOWED_ORIGINS..."
+          if [[ -z "$CORS_ALLOWED_ORIGINS" ]]; then
+            echo "  ERROR: CORS_ALLOWED_ORIGINS está vazio"
             exit 1
           fi
+          if [[ "$CORS_ALLOWED_ORIGINS" != http* ]]; then
+            echo "  ERROR: CORS_ALLOWED_ORIGINS está malformado ('$CORS_ALLOWED_ORIGINS'). Use apenas a lista de origens, ex.: http://localhost:3000,https://focus.lzguimaraes.com.br"
+            exit 1
+          fi
+          echo "  CORS_ALLOWED_ORIGINS formatação ok"
           echo "==> Todos os secrets estão corretos. Prosseguindo com o deploy."
 
       - name: Diagnosticar conectividade com a VPS
@@ -70,6 +82,11 @@ jobs:
             SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS }}
+            SPRING_MAIL_USERNAME=${{ secrets.SPRING_MAIL_USERNAME }}
+            SPRING_MAIL_PASSWORD=${{ secrets.SPRING_MAIL_PASSWORD }}
+            SPRING_MAIL_FROM=${{ secrets.SPRING_MAIL_FROM }}
+            APP_FRONTEND_URL=${{ secrets.APP_FRONTEND_URL }}
+            APP_BACKEND_URL=${{ secrets.APP_BACKEND_URL }}
             FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}
             BACKEND_PORT=${{ secrets.BACKEND_PORT }}
             EOF
