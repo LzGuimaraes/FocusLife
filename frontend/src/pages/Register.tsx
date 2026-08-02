@@ -16,7 +16,7 @@ export default function Register() {
     e.preventDefault();
     setError("");
     if (password !== confirmPassword) { setError("As senhas não coincidem."); return; }
-    if (password.length < 6) { setError("A senha deve ter pelo menos 6 caracteres."); return; }
+    if (password.length < 8) { setError("A senha deve ter pelo menos 8 caracteres."); return; }
     setLoading(true);
     try {
       await api.post("/auth/register", { name: nome, email, password }, { withCredentials: true });
@@ -34,7 +34,7 @@ export default function Register() {
         <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
           <Input label="Nome" type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Seu nome completo" required disabled={loading} />
           <Input label="E-mail" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu@email.com" required disabled={loading} />
-          <Input label="Senha" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" required disabled={loading} />
+          <Input label="Senha" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 8 caracteres" required disabled={loading} />
           <Input label="Confirmar Senha" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repita a senha" required disabled={loading} />
           <button type="submit" disabled={loading} style={{ padding: "12px", background: "linear-gradient(135deg, #10b981, #34d399)", color: "white", border: "none", borderRadius: "10px", cursor: loading ? "not-allowed" : "pointer", fontSize: "15px", fontWeight: 600, opacity: loading ? 0.7 : 1, marginTop: "4px", transition: "all 0.15s ease" }}
             onMouseEnter={e => { if (!loading) { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(16,185,129,0.35)"; }}}

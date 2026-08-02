@@ -87,7 +87,10 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<MessageResponse> register(@Valid @RequestBody RegisterUserRequest request) {
+        log.info("Registro solicitado para email={}", request.email());
+
         if (userRepository.existsByEmail(request.email())) {
+            log.warn("Tentativa de registro com email já existente={}", request.email());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new MessageResponse("Este e-mail já está em uso."));
         }
@@ -100,6 +103,7 @@ public class AuthController {
         newUser.setActivationCode(UUID.randomUUID().toString());
 
         userRepository.save(newUser);
+        log.info("Usuário salvo com ID={} e email={}", newUser.getId(), newUser.getEmail());
 
         String activationLink = String.format("%s/auth/activate?code=%s", frontendUrl, newUser.getActivationCode());
         String body = "<html>"
@@ -126,11 +130,12 @@ public class AuthController {
                 + "</body></html>";
 
         try {
+            log.info("Enviando email de ativação para email={}", newUser.getEmail());
             mailService.sendHtml(newUser.getEmail(), "Ative sua conta no FocusLife Hub", body);
-        } catch (MessagingException ex) {
-            log.error("Falha ao enviar email de ativação", ex);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse("Usuário criado, mas houve um problema ao enviar o email de ativação. Tente novamente mais tarde."));
+        } catch (Exception ex) {
+            log.error("Falha ao enviar email de ativação para {}", newUser.getEmail(), ex);
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(new MessageResponse("Usuário criado, mas não foi possível enviar o email de ativação. Verifique a configuração SMTP e tente novamente mais tarde."));
         }
 
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -139,20 +144,24 @@ public class AuthController {
 
     @GetMapping("/activate")
     public ResponseEntity<MessageResponse> activateAccount(@RequestParam("code") String code) {
+        log.info("Ativação solicitada com code={}", code);
         Optional<UserModel> optionalUser = userRepository.findByActivationCode(code);
         if (optionalUser.isEmpty()) {
+            log.warn("Código de ativação inválido={}", code);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new MessageResponse("Código de ativação inválido ou expirado."));
         }
 
         UserModel user = optionalUser.get();
         if (Boolean.TRUE.equals(user.getEnabled())) {
+            log.info("Conta já ativada para email={}", user.getEmail());
             return ResponseEntity.ok(new MessageResponse("Conta já ativada."));
         }
 
         user.setEnabled(true);
         user.setActivationCode(null);
         userRepository.save(user);
+        log.info("Conta ativada com sucesso para email={}", user.getEmail());
 
         return ResponseEntity.ok(new MessageResponse("Conta ativada com sucesso. Agora você pode entrar."));
     }
@@ -193,21 +202,30 @@ public class AuthController {
                 + "</table>"
                 + "</body></html>";
 
-        mailService.sendHtml(user.getEmail(), "Redefinição de senha FocusLife Hub", body);
+        try {
+            mailService.sendHtml(user.getEmail(), "Redefinição de senha FocusLife Hub", body);
+        } catch (Exception ex) {
+            log.error("Falha ao enviar email de redefinição de senha", ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new MessageResponse("Houve um problema ao enviar o e-mail de redefinição de senha. Tente novamente mais tarde."));
+        }
 
         return ResponseEntity.ok(new MessageResponse("Se houver uma conta associada a este e-mail, você receberá instruções para redefinir a senha."));
     }
 
     @PostMapping("/reset-password")
     public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        log.info("Reset de senha solicitado para token={}", request.token());
         Optional<UserModel> optionalUser = userRepository.findByResetPasswordToken(request.token());
         if (optionalUser.isEmpty()) {
+            log.warn("Token de reset inválido ou não encontrado={}", request.token());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new MessageResponse("Token inválido ou expirado."));
         }
 
         UserModel user = optionalUser.get();
         if (user.getResetPasswordTokenExpiration() == null || user.getResetPasswordTokenExpiration().isBefore(Instant.now())) {
+            log.warn("Token de reset expirado para email={}", user.getEmail());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new MessageResponse("Token inválido ou expirado."));
         }
@@ -216,6 +234,7 @@ public class AuthController {
         user.setResetPasswordToken(null);
         user.setResetPasswordTokenExpiration(null);
         userRepository.save(user);
+        log.info("Senha redefinida com sucesso para email={}", user.getEmail());
 
         return ResponseEntity.ok(new MessageResponse("Senha redefinida com sucesso. Você já pode entrar com a nova senha."));
     }
