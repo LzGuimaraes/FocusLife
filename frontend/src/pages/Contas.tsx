@@ -70,7 +70,7 @@ export default function Contas() {
     if (form.categoria === "INVESTIMENTO" && !form.categoriaInvestimento) e.categoriaInvestimento = "Selecione a categoria.";
     const ci = catInfo[form.categoriaInvestimento as CatInvest];
     if (ci?.autoCalc) {
-      const vu = parseFloat(form.valorUnitario); const q = parseInt(form.quantidade);
+      const vu = parseFloat(form.valorUnitario); const q = parseFloat(form.quantidade);
       if (!form.valorUnitario || isNaN(vu) || vu <= 0) e.valorUnitario = "Informe o preço médio.";
       if (!form.quantidade || isNaN(q) || q <= 0) e.quantidade = "Informe a quantidade.";
     } else if (form.categoria === "INVESTIMENTO") {

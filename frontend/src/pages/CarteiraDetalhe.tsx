@@ -82,7 +82,7 @@ export default function CarteiraDetalhe() {
     if (!form.nome.trim()) e.nome = "O nome é obrigatório.";
     if (isInvest && !form.categoriaInvestimento) e.categoriaInvestimento = "Selecione a categoria.";
     const ci = catInfo[form.categoriaInvestimento as CatInvest];
-    if (ci?.autoCalc) { const vu = parseFloat(form.valorUnitario); const q = parseInt(form.quantidade); if (!form.valorUnitario || isNaN(vu) || vu <= 0) e.valorUnitario = "Informe o preço médio."; if (!form.quantidade || isNaN(q) || q <= 0) e.quantidade = "Informe a quantidade."; }
+    if (ci?.autoCalc) { const vu = parseFloat(form.valorUnitario); const q = parseFloat(form.quantidade); if (!form.valorUnitario || isNaN(vu) || vu <= 0) e.valorUnitario = "Informe o preço médio."; if (!form.quantidade || isNaN(q) || q <= 0) e.quantidade = "Informe a quantidade."; }
     else if (isInvest) { const s = parseFloat(form.saldo); if (form.saldo === "" || isNaN(s) || s < 0) e.saldo = "Valor inválido."; }
     if (isDespesa) { const s = parseFloat(form.saldo); if (form.saldo === "" || isNaN(s) || s < 0) e.saldo = "Valor inválido."; }
     setErrors(e);
