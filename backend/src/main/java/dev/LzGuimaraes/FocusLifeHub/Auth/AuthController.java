@@ -139,7 +139,7 @@ public class AuthController {
         }
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new MessageResponse("Usuário criado. Verifique seu e-mail para ativar a conta."));
+                .body(new MessageResponse("Usuário criado. Enviamos um e-mail de ativação. Verifique sua caixa de entrada e também a pasta de spam."));
     }
 
     @GetMapping("/activate")
