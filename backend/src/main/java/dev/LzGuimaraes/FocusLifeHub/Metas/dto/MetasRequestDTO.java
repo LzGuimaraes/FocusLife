@@ -1,6 +1,8 @@
 package dev.LzGuimaraes.FocusLifeHub.Metas.dto;
 
-import java.util.Date;
+import java.time.LocalDate;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import dev.LzGuimaraes.FocusLifeHub.Metas.Enum.MetaStatus;
 import jakarta.validation.constraints.Future;
@@ -19,6 +21,7 @@ public record MetasRequestDTO(
     Float prograsso,
     @NotNull(message = "O prazo é obrigatório")
     @Future(message = "O prazo deve ser uma data futura")
-    Date prazo,
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    LocalDate prazo,
     MetaStatus status
 ) {}

@@ -1,7 +1,8 @@
 package dev.LzGuimaraes.FocusLifeHub.Metas;
 
-import java.util.Date;
+import java.time.LocalDate;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import dev.LzGuimaraes.FocusLifeHub.Metas.Enum.MetaStatus;
@@ -31,7 +32,8 @@ public class MetasModel {
     private String titulo;
     private String descricao;
     private Float prograsso;
-    private Date prazo;
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate prazo;
     @Enumerated(EnumType.STRING) 
     private MetaStatus status;
 

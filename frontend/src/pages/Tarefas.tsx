@@ -5,6 +5,7 @@ import Layout from "../components/Layout";
 import Modal from "../components/Modal";
 import { Input, Select, DateInput } from "../components/Form";
 import { PageHeader, CardGrid, FilterBar, EmptyState, Spinner, StatusBadge, PrioridadeBadge } from "../components/UI";
+import { formatLocalDate, parseLocalDate } from "../utils/date";
 
 interface Tarefa { id: number; titulo: string; status: string; prioridade: string; prazo: string; }
 interface FormData { titulo: string; status: string; prioridade: string; prazo: string; }
@@ -40,7 +41,7 @@ export default function Tarefas() {
 
   const handleSubmit = async () => {
     if (!validate()) return;
-    const payload = { titulo: form.titulo, status: form.status, prioridade: form.prioridade, prazo: form.prazo ? new Date(form.prazo).toISOString() : null };
+    const payload = { titulo: form.titulo, status: form.status, prioridade: form.prioridade, prazo: form.prazo ? formatLocalDate(parseLocalDate(form.prazo)) : null };
     const promise = editing ? api.put(`/tarefas/alter/${editing.id}`, payload) : api.post("/tarefas/create", payload);
     toast.promise(promise, { loading: "Salvando...", success: () => { closeModal(); fetchTarefas(); return editing ? "Tarefa atualizada!" : "Tarefa criada!"; }, error: "Erro ao salvar" });
   };
@@ -56,13 +57,13 @@ export default function Tarefas() {
 
   const openModal = (t: Tarefa | null = null) => {
     setErrors({});
-    if (t) { setEditing(t); setForm({ titulo: t.titulo, status: t.status, prioridade: t.prioridade, prazo: t.prazo ? new Date(t.prazo).toISOString().split('T')[0] : "" }); }
+    if (t) { setEditing(t); setForm({ titulo: t.titulo, status: t.status, prioridade: t.prioridade, prazo: t.prazo ? formatLocalDate(parseLocalDate(t.prazo)) : "" }); }
     else { setEditing(null); setForm(emptyForm); }
     setShowModal(true);
   };
   const closeModal = () => { setShowModal(false); setEditing(null); };
 
-  const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('pt-BR') : "Sem prazo";
+  const fmtDate = (d: string) => d ? parseLocalDate(d).toLocaleDateString('pt-BR') : "Sem prazo";
   const filtered = filter === "all" ? tarefas : tarefas.filter(t => t.status === filter);
 
   return (

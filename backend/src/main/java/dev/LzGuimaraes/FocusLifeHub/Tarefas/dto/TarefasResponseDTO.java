@@ -1,6 +1,8 @@
 package dev.LzGuimaraes.FocusLifeHub.Tarefas.dto;
 
-import java.util.Date;
+import java.time.LocalDate;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import dev.LzGuimaraes.FocusLifeHub.Tarefas.Enum.Prioridade;
 import dev.LzGuimaraes.FocusLifeHub.Tarefas.Enum.TarefaStatus;
@@ -10,6 +12,7 @@ public record TarefasResponseDTO(
     String titulo,
     TarefaStatus status,
     Prioridade prioridade,
-    Date prazo,
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    LocalDate prazo,
     Long user_id
 ) {}

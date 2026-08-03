@@ -1,6 +1,8 @@
 package dev.LzGuimaraes.FocusLifeHub.Tarefas.dto;
 
-import java.util.Date;
+import java.time.LocalDate;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import dev.LzGuimaraes.FocusLifeHub.Tarefas.Enum.Prioridade;
 import dev.LzGuimaraes.FocusLifeHub.Tarefas.Enum.TarefaStatus;
@@ -14,5 +16,6 @@ public record TarefasRequestDTO(
     TarefaStatus status, 
     Prioridade prioridade, 
     @FutureOrPresent(message = "O prazo não pode ser uma data passada")
-    Date prazo
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    LocalDate prazo
 ) {}

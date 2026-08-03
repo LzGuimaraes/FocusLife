@@ -5,6 +5,7 @@ import Layout from "../components/Layout";
 import Modal from "../components/Modal";
 import { Input, Select, DateInput, NumberInput, TextArea } from "../components/Form";
 import { PageHeader, CardGrid, EmptyState, Spinner } from "../components/UI";
+import { formatLocalDate, parseLocalDate } from "../utils/date";
 
 interface Estudo { id: number; nome: string; duracao_min: number; data: string; notas: string; materia_id: number; }
 interface Materia { id: number; nome: string; }
@@ -40,7 +41,7 @@ export default function Estudos() {
 
   const handleSubmit = async () => {
     if (!validate()) return;
-    const p = { nome: form.nome, duracao_min: parseInt(form.duracao_min) || 0, data: new Date(form.data).toISOString(), notas: form.notas, materia_id: parseInt(form.materia_id) };
+    const p = { nome: form.nome, duracao_min: parseInt(form.duracao_min) || 0, data: formatLocalDate(parseLocalDate(form.data)), notas: form.notas, materia_id: parseInt(form.materia_id) };
     const promise = editing ? api.put(`/estudos/alter/${editing.id}`, p) : api.post("/estudos/create", p);
     toast.promise(promise, { loading: "Salvando...", success: () => { closeModal(); fetchEstudos(); return editing ? "Estudo atualizado!" : "Estudo registrado!"; }, error: "Erro ao salvar" });
   };
@@ -49,10 +50,10 @@ export default function Estudos() {
     toast("Excluir esta sessão de estudo?", { action: { label: "Sim, excluir", onClick: () => { toast.promise(api.delete(`/estudos/delete/${id}`), { loading: "Excluindo...", success: () => { fetchEstudos(); return "Estudo excluído!"; }, error: "Erro ao excluir" }); }}, cancel: { label: "Cancelar", onClick: () => {} } });
   };
 
-  const openModal = (e: Estudo | null = null) => { setErrors({}); if (e) { setEditing(e); setForm({ nome: e.nome, duracao_min: e.duracao_min.toString(), data: e.data ? new Date(e.data).toISOString().split('T')[0] : "", notas: e.notas || "", materia_id: e.materia_id.toString() }); } else { setEditing(null); setForm({ nome: "", duracao_min: "", data: "", notas: "", materia_id: materias[0]?.id.toString() || "" }); } setShowModal(true); };
+  const openModal = (e: Estudo | null = null) => { setErrors({}); if (e) { setEditing(e); setForm({ nome: e.nome, duracao_min: e.duracao_min.toString(), data: e.data ? formatLocalDate(parseLocalDate(e.data)) : "", notas: e.notas || "", materia_id: e.materia_id.toString() }); } else { setEditing(null); setForm({ nome: "", duracao_min: "", data: "", notas: "", materia_id: materias[0]?.id.toString() || "" }); } setShowModal(true); };
   const closeModal = () => { setShowModal(false); setEditing(null); };
   const getMateriaNome = (id: number) => materias.find(m => m.id === id)?.nome || "N/A";
-  const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('pt-BR') : "";
+  const fmtDate = (d: string) => d ? parseLocalDate(d).toLocaleDateString('pt-BR') : "";
   const fmtDur = (m: number) => m < 60 ? `${m}min` : `${Math.floor(m / 60)}h ${m % 60}min`;
   const durColor = (m: number) => m >= 120 ? "#10b981" : m >= 60 ? "#3b82f6" : m >= 30 ? "#f59e0b" : "#ef4444";
   const filtered = filterMateria === "all" ? estudos : estudos.filter(e => e.materia_id.toString() === filterMateria);

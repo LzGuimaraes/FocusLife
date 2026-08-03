@@ -1,7 +1,8 @@
 package dev.LzGuimaraes.FocusLifeHub.Tarefas;
 
-import java.util.Date;
+import java.time.LocalDate;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import dev.LzGuimaraes.FocusLifeHub.Tarefas.Enum.Prioridade;
@@ -32,7 +33,8 @@ public class TarefasModel {
     private TarefaStatus status;
     @Enumerated(EnumType.STRING)
     private Prioridade prioridade;
-    private Date prazo;
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate prazo;
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")

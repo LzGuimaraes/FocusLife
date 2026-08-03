@@ -1,7 +1,8 @@
 package dev.LzGuimaraes.FocusLifeHub.Estudos;
 
-import java.util.Date;
+import java.time.LocalDate;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import dev.LzGuimaraes.FocusLifeHub.Materia.MateriaModel;
@@ -27,7 +28,8 @@ public class EstudosModel {
     private Long id;
     private String nome;
     private int duracao_min;
-    private Date data;
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate data;
     private String notas;
 
     @ManyToOne(fetch = FetchType.LAZY)

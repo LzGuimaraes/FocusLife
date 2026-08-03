@@ -1,6 +1,8 @@
 package dev.LzGuimaraes.FocusLifeHub.Metas.dto;
 
-import java.util.Date;
+import java.time.LocalDate;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import dev.LzGuimaraes.FocusLifeHub.Metas.Enum.MetaStatus;
 
@@ -9,7 +11,8 @@ public record MetasResponseDTO(
     String titulo,
     String descricao,
     Float prograsso,
-    Date prazo,
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    LocalDate prazo,
     MetaStatus status,
     Long user_id
 ) {}

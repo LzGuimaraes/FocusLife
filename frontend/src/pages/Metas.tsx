@@ -5,6 +5,7 @@ import Layout from "../components/Layout";
 import Modal from "../components/Modal";
 import { Input, Select, DateInput, NumberInput } from "../components/Form";
 import { PageHeader, CardGrid, FilterBar, EmptyState, Spinner, StatusBadge, ProgressBar } from "../components/UI";
+import { formatLocalDate, parseLocalDate } from "../utils/date";
 
 interface Meta { id: number; titulo: string; descricao: string; prograsso: number; prazo: string; status: string; }
 interface FormData { titulo: string; descricao: string; prograsso: string; prazo: string; status: string; }
@@ -37,7 +38,7 @@ export default function Metas() {
 
   const handleSubmit = async () => {
     if (!validate()) return;
-    const p = { titulo: form.titulo, descricao: form.descricao, prograsso: parseFloat(form.prograsso), prazo: new Date(form.prazo).toISOString(), status: form.status };
+    const p = { titulo: form.titulo, descricao: form.descricao, prograsso: parseFloat(form.prograsso), prazo: formatLocalDate(parseLocalDate(form.prazo)), status: form.status };
     const promise = editing ? api.put(`/metas/alter/${editing.id}`, p) : api.post("/metas/create", p);
     toast.promise(promise, { loading: "Salvando...", success: () => { closeModal(); fetchMetas(); return editing ? "Meta atualizada!" : "Meta criada!"; }, error: "Erro ao salvar" });
   };
@@ -46,9 +47,9 @@ export default function Metas() {
     toast("Excluir esta meta?", { action: { label: "Sim, excluir", onClick: () => { toast.promise(api.delete(`/metas/delete/${id}`), { loading: "Excluindo...", success: () => { fetchMetas(); return "Meta excluída!"; }, error: "Erro ao excluir" }); }}, cancel: { label: "Cancelar", onClick: () => {} } });
   };
 
-  const openModal = (m: Meta | null = null) => { setErrors({}); if (m) { setEditing(m); setForm({ titulo: m.titulo, descricao: m.descricao, prograsso: m.prograsso.toString(), prazo: m.prazo ? new Date(m.prazo).toISOString().split('T')[0] : "", status: m.status }); } else { setEditing(null); setForm(emptyForm); } setShowModal(true); };
+  const openModal = (m: Meta | null = null) => { setErrors({}); if (m) { setEditing(m); setForm({ titulo: m.titulo, descricao: m.descricao, prograsso: m.prograsso.toString(), prazo: m.prazo ? formatLocalDate(parseLocalDate(m.prazo)) : "", status: m.status }); } else { setEditing(null); setForm(emptyForm); } setShowModal(true); };
   const closeModal = () => { setShowModal(false); setEditing(null); };
-  const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('pt-BR') : "";
+  const fmtDate = (d: string) => d ? parseLocalDate(d).toLocaleDateString('pt-BR') : "";
   const filtered = filter === "all" ? metas : metas.filter(m => m.status === filter);
 
   return (
