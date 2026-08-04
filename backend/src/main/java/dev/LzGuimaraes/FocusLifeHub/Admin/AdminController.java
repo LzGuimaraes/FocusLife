@@ -6,11 +6,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import dev.LzGuimaraes.FocusLifeHub.Email.DailyNotificationJob;
+import dev.LzGuimaraes.FocusLifeHub.User.dto.response.MessageResponse;
 import dev.LzGuimaraes.FocusLifeHub.User.dto.response.UserResponseDTO;
 import jakarta.validation.Valid;
 
@@ -19,9 +22,11 @@ import jakarta.validation.Valid;
 public class AdminController {
 
     private final AdminService adminService;
+    private final DailyNotificationJob dailyNotificationJob;
 
-    public AdminController(AdminService adminService) {
+    public AdminController(AdminService adminService, DailyNotificationJob dailyNotificationJob) {
         this.adminService = adminService;
+        this.dailyNotificationJob = dailyNotificationJob;
     }
 
     @GetMapping("/users")
@@ -38,5 +43,11 @@ public class AdminController {
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
         adminService.deleteUser(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/jobs/daily/run")
+    public ResponseEntity<MessageResponse> runDailyJob() {
+        dailyNotificationJob.run();
+        return ResponseEntity.ok(new MessageResponse("Job diário executado."));
     }
 }
