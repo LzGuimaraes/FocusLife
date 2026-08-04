@@ -7,6 +7,7 @@ import { Input, Select, NumberInput, DateInput } from "../components/Form";
 import { PageHeader, CardGrid, EmptyState, Spinner } from "../components/UI";
 import { InvestInfo, totalInvestido, saldoAtual, lucro, rentabilidade, fmtPct, fmtSigned } from "../components/InvestInfo";
 import { formatLocalDate, parseLocalDate } from "../utils/date";
+import ContaLogsModal from "../components/ContaLogsModal";
 
 type Categoria = "CONTA" | "INVESTIMENTO";
 type CatInvest = "RENDA_FIXA" | "TESOURO_DIRETO" | "ACOES" | "FIIS" | "ETFS" | "CRIPTOMOEDAS";
@@ -56,6 +57,7 @@ export default function Contas() {
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
   const [form, setForm] = useState<FormData>(emptyForm);
   const [errors, setErrors] = useState<Errors>({});
+  const [logsConta, setLogsConta] = useState<Ativo | null>(null);
 
   useEffect(() => { api.get("/financas/all?page=0&size=100").then(r => setFinancas(r.data.content)).catch(() => {}); }, []);
   useEffect(() => { fetchAtivos(); }, [filterFinanca]);
@@ -298,6 +300,7 @@ export default function Contas() {
                           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                             {isConta && <button onClick={() => togglePago(a)} style={{ ...btnSm, background: a.pago ? "#fef3c7" : "#d1fae5", color: a.pago ? "#b45309" : "#047857", fontWeight: 700 }}>{a.pago ? "↩ Desmarcar" : "✓ Pagar"}</button>}
                             <button onClick={() => openModal(a)} style={btnSm}>✏️ Editar</button>
+                            <button onClick={() => setLogsConta(a)} style={btnSm} title="Ver logs">📜</button>
                             <button onClick={() => handleDelete(a.id)} style={{ ...btnSm, background: "#fee2e2", color: "#ef4444" }}>🗑</button>
                           </div>
                         </td>
@@ -424,6 +427,9 @@ export default function Contas() {
           <Select label="Carteira" required value={form.financas_id} onChange={e => setForm({ ...form, financas_id: e.target.value })} error={errors.financas_id}>{financas.filter(f => f.tipoCarteira === "INVESTIMENTO").map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}</Select>
         )}
       </Modal>
+      {logsConta && (
+        <ContaLogsModal open contaId={logsConta.id} contaNome={logsConta.nome} onClose={() => setLogsConta(null)} />
+      )}
     </Layout>
   );
 }

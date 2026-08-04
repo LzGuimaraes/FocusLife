@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import dev.LzGuimaraes.FocusLifeHub.Contas.dto.ContaLogResponseDTO;
 import dev.LzGuimaraes.FocusLifeHub.Contas.dto.ContasRequestDTO;
 import dev.LzGuimaraes.FocusLifeHub.Contas.dto.ContasResponseDTO;
 import jakarta.validation.Valid;
@@ -44,6 +45,15 @@ public class ContasController {
     public ResponseEntity<List<ContasResponseDTO>> getContasVencendo(@RequestParam("data") LocalDate data) {
         List<ContasResponseDTO> contas = contasService.getContasVencendo(data);
         return ResponseEntity.ok(contas);
+    }
+
+    @GetMapping("/{id}/logs")
+    public ResponseEntity<Page<ContaLogResponseDTO>> getContaLogs(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Page<ContaLogResponseDTO> logs = contasService.getContaLogs(id, page, size);
+        return ResponseEntity.ok(logs);
     }
 
     @PostMapping("/create")

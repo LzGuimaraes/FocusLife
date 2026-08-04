@@ -5,12 +5,15 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder; 
 import org.springframework.stereotype.Service;
 
 import dev.LzGuimaraes.FocusLifeHub.Exceptions.ResourceNotFoundException;
+import dev.LzGuimaraes.FocusLifeHub.Contas.dto.ContaLogResponseDTO;
 import dev.LzGuimaraes.FocusLifeHub.Contas.dto.ContasRequestDTO;
 import dev.LzGuimaraes.FocusLifeHub.Contas.dto.ContasResponseDTO;
 import dev.LzGuimaraes.FocusLifeHub.Financas.FinancasModel;
@@ -23,14 +26,17 @@ public class ContasService {
 
     private final ContasRepository contasRepository;
     private final FinancasRepository financasRepository;
+    private final ContaLogRepository contaLogRepository;
     private final ContasMapper contasMapper;
 
     public ContasService(
             ContasRepository contasRepository,
             FinancasRepository financasRepository,
+            ContaLogRepository contaLogRepository,
             ContasMapper contasMapper) {
         this.contasRepository = contasRepository;
         this.financasRepository = financasRepository;
+        this.contaLogRepository = contaLogRepository;
         this.contasMapper = contasMapper;
     }
 
@@ -79,6 +85,20 @@ public class ContasService {
                 .stream()
                 .map(contasMapper::toResponse)
                 .collect(Collectors.toList());
+    }
+
+    public Page<ContaLogResponseDTO> getContaLogs(Long id, int page, int size) {
+        Long userId = getAuthenticatedUserId();
+        ContasModel conta = contasRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Conta com ID " + id + " não encontrada"));
+
+        if (!conta.getFinancas().getUser().getId().equals(userId)) {
+            throw new ResourceNotFoundException("Conta com ID " + id + " não encontrada");
+        }
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "criadoEm"));
+        return contaLogRepository.findByContaId(id, pageable)
+                .map(log -> new ContaLogResponseDTO(log.getId(), log.getAcao(), log.getCriadoEm()));
     }
 
     public ContasResponseDTO createConta(ContasRequestDTO dto) {
