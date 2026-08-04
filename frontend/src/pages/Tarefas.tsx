@@ -7,10 +7,10 @@ import { Input, Select, DateInput } from "../components/Form";
 import { PageHeader, CardGrid, FilterBar, EmptyState, Spinner, StatusBadge, PrioridadeBadge } from "../components/UI";
 import { formatLocalDate, parseLocalDate } from "../utils/date";
 
-interface Tarefa { id: number; titulo: string; status: string; prioridade: string; prazo: string; }
-interface FormData { titulo: string; status: string; prioridade: string; prazo: string; }
+interface Tarefa { id: number; titulo: string; status: string; prioridade: string; prazo: string; horario: string | null; }
+interface FormData { titulo: string; status: string; prioridade: string; prazo: string; horario: string; }
 
-const emptyForm: FormData = { titulo: "", status: "PENDENTE", prioridade: "media", prazo: "" };
+const emptyForm: FormData = { titulo: "", status: "PENDENTE", prioridade: "media", prazo: "", horario: "" };
 type Errors = Partial<Record<keyof FormData, string>>;
 
 export default function Tarefas() {
@@ -41,7 +41,7 @@ export default function Tarefas() {
 
   const handleSubmit = async () => {
     if (!validate()) return;
-    const payload = { titulo: form.titulo, status: form.status, prioridade: form.prioridade, prazo: form.prazo ? formatLocalDate(parseLocalDate(form.prazo)) : null };
+    const payload = { titulo: form.titulo, status: form.status, prioridade: form.prioridade, prazo: form.prazo ? formatLocalDate(parseLocalDate(form.prazo)) : null, horario: form.horario || null };
     const promise = editing ? api.put(`/tarefas/alter/${editing.id}`, payload) : api.post("/tarefas/create", payload);
     toast.promise(promise, { loading: "Salvando...", success: () => { closeModal(); fetchTarefas(); return editing ? "Tarefa atualizada!" : "Tarefa criada!"; }, error: "Erro ao salvar" });
   };
@@ -57,14 +57,22 @@ export default function Tarefas() {
 
   const openModal = (t: Tarefa | null = null) => {
     setErrors({});
-    if (t) { setEditing(t); setForm({ titulo: t.titulo, status: t.status, prioridade: t.prioridade, prazo: t.prazo ? formatLocalDate(parseLocalDate(t.prazo)) : "" }); }
+    if (t) { setEditing(t); setForm({ titulo: t.titulo, status: t.status, prioridade: t.prioridade, prazo: t.prazo ? formatLocalDate(parseLocalDate(t.prazo)) : "", horario: t.horario || "" }); }
     else { setEditing(null); setForm(emptyForm); }
     setShowModal(true);
   };
   const closeModal = () => { setShowModal(false); setEditing(null); };
 
   const fmtDate = (d: string) => d ? parseLocalDate(d).toLocaleDateString('pt-BR') : "Sem prazo";
-  const filtered = filter === "all" ? tarefas : tarefas.filter(t => t.status === filter);
+  // Ordena por horário (HH:mm), nulos por último
+  const filtered = (filter === "all" ? tarefas : tarefas.filter(t => t.status === filter))
+    .slice()
+    .sort((a, b) => {
+      if (!a.horario && !b.horario) return 0;
+      if (!a.horario) return 1;
+      if (!b.horario) return -1;
+      return a.horario.localeCompare(b.horario);
+    });
 
   return (
     <Layout>
@@ -76,7 +84,7 @@ export default function Tarefas() {
           <div key={t.id} style={cardStyle} onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "var(--shadow-lg)"; }} onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "var(--shadow-sm)"; }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "12px" }}><StatusBadge status={t.status} /><PrioridadeBadge prioridade={t.prioridade} /></div>
             <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--color-text)", marginBottom: "8px" }}>{t.titulo}</h3>
-            <p style={{ fontSize: "12px", color: "var(--color-text-muted)", marginBottom: "16px" }}>📅 {fmtDate(t.prazo)}</p>
+            <p style={{ fontSize: "12px", color: "var(--color-text-muted)", marginBottom: "16px" }}>📅 {fmtDate(t.prazo)} · 🕐 {t.horario || "-"}</p>
             <div style={{ display: "flex", gap: "8px", marginTop: "auto" }}><button onClick={() => openModal(t)} style={btnSm}>✏️ Editar</button><button onClick={() => handleDelete(t.id)} style={{ ...btnSm, background: "var(--color-danger-light)", color: "var(--color-danger)" }}>🗑 Excluir</button></div>
           </div>))}</CardGrid>
       }
@@ -87,7 +95,10 @@ export default function Tarefas() {
           <Select label="Status" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}><option value="PENDENTE">Pendente</option><option value="Ativa">Ativa</option><option value="Concluida">Concluída</option><option value="Cancelada">Cancelada</option></Select>
           <Select label="Prioridade" value={form.prioridade} onChange={e => setForm({ ...form, prioridade: e.target.value })}><option value="baixa">🔵 Baixa</option><option value="media">🟡 Média</option><option value="alta">🔴 Alta</option></Select>
         </div>
-        <DateInput label="Prazo" value={form.prazo} onChange={e => setForm({ ...form, prazo: e.target.value })} error={errors.prazo} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+          <DateInput label="Prazo" value={form.prazo} onChange={e => setForm({ ...form, prazo: e.target.value })} error={errors.prazo} min={formatLocalDate(new Date())} />
+          <Input label="Horário (opcional)" type="time" value={form.horario} onChange={e => setForm({ ...form, horario: e.target.value })} />
+        </div>
       </Modal>
     </Layout>
   );

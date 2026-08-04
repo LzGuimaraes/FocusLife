@@ -1,5 +1,9 @@
 package dev.LzGuimaraes.FocusLifeHub.Tarefas;
 
+import java.time.LocalDate;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
@@ -53,6 +57,14 @@ public class TarefasService {
         return tarefasMapper.toResponse(tarefa);
     }
 
+    public List<TarefasResponseDTO> getTarefasDoDia(LocalDate data) {
+        Long userId = getAuthenticatedUserId();
+        return tarefasRepository.findByUserIdAndPrazo(userId, data)
+                .stream()
+                .map(tarefasMapper::toResponse)
+                .collect(Collectors.toList());
+    }
+
     public TarefasResponseDTO createTarefa(TarefasRequestDTO dto) {
         Long userId = getAuthenticatedUserId();
         
@@ -90,6 +102,9 @@ public class TarefasService {
         }
         if (dto.prazo() != null) {
             tarefa.setPrazo(dto.prazo());
+        }
+        if (dto.horario() != null) {
+            tarefa.setHorario(dto.horario());
         }
 
         TarefasModel updatedTarefa = tarefasRepository.save(tarefa);

@@ -1,6 +1,7 @@
 package dev.LzGuimaraes.FocusLifeHub.Tarefas;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -35,6 +36,9 @@ public class TarefasModel {
     private Prioridade prioridade;
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate prazo;
+
+    @JsonFormat(pattern = "HH:mm")
+    private LocalTime horario;
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")

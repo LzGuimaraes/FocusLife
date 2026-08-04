@@ -1,5 +1,8 @@
 package dev.LzGuimaraes.FocusLifeHub.Tarefas;
 
+import java.time.LocalDate;
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -23,6 +26,12 @@ public class TarefasController {
     @GetMapping("/all")
     public ResponseEntity<Page<TarefasResponseDTO>> getAllTarefas(Pageable pageable) {
         Page<TarefasResponseDTO> tarefas = tarefasService.getAllTarefas(pageable);
+        return ResponseEntity.ok(tarefas);
+    }
+
+    @GetMapping("/do-dia")
+    public ResponseEntity<List<TarefasResponseDTO>> getTarefasDoDia(@RequestParam("data") LocalDate data) {
+        List<TarefasResponseDTO> tarefas = tarefasService.getTarefasDoDia(data);
         return ResponseEntity.ok(tarefas);
     }
 

@@ -19,6 +19,7 @@ public class TarefasMapper {
         tarefa.setStatus(dto.status());
         tarefa.setPrioridade(dto.prioridade()); 
         tarefa.setPrazo(dto.prazo());
+        tarefa.setHorario(dto.horario());
         tarefa.setUser(user);
 
         return tarefa;
@@ -37,6 +38,7 @@ public class TarefasMapper {
             tarefa.getStatus(),
             tarefa.getPrioridade(),
             tarefa.getPrazo(),
+            tarefa.getHorario(),
             userId
         );
     }
