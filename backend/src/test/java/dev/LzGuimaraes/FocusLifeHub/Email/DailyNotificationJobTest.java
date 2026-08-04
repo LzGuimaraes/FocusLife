@@ -13,10 +13,12 @@ import org.junit.jupiter.api.Test;
 import dev.LzGuimaraes.FocusLifeHub.Auth.MailService;
 import dev.LzGuimaraes.FocusLifeHub.Contas.ContasModel;
 import dev.LzGuimaraes.FocusLifeHub.Contas.ContasRepository;
+import dev.LzGuimaraes.FocusLifeHub.Tarefas.TarefasRepository;
 
 class DailyNotificationJobTest {
 
     private ContasRepository contasRepository;
+    private TarefasRepository tarefasRepository;
     private EmailLogRepository emailLogRepository;
     private MailService mailService;
     private DailyNotificationJob job;
@@ -24,9 +26,10 @@ class DailyNotificationJobTest {
     @BeforeEach
     void setUp() {
         contasRepository = mock(ContasRepository.class);
+        tarefasRepository = mock(TarefasRepository.class);
         emailLogRepository = mock(EmailLogRepository.class);
         mailService = mock(MailService.class);
-        job = new DailyNotificationJob(contasRepository, emailLogRepository, mailService);
+        job = new DailyNotificationJob(contasRepository, tarefasRepository, emailLogRepository, mailService);
     }
 
     @Test
