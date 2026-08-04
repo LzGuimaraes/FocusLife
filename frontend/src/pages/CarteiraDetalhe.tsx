@@ -7,14 +7,15 @@ import Modal from "../components/Modal";
 import { Input, Select, NumberInput, DateInput } from "../components/Form";
 import { CardGrid, EmptyState, Spinner } from "../components/UI";
 import { InvestInfo, totalInvestido, saldoAtual, lucro, rentabilidade, fmtPct, fmtSigned } from "../components/InvestInfo";
+import { formatLocalDate, parseLocalDate } from "../utils/date";
 
 /* ── Types ── */
 type CatInvest = "RENDA_FIXA" | "TESOURO_DIRETO" | "ACOES" | "FIIS" | "ETFS" | "CRIPTOMOEDAS";
 type TipoCarteira = "INVESTIMENTO" | "DESPESAS";
 
-interface Ativo { id: number; nome: string; categoria: "CONTA" | "INVESTIMENTO"; categoriaInvestimento: CatInvest | null; quantidade: number | null; valorUnitario: number | null; precoAtual: number | null; saldo: number; instituicao: string | null; dataAplicacao: string | null; vencimento: string | null; rentabilidade: number | null; pago: boolean | null; financas_id: number; }
+interface Ativo { id: number; nome: string; categoria: "CONTA" | "INVESTIMENTO"; categoriaInvestimento: CatInvest | null; quantidade: number | null; valorUnitario: number | null; precoAtual: number | null; saldo: number; instituicao: string | null; dataAplicacao: string | null; vencimento: string | null; dataVencimento: string | null; rentabilidade: number | null; pago: boolean | null; financas_id: number; }
 interface Financa { id: number; nome: string; moeda: string; tipoCarteira: TipoCarteira; }
-interface FormData { nome: string; categoria: "CONTA" | "INVESTIMENTO"; categoriaInvestimento: CatInvest | ""; quantidade: string; valorUnitario: string; precoAtual: string; saldo: string; instituicao: string; dataAplicacao: string; vencimento: string; rentabilidade: string; financas_id: string; pago: boolean; }
+interface FormData { nome: string; categoria: "CONTA" | "INVESTIMENTO"; categoriaInvestimento: CatInvest | ""; quantidade: string; valorUnitario: string; precoAtual: string; saldo: string; instituicao: string; dataAplicacao: string; vencimento: string; dataVencimento: string; rentabilidade: string; financas_id: string; pago: boolean; }
 
 const moedaS: Record<string, string> = { BRL: "R$", USD: "$", EUR: "€", GBP: "£", JPY: "¥" };
 const fmt = (v: number | null | undefined, m: string) => v != null ? `${moedaS[m] || m} ${v.toFixed(2)}` : "-";
@@ -34,7 +35,7 @@ const tipoLabel: Record<TipoCarteira, { icon: string; label: string; color: stri
   DESPESAS: { icon: "📋", label: "Despesas", color: "#ef4444", bg: "#fef2f2" },
 };
 
-const emptyForm: FormData = { nome: "", categoria: "INVESTIMENTO", categoriaInvestimento: "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", rentabilidade: "", financas_id: "", pago: false };
+const emptyForm: FormData = { nome: "", categoria: "INVESTIMENTO", categoriaInvestimento: "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", dataVencimento: "", rentabilidade: "", financas_id: "", pago: false };
 type Errors = Partial<Record<keyof FormData, string>>;
 
 export default function CarteiraDetalhe() {
@@ -80,6 +81,7 @@ export default function CarteiraDetalhe() {
   const validate = (): boolean => {
     const e: Errors = {};
     if (!form.nome.trim()) e.nome = "O nome é obrigatório.";
+    if (!form.dataVencimento) e.dataVencimento = "Informe a data de vencimento.";
     if (isInvest && !form.categoriaInvestimento) e.categoriaInvestimento = "Selecione a categoria.";
     const ci = catInfo[form.categoriaInvestimento as CatInvest];
     if (ci?.autoCalc) { const vu = parseFloat(form.valorUnitario); const q = parseFloat(form.quantidade); if (!form.valorUnitario || isNaN(vu) || vu <= 0) e.valorUnitario = "Informe o preço médio."; if (!form.quantidade || isNaN(q) || q <= 0) e.quantidade = "Informe a quantidade."; }
@@ -91,7 +93,7 @@ export default function CarteiraDetalhe() {
 
   const handleSubmit = async () => {
     if (!validate()) return;
-    const payload: any = { nome: form.nome, categoria: isInvest ? "INVESTIMENTO" : "CONTA", financas_id: carteiraId };
+    const payload: any = { nome: form.nome, categoria: isInvest ? "INVESTIMENTO" : "CONTA", financas_id: carteiraId, dataVencimento: formatLocalDate(parseLocalDate(form.dataVencimento)) };
     if (isInvest) { payload.categoriaInvestimento = form.categoriaInvestimento; payload.instituicao = form.instituicao || null; payload.dataAplicacao = form.dataAplicacao || null; payload.vencimento = form.vencimento || null; payload.rentabilidade = form.rentabilidade ? parseFloat(form.rentabilidade) : null; payload.precoAtual = form.precoAtual ? parseFloat(form.precoAtual) : null; const ci = catInfo[form.categoriaInvestimento as CatInvest]; if (ci?.autoCalc) { payload.valorUnitario = parseFloat(form.valorUnitario) || 0; payload.quantidade = parseFloat(form.quantidade) || 0; } else { payload.saldo = parseFloat(form.saldo) || 0; } }
     if (isDespesa) { payload.saldo = parseFloat(form.saldo) || 0; payload.pago = form.pago; }
     const promise = editing ? api.put(`/contas/alter/${editing.id}`, payload) : api.post("/contas/create", payload);
@@ -102,7 +104,7 @@ export default function CarteiraDetalhe() {
 
   const togglePago = async (ativo: Ativo) => { const novo = !ativo.pago; try { await api.put(`/contas/alter/${ativo.id}`, { ...ativo, pago: novo, financas_id: ativo.financas_id }); setAtivos(prev => prev.map(a => a.id === ativo.id ? { ...a, pago: novo } : a)); toast.success(novo ? "Pago!" : "Desmarcado"); } catch { toast.error("Erro"); } };
 
-  const openModal = (a: Ativo | null = null) => { setErrors({}); if (a) { setEditing(a); setForm({ nome: a.nome, categoria: a.categoria, categoriaInvestimento: a.categoriaInvestimento || "", quantidade: a.quantidade?.toString() || "", valorUnitario: a.valorUnitario?.toString() || "", precoAtual: a.precoAtual?.toString() || "", saldo: a.saldo?.toString() || "0", instituicao: a.instituicao || "", dataAplicacao: a.dataAplicacao || "", vencimento: a.vencimento || "", rentabilidade: a.rentabilidade?.toString() || "", financas_id: a.financas_id.toString(), pago: a.pago ?? false }); } else { setEditing(null); setForm({ ...emptyForm, categoria: isInvest ? "INVESTIMENTO" : "CONTA", financas_id: carteiraId.toString() }); } setShowModal(true); };
+  const openModal = (a: Ativo | null = null) => { setErrors({}); if (a) { setEditing(a); setForm({ nome: a.nome, categoria: a.categoria, categoriaInvestimento: a.categoriaInvestimento || "", quantidade: a.quantidade?.toString() || "", valorUnitario: a.valorUnitario?.toString() || "", precoAtual: a.precoAtual?.toString() || "", saldo: a.saldo?.toString() || "0", instituicao: a.instituicao || "", dataAplicacao: a.dataAplicacao || "", vencimento: a.vencimento || "", dataVencimento: a.dataVencimento || "", rentabilidade: a.rentabilidade?.toString() || "", financas_id: a.financas_id.toString(), pago: a.pago ?? false }); } else { setEditing(null); setForm({ ...emptyForm, categoria: isInvest ? "INVESTIMENTO" : "CONTA", financas_id: carteiraId.toString() }); } setShowModal(true); };
   const closeModal = () => { setShowModal(false); setEditing(null); };
 
   /* ── Sumários ── */
@@ -233,6 +235,7 @@ export default function CarteiraDetalhe() {
                   <tr style={{ background: "#f8fafc" }}>
                     <th style={thStyle}>Ativo</th>
                     <th style={thStyle}>Detalhes</th>
+                    <th style={thStyle}>Vencimento</th>
                     <th style={{ ...thStyle, textAlign: "right" }}>Valor</th>
                     <th style={thStyle}>Ações</th>
                   </tr>
@@ -243,8 +246,9 @@ export default function CarteiraDetalhe() {
                     const isConta = a.categoria === "CONTA";
                     const isInv = a.categoria === "INVESTIMENTO";
                     const temQtd = isInv && a.quantidade != null && a.valorUnitario != null;
+                    const vencida = a.dataVencimento != null && a.dataVencimento < formatLocalDate(new Date());
                     return (
-                      <tr key={a.id} style={{ borderTop: "1px solid #f1f5f9" }}>
+                      <tr key={a.id} style={{ borderTop: "1px solid #f1f5f9", background: vencida ? "#fef2f2" : undefined }}>
                         <td style={tdStyle}>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                             <span style={{ fontWeight: 600, color: "#0f172a" }}>{a.nome}</span>
@@ -266,8 +270,11 @@ export default function CarteiraDetalhe() {
                             {isInv && !temQtd && a.precoAtual == null && a.instituicao && <span style={{ fontSize: "12px", color: "#64748b" }}>🏦 {a.instituicao}</span>}
                             {isInv && !temQtd && a.precoAtual == null && a.dataAplicacao && <span style={{ fontSize: "12px", color: "#64748b" }}>🗓 {a.dataAplicacao}</span>}
                           </div>
-                        </td>
-                        <td style={{ ...tdStyle, textAlign: "right" }}>
+                        </td>                        <td style={tdStyle}>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: vencida ? "#ef4444" : "#475569", whiteSpace: "nowrap" }}>
+                            {a.dataVencimento ? parseLocalDate(a.dataVencimento).toLocaleDateString('pt-BR') : "-"}
+                          </span>
+                        </td>                        <td style={{ ...tdStyle, textAlign: "right" }}>
                           <span style={{ fontSize: "15px", fontWeight: 800, color: isConta ? (a.pago ? "#10b981" : "#f59e0b") : "#10b981", whiteSpace: "nowrap" }}>{fmt(saldoAtual(a), moeda)}</span>
                         </td>
                         <td style={tdStyle}>
@@ -290,6 +297,7 @@ export default function CarteiraDetalhe() {
       {/* ── Modal ── */}
       <Modal open={showModal} onClose={closeModal} title={editing ? `Editar ${itemLabel}` : `Novo ${itemLabel}`} onSubmit={handleSubmit} submitLabel="Salvar" width="540px">
         <Input label="Nome / Ticker / Ativo" value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} placeholder={isInvest ? "Ex: PETR4, BTC, Tesouro Selic..." : "Ex: Aluguel, Internet..."} error={errors.nome} />
+        <DateInput label="Data de Vencimento" value={form.dataVencimento} onChange={e => setForm({ ...form, dataVencimento: e.target.value })} error={errors.dataVencimento} required />
 
         {isDespesa && (
           <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", background: form.pago ? "#d1fae5" : "#fef3c7", borderRadius: "10px", border: `1.5px solid ${form.pago ? "#10b981" : "#f59e0b"}` }}>
