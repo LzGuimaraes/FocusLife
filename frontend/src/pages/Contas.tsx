@@ -102,8 +102,21 @@ export default function Contas() {
       } else {
         payload.saldo = parseFloat(form.saldo) || 0;
       }
+      payload.pago = null; // não se aplica a investimentos
     }
-    if (form.categoria === "CONTA") { payload.saldo = parseFloat(form.saldo) || 0; payload.pago = form.pago; }
+    if (form.categoria === "CONTA") {
+      payload.saldo = parseFloat(form.saldo) || 0;
+      payload.pago = form.pago;
+      // Campos exclusivos de INVESTIMENTO: sempre null numa Conta, mesmo ao editar um ativo que antes era investimento.
+      payload.categoriaInvestimento = null;
+      payload.quantidade = null;
+      payload.valorUnitario = null;
+      payload.precoAtual = null;
+      payload.instituicao = null;
+      payload.dataAplicacao = null;
+      payload.vencimento = null;
+      payload.rentabilidade = null;
+    }
     const promise = editing ? api.put(`/contas/alter/${editing.id}`, payload) : api.post("/contas/create", payload);
     toast.promise(promise, { loading: "Salvando...", success: () => { closeModal(); fetchAtivos(); return editing ? "Atualizado!" : "Criado!"; }, error: (err: any) => err?.response?.data?.message || "Erro ao salvar" });
   };
@@ -300,7 +313,7 @@ export default function Contas() {
 
       {/* ── Modal ── */}
       <Modal open={showModal} onClose={closeModal} title={editing ? "Editar Ativo" : "Novo Ativo"} onSubmit={handleSubmit} submitLabel="Salvar" width="540px">
-        <Input label="Nome / Ticker / Ativo" value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} placeholder={walletType === "INVESTIMENTO" ? "Ex: PETR4, BTC, Tesouro Selic..." : "Ex: Aluguel, Internet..."} error={errors.nome} />
+        <Input label="Nome / Ticker / Ativo" required value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} placeholder={walletType === "INVESTIMENTO" ? "Ex: PETR4, BTC, Tesouro Selic..." : "Ex: Aluguel, Internet..."} error={errors.nome} />
         <DateInput label="Data de Vencimento" value={form.dataVencimento} onChange={e => setForm({ ...form, dataVencimento: e.target.value })} error={errors.dataVencimento} required />
 
         {/* Categoria travada */}
@@ -310,7 +323,7 @@ export default function Contas() {
             <span style={{ fontSize: "13px", fontWeight: 700, color: walletType === "INVESTIMENTO" ? "#8b5cf6" : "#6366f1" }}>{walletType === "INVESTIMENTO" ? "📈 Investimento" : "💳 Conta"}</span>
           </div>
         ) : (
-          <Select label="Categoria" value={form.categoria} onChange={e => { const cat = e.target.value as Categoria; setForm({ ...form, categoria: cat, categoriaInvestimento: cat === "CONTA" ? "" : form.categoriaInvestimento, quantidade: "", valorUnitario: "", precoAtual: "", instituicao: "", dataAplicacao: "", vencimento: "", rentabilidade: "" }); }}>
+          <Select label="Categoria" required value={form.categoria} onChange={e => { const cat = e.target.value as Categoria; setForm({ ...form, categoria: cat, categoriaInvestimento: cat === "CONTA" ? "" : form.categoriaInvestimento, quantidade: "", valorUnitario: "", precoAtual: "", instituicao: "", dataAplicacao: "", vencimento: "", rentabilidade: "" }); }}>
             <option value="CONTA">💳 Conta</option><option value="INVESTIMENTO">📈 Investimento</option>
           </Select>
         )}
@@ -319,13 +332,13 @@ export default function Contas() {
         {(walletType === "DESPESAS" || (!walletType && form.categoria === "CONTA")) && (
           <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", background: form.pago ? "#d1fae5" : "#fef3c7", borderRadius: "10px", border: `1.5px solid ${form.pago ? "#10b981" : "#f59e0b"}` }}>
             <input type="checkbox" id="pago-check" checked={form.pago} onChange={e => setForm({ ...form, pago: e.target.checked })} style={{ width: "18px", height: "18px", accentColor: "#10b981", cursor: "pointer" }} />
-            <label htmlFor="pago-check" style={{ fontSize: "14px", fontWeight: 600, color: form.pago ? "#047857" : "#b45309", cursor: "pointer" }}>{form.pago ? "✅ Pago" : "⏳ Pendente"}</label>
+            <label htmlFor="pago-check" style={{ fontSize: "14px", fontWeight: 600, color: form.pago ? "#047857" : "#b45309", cursor: "pointer" }}>{form.pago ? "✅ Pago" : "⏳ Pendente"} (opcional)</label>
           </div>
         )}
 
         {/* Categoria de Investimento */}
         {(walletType === "INVESTIMENTO" || (!walletType && form.categoria === "INVESTIMENTO")) && (
-          <Select label="Categoria de Investimento" value={form.categoriaInvestimento} onChange={e => { setForm({ ...form, categoriaInvestimento: e.target.value as CatInvest | "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", rentabilidade: "" }); }} error={errors.categoriaInvestimento}>
+          <Select label="Categoria de Investimento" required value={form.categoriaInvestimento} onChange={e => { setForm({ ...form, categoriaInvestimento: e.target.value as CatInvest | "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", rentabilidade: "" }); }} error={errors.categoriaInvestimento}>
             <option value="">Selecione...</option>
             {(Object.keys(catInfo) as CatInvest[]).map(ci => <option key={ci} value={ci}>{catInfo[ci].icon} {catInfo[ci].label}</option>)}
           </Select>
@@ -340,13 +353,13 @@ export default function Contas() {
               {/* Renda Fixa: campos específicos */}
               {form.categoriaInvestimento === "RENDA_FIXA" && (
                 <>
-                  <Input label="Instituição Financeira" value={form.instituicao} onChange={e => setForm({ ...form, instituicao: e.target.value })} placeholder="Ex: Banco do Brasil, XP..." />
+                  <Input label="Instituição Financeira (opcional)" value={form.instituicao} onChange={e => setForm({ ...form, instituicao: e.target.value })} placeholder="Ex: Banco do Brasil, XP..." />
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                    <DateInput label="Data da Aplicação" value={form.dataAplicacao} onChange={e => setForm({ ...form, dataAplicacao: e.target.value })} />
-                    <NumberInput label="Rentabilidade (%)" decimal value={form.rentabilidade} onChange={v => setForm({ ...form, rentabilidade: v })} placeholder="Ex: 12.5" />
+                    <DateInput label="Data da Aplicação (opcional)" value={form.dataAplicacao} onChange={e => setForm({ ...form, dataAplicacao: e.target.value })} />
+                    <NumberInput label="Rentabilidade % (opcional)" decimal value={form.rentabilidade} onChange={v => setForm({ ...form, rentabilidade: v })} placeholder="Ex: 12.5" />
                   </div>
                   <DateInput label="Vencimento (opcional)" value={form.vencimento} onChange={e => setForm({ ...form, vencimento: e.target.value })} />
-                  <NumberInput label="Valor Aplicado" decimal value={form.saldo} onChange={v => setForm({ ...form, saldo: v })} error={errors.saldo} placeholder="1000.00" />
+                  <NumberInput label="Valor Aplicado" required decimal value={form.saldo} onChange={v => setForm({ ...form, saldo: v })} error={errors.saldo} placeholder="1000.00" />
                 </>
               )}
 
@@ -354,11 +367,11 @@ export default function Contas() {
               {form.categoriaInvestimento === "TESOURO_DIRETO" && (
                 <>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                    <DateInput label="Data da Compra" value={form.dataAplicacao} onChange={e => setForm({ ...form, dataAplicacao: e.target.value })} />
-                    <DateInput label="Vencimento" value={form.vencimento} onChange={e => setForm({ ...form, vencimento: e.target.value })} />
+                    <DateInput label="Data da Compra (opcional)" value={form.dataAplicacao} onChange={e => setForm({ ...form, dataAplicacao: e.target.value })} />
+                    <DateInput label="Vencimento (opcional)" value={form.vencimento} onChange={e => setForm({ ...form, vencimento: e.target.value })} />
                   </div>
                   <NumberInput label="Quantidade de Títulos (opcional)" value={form.quantidade} onChange={v => setForm({ ...form, quantidade: v })} placeholder="Ex: 5" />
-                  <NumberInput label="Valor Investido" decimal value={form.saldo} onChange={v => setForm({ ...form, saldo: v })} error={errors.saldo} placeholder="1000.00" />
+                  <NumberInput label="Valor Investido" required decimal value={form.saldo} onChange={v => setForm({ ...form, saldo: v })} error={errors.saldo} placeholder="1000.00" />
                 </>
               )}
 
@@ -367,8 +380,8 @@ export default function Contas() {
                 <>
                   <Input label={form.categoriaInvestimento === "ACOES" ? "Nome da Empresa (opcional)" : "Nome do Fundo (opcional)"} value={form.instituicao} onChange={e => setForm({ ...form, instituicao: e.target.value })} placeholder="Opcional" />
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                    <NumberInput label="Preço Médio" decimal value={form.valorUnitario} onChange={v => setForm({ ...form, valorUnitario: v })} error={errors.valorUnitario} placeholder="Ex: 35.50" />
-                    <NumberInput label="Quantidade" value={form.quantidade} onChange={v => setForm({ ...form, quantidade: v })} error={errors.quantidade} placeholder="Ex: 100" />
+                    <NumberInput label="Preço Médio" required decimal value={form.valorUnitario} onChange={v => setForm({ ...form, valorUnitario: v })} error={errors.valorUnitario} placeholder="Ex: 35.50" />
+                    <NumberInput label="Quantidade" required value={form.quantidade} onChange={v => setForm({ ...form, quantidade: v })} error={errors.quantidade} placeholder="Ex: 100" />
                   </div>
                   <NumberInput label="Preço Atual (opcional)" decimal value={form.precoAtual} onChange={v => setForm({ ...form, precoAtual: v })} placeholder="Ex: 38.20" />
                   {form.valorUnitario && form.quantidade && (
@@ -384,8 +397,8 @@ export default function Contas() {
               {form.categoriaInvestimento === "CRIPTOMOEDAS" && (
                 <>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                    <NumberInput label="Preço Médio" decimal value={form.valorUnitario} onChange={v => setForm({ ...form, valorUnitario: v })} error={errors.valorUnitario} placeholder="Ex: 350000.00" />
-                    <NumberInput label="Quantidade" highPrecision value={form.quantidade} onChange={v => setForm({ ...form, quantidade: v })} error={errors.quantidade} placeholder="Ex: 0.05" />
+                    <NumberInput label="Preço Médio" required decimal value={form.valorUnitario} onChange={v => setForm({ ...form, valorUnitario: v })} error={errors.valorUnitario} placeholder="Ex: 350000.00" />
+                    <NumberInput label="Quantidade" required highPrecision value={form.quantidade} onChange={v => setForm({ ...form, quantidade: v })} error={errors.quantidade} placeholder="Ex: 0.05" />
                   </div>
                   <NumberInput label="Preço Atual (opcional)" decimal value={form.precoAtual} onChange={v => setForm({ ...form, precoAtual: v })} placeholder="Ex: 365000.00" />
                   {form.valorUnitario && form.quantidade && (
@@ -403,12 +416,12 @@ export default function Contas() {
         {/* Conta: saldo + carteira */}
         {(walletType === "DESPESAS" || (!walletType && form.categoria === "CONTA")) && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-            <NumberInput label="Saldo" decimal value={form.saldo} onChange={v => setForm({ ...form, saldo: v })} error={errors.saldo} placeholder="0.00" />
-            <Select label="Carteira" value={form.financas_id} onChange={e => setForm({ ...form, financas_id: e.target.value })} error={errors.financas_id}>{financas.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}</Select>
+            <NumberInput label="Saldo" required decimal value={form.saldo} onChange={v => setForm({ ...form, saldo: v })} error={errors.saldo} placeholder="0.00" hint="Valor da conta/despesa neste vencimento" />
+            <Select label="Carteira" required value={form.financas_id} onChange={e => setForm({ ...form, financas_id: e.target.value })} error={errors.financas_id}>{financas.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}</Select>
           </div>
         )}
         {(walletType === "INVESTIMENTO" || (!walletType && form.categoria === "INVESTIMENTO")) && (
-          <Select label="Carteira" value={form.financas_id} onChange={e => setForm({ ...form, financas_id: e.target.value })} error={errors.financas_id}>{financas.filter(f => f.tipoCarteira === "INVESTIMENTO").map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}</Select>
+          <Select label="Carteira" required value={form.financas_id} onChange={e => setForm({ ...form, financas_id: e.target.value })} error={errors.financas_id}>{financas.filter(f => f.tipoCarteira === "INVESTIMENTO").map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}</Select>
         )}
       </Modal>
     </Layout>
