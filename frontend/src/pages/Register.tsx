@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import api from "../api/api";
 import { useNavigate } from "react-router-dom";
 import { Input } from "../components/Form";
@@ -10,6 +11,7 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [registered, setRegistered] = useState(false);
   const navigate = useNavigate();
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -20,7 +22,9 @@ export default function Register() {
     setLoading(true);
     try {
       await api.post("/auth/register", { name: nome, email, password }, { withCredentials: true });
-      navigate("/auth/login", { state: { registered: true } });
+      setRegistered(true);
+      toast.success(`Cadastro realizado! Enviamos um e-mail de confirmação para ${email}. Verifique sua caixa de entrada.`, { duration: 4000 });
+      setTimeout(() => navigate("/auth/login", { state: { registered: true } }), 4000);
     } catch (error: any) { setError(error.response?.data?.message || error.response?.data || "Erro ao registrar."); }
     finally { setLoading(false); }
   };
@@ -36,8 +40,8 @@ export default function Register() {
           <Input label="E-mail" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu@email.com" required disabled={loading} />
           <Input label="Senha" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 8 caracteres" required disabled={loading} />
           <Input label="Confirmar Senha" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repita a senha" required disabled={loading} />
-          <button type="submit" disabled={loading} style={{ padding: "12px", background: "linear-gradient(135deg, #10b981, #34d399)", color: "white", border: "none", borderRadius: "10px", cursor: loading ? "not-allowed" : "pointer", fontSize: "15px", fontWeight: 600, opacity: loading ? 0.7 : 1, marginTop: "4px", transition: "all 0.15s ease" }}
-            onMouseEnter={e => { if (!loading) { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(16,185,129,0.35)"; }}}
+          <button type="submit" disabled={loading || registered} style={{ padding: "12px", background: "linear-gradient(135deg, #10b981, #34d399)", color: "white", border: "none", borderRadius: "10px", cursor: loading || registered ? "not-allowed" : "pointer", fontSize: "15px", fontWeight: 600, opacity: loading || registered ? 0.7 : 1, marginTop: "4px", transition: "all 0.15s ease" }}
+            onMouseEnter={e => { if (!loading && !registered) { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(16,185,129,0.35)"; }}}
             onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>{loading ? "Criando..." : "Criar Conta"}</button>
         </form>
         <div style={{ textAlign: "center" }}><span style={{ fontSize: "13px", color: "#64748b" }}>Já tem uma conta? </span><button onClick={() => navigate("/auth/login")} disabled={loading} style={{ background: "none", border: "none", color: "#6366f1", cursor: "pointer", fontSize: "13px", fontWeight: 600, padding: 0 }}>Fazer login</button></div>
