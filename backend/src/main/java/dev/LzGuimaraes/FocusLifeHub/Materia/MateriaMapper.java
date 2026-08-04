@@ -17,6 +17,7 @@ public class MateriaMapper {
         MateriaModel materia = new MateriaModel();
         materia.setNome(dto.nome());
         materia.setDescricao(dto.descricao());
+        materia.setDiasSemana(dto.diasSemana());
         materia.setUser(user);
         return materia;
     }
@@ -33,7 +34,9 @@ public class MateriaMapper {
             model.getNome(),
             model.getDescricao(),
             model.getUser().getId(),
-            estudosDTOs 
+            model.getDiasSemana(),
+            estudosDTOs,
+            model.getTotalSegundos()
         );
     }
     

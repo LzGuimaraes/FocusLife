@@ -15,6 +15,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import dev.LzGuimaraes.FocusLifeHub.Materia.dto.MateriaRequestDTO;
 import dev.LzGuimaraes.FocusLifeHub.Materia.dto.MateriaResponseDTO;
+import dev.LzGuimaraes.FocusLifeHub.Materia.dto.SessaoIniciadaResponseDTO;
+import dev.LzGuimaraes.FocusLifeHub.Materia.dto.SessaoPausadaResponseDTO;
+import dev.LzGuimaraes.FocusLifeHub.Materia.dto.TempoTotalResponseDTO;
 import jakarta.validation.Valid;
 
 @RestController
@@ -36,6 +39,21 @@ public class MateriaController {
     @GetMapping("/all/{id}")
     public MateriaResponseDTO getMateriaById(@PathVariable Long id) {
         return materiaService.getMateriaById(id);
+    }
+
+    @PostMapping("/{id}/sessoes/iniciar")
+    public ResponseEntity<SessaoIniciadaResponseDTO> iniciarSessao(@PathVariable Long id) {
+        return ResponseEntity.ok(materiaService.iniciarSessao(id));
+    }
+
+    @PutMapping("/{id}/sessoes/{sessaoId}/pausar")
+    public ResponseEntity<SessaoPausadaResponseDTO> pausarSessao(@PathVariable Long id, @PathVariable Long sessaoId) {
+        return ResponseEntity.ok(materiaService.pausarSessao(id, sessaoId));
+    }
+
+    @GetMapping("/{id}/tempo-total")
+    public ResponseEntity<TempoTotalResponseDTO> getTempoTotal(@PathVariable Long id) {
+        return ResponseEntity.ok(materiaService.getTempoTotal(id));
     }
 
     @PostMapping("create")
