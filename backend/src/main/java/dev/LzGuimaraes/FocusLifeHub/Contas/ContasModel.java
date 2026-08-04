@@ -1,8 +1,12 @@
 package dev.LzGuimaraes.FocusLifeHub.Contas;
 
+import java.time.LocalDate;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import dev.LzGuimaraes.FocusLifeHub.Financas.FinancasModel;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -47,6 +51,10 @@ public class ContasModel {
     private String dataAplicacao;
 
     private String vencimento;
+
+    @Column(nullable = false)
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate dataVencimento;
 
     private Float rentabilidade;
 

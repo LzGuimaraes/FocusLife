@@ -1,5 +1,9 @@
 package dev.LzGuimaraes.FocusLifeHub.Contas.dto;
 
+import java.time.LocalDate;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import dev.LzGuimaraes.FocusLifeHub.Contas.CategoriaAtivo;
 import dev.LzGuimaraes.FocusLifeHub.Contas.CategoriaInvestimento;
 import jakarta.validation.constraints.NotBlank;
@@ -36,6 +40,10 @@ public record ContasRequestDTO(
     String dataAplicacao,
 
     String vencimento,
+
+    @NotNull(message = "A data de vencimento é obrigatória")
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    LocalDate dataVencimento,
 
     @PositiveOrZero(message = "A rentabilidade não pode ser negativa.")
     Float rentabilidade,

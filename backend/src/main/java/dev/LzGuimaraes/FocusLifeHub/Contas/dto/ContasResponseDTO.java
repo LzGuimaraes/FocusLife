@@ -1,5 +1,9 @@
 package dev.LzGuimaraes.FocusLifeHub.Contas.dto;
 
+import java.time.LocalDate;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import dev.LzGuimaraes.FocusLifeHub.Contas.CategoriaAtivo;
 import dev.LzGuimaraes.FocusLifeHub.Contas.CategoriaInvestimento;
 
@@ -15,6 +19,8 @@ public record ContasResponseDTO(
     String instituicao,
     String dataAplicacao,
     String vencimento,
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    LocalDate dataVencimento,
     Float rentabilidade,
     Boolean pago,
     Long financas_id

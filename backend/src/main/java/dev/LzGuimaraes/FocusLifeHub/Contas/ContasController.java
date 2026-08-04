@@ -1,5 +1,6 @@
 package dev.LzGuimaraes.FocusLifeHub.Contas;
 
+import java.time.LocalDate;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -36,6 +37,12 @@ public class ContasController {
     @GetMapping("/by-financa/{financasId}")
     public ResponseEntity<List<ContasResponseDTO>> getContasByFinancaId(@PathVariable Long financasId) {
         List<ContasResponseDTO> contas = contasService.getContasByFinancaId(financasId);
+        return ResponseEntity.ok(contas);
+    }
+
+    @GetMapping("/vencendo")
+    public ResponseEntity<List<ContasResponseDTO>> getContasVencendo(@RequestParam("data") LocalDate data) {
+        List<ContasResponseDTO> contas = contasService.getContasVencendo(data);
         return ResponseEntity.ok(contas);
     }
 

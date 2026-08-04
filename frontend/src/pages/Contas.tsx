@@ -6,6 +6,7 @@ import Modal from "../components/Modal";
 import { Input, Select, NumberInput, DateInput } from "../components/Form";
 import { PageHeader, CardGrid, EmptyState, Spinner } from "../components/UI";
 import { InvestInfo, totalInvestido, saldoAtual, lucro, rentabilidade, fmtPct, fmtSigned } from "../components/InvestInfo";
+import { formatLocalDate, parseLocalDate } from "../utils/date";
 
 type Categoria = "CONTA" | "INVESTIMENTO";
 type CatInvest = "RENDA_FIXA" | "TESOURO_DIRETO" | "ACOES" | "FIIS" | "ETFS" | "CRIPTOMOEDAS";
@@ -16,14 +17,15 @@ interface Ativo {
   categoriaInvestimento: CatInvest | null; quantidade: number | null;
   valorUnitario: number | null; precoAtual: number | null; saldo: number;
   instituicao: string | null; dataAplicacao: string | null;
-  vencimento: string | null; rentabilidade: number | null; pago: boolean | null;
+  vencimento: string | null; dataVencimento: string | null;
+  rentabilidade: number | null; pago: boolean | null;
   financas_id: number;
 }
 interface Financa { id: number; nome: string; moeda: string; tipoCarteira: TipoCarteira; }
 interface FormData {
   nome: string; categoria: Categoria; categoriaInvestimento: CatInvest | "";
   quantidade: string; valorUnitario: string; precoAtual: string; saldo: string;
-  instituicao: string; dataAplicacao: string; vencimento: string; rentabilidade: string;
+  instituicao: string; dataAplicacao: string; vencimento: string; dataVencimento: string; rentabilidade: string;
   financas_id: string; pago: boolean;
 }
 const moedaS: Record<string, string> = { BRL: "R$", USD: "$", EUR: "€", GBP: "£", JPY: "¥" };
@@ -39,7 +41,7 @@ const catInfo: Record<CatInvest, { icon: string; label: string; color: string; b
   CRIPTOMOEDAS:     { icon: "₿",  label: "Criptomoedas",     color: "#f59e0b", bg: "#fef3c7", autoCalc: true },
 };
 
-const emptyForm: FormData = { nome: "", categoria: "INVESTIMENTO", categoriaInvestimento: "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", rentabilidade: "", financas_id: "", pago: false };
+const emptyForm: FormData = { nome: "", categoria: "INVESTIMENTO", categoriaInvestimento: "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", dataVencimento: "", rentabilidade: "", financas_id: "", pago: false };
 type Errors = Partial<Record<keyof FormData, string>>;
 
 export default function Contas() {
@@ -66,6 +68,7 @@ export default function Contas() {
   const validate = (): boolean => {
     const e: Errors = {};
     if (!form.nome.trim()) e.nome = "O nome é obrigatório.";
+    if (!form.dataVencimento) e.dataVencimento = "Informe a data de vencimento.";
     if (!form.financas_id) e.financas_id = "Selecione uma carteira.";
     if (form.categoria === "INVESTIMENTO" && !form.categoriaInvestimento) e.categoriaInvestimento = "Selecione a categoria.";
     const ci = catInfo[form.categoriaInvestimento as CatInvest];
@@ -84,7 +87,7 @@ export default function Contas() {
 
   const handleSubmit = async () => {
     if (!validate()) return;
-    const payload: any = { nome: form.nome, categoria: form.categoria, financas_id: parseInt(form.financas_id) };
+    const payload: any = { nome: form.nome, categoria: form.categoria, financas_id: parseInt(form.financas_id), dataVencimento: formatLocalDate(parseLocalDate(form.dataVencimento)) };
     if (form.categoria === "INVESTIMENTO") {
       payload.categoriaInvestimento = form.categoriaInvestimento;
       payload.instituicao = form.instituicao || null;
@@ -116,7 +119,7 @@ export default function Contas() {
   const openModal = (a: Ativo | null = null) => {
     setErrors({});
     const defCat: Categoria = walletType === "INVESTIMENTO" ? "INVESTIMENTO" : "CONTA";
-    if (a) { setEditing(a); setForm({ nome: a.nome, categoria: a.categoria, categoriaInvestimento: a.categoriaInvestimento || "", quantidade: a.quantidade?.toString() || "", valorUnitario: a.valorUnitario?.toString() || "", precoAtual: a.precoAtual?.toString() || "", saldo: a.saldo?.toString() || "0", instituicao: a.instituicao || "", dataAplicacao: a.dataAplicacao || "", vencimento: a.vencimento || "", rentabilidade: a.rentabilidade?.toString() || "", financas_id: a.financas_id.toString(), pago: a.pago ?? false }); }
+    if (a) { setEditing(a); setForm({ nome: a.nome, categoria: a.categoria, categoriaInvestimento: a.categoriaInvestimento || "", quantidade: a.quantidade?.toString() || "", valorUnitario: a.valorUnitario?.toString() || "", precoAtual: a.precoAtual?.toString() || "", saldo: a.saldo?.toString() || "0", instituicao: a.instituicao || "", dataAplicacao: a.dataAplicacao || "", vencimento: a.vencimento || "", dataVencimento: a.dataVencimento || "", rentabilidade: a.rentabilidade?.toString() || "", financas_id: a.financas_id.toString(), pago: a.pago ?? false }); }
     else { setEditing(null); setForm({ ...emptyForm, categoria: defCat, financas_id: filterFinanca !== "all" ? filterFinanca : (financas[0]?.id.toString() || "") }); }
     setShowModal(true);
   };
@@ -235,6 +238,7 @@ export default function Contas() {
                   <tr style={{ background: "#f8fafc" }}>
                     <th style={thStyle}>Ativo</th>
                     <th style={thStyle}>Detalhes</th>
+                    <th style={thStyle}>Vencimento</th>
                     <th style={{ ...thStyle, textAlign: "right" }}>Valor</th>
                     <th style={thStyle}>Ações</th>
                   </tr>
@@ -246,8 +250,9 @@ export default function Contas() {
                     const isConta = a.categoria === "CONTA";
                     const isInvest = a.categoria === "INVESTIMENTO";
                     const temQtd = isInvest && a.quantidade != null && a.valorUnitario != null;
+                    const vencida = a.dataVencimento != null && a.dataVencimento < formatLocalDate(new Date());
                     return (
-                      <tr key={a.id} style={{ borderTop: "1px solid #f1f5f9" }}>
+                      <tr key={a.id} style={{ borderTop: "1px solid #f1f5f9", background: vencida ? "#fef2f2" : undefined }}>
                         <td style={tdStyle}>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                             <span style={{ fontWeight: 600, color: "#0f172a" }}>{a.nome}</span>
@@ -269,8 +274,11 @@ export default function Contas() {
                             {isInvest && !temQtd && a.precoAtual == null && a.instituicao && <span style={{ fontSize: "12px", color: "#64748b" }}>🏦 {a.instituicao}</span>}
                             {isInvest && !temQtd && a.precoAtual == null && a.dataAplicacao && <span style={{ fontSize: "12px", color: "#64748b" }}>🗓 {a.dataAplicacao}</span>}
                           </div>
-                        </td>
-                        <td style={{ ...tdStyle, textAlign: "right" }}>
+                        </td>                        <td style={tdStyle}>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: vencida ? "#ef4444" : "#475569", whiteSpace: "nowrap" }}>
+                            {a.dataVencimento ? parseLocalDate(a.dataVencimento).toLocaleDateString('pt-BR') : "-"}
+                          </span>
+                        </td>                        <td style={{ ...tdStyle, textAlign: "right" }}>
                           <span style={{ fontSize: "15px", fontWeight: 800, color: isConta ? (a.pago ? "#10b981" : "#f59e0b") : "#10b981", whiteSpace: "nowrap" }}>{fmt(saldoAtual(a), moeda)}</span>
                         </td>
                         <td style={tdStyle}>
@@ -293,6 +301,7 @@ export default function Contas() {
       {/* ── Modal ── */}
       <Modal open={showModal} onClose={closeModal} title={editing ? "Editar Ativo" : "Novo Ativo"} onSubmit={handleSubmit} submitLabel="Salvar" width="540px">
         <Input label="Nome / Ticker / Ativo" value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} placeholder={walletType === "INVESTIMENTO" ? "Ex: PETR4, BTC, Tesouro Selic..." : "Ex: Aluguel, Internet..."} error={errors.nome} />
+        <DateInput label="Data de Vencimento" value={form.dataVencimento} onChange={e => setForm({ ...form, dataVencimento: e.target.value })} error={errors.dataVencimento} required />
 
         {/* Categoria travada */}
         {walletType ? (

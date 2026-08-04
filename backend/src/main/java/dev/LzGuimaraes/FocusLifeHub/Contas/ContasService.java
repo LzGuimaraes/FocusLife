@@ -1,5 +1,6 @@
 package dev.LzGuimaraes.FocusLifeHub.Contas;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -72,6 +73,14 @@ public class ContasService {
                 .collect(Collectors.toList());
     }
 
+    public List<ContasResponseDTO> getContasVencendo(LocalDate data) {
+        Long userId = getAuthenticatedUserId();
+        return contasRepository.findByFinancas_UserIdAndPagoFalseAndDataVencimento(userId, data)
+                .stream()
+                .map(contasMapper::toResponse)
+                .collect(Collectors.toList());
+    }
+
     public ContasResponseDTO createConta(ContasRequestDTO dto) {
         Long userId = getAuthenticatedUserId();
 
@@ -139,6 +148,7 @@ public class ContasService {
         ativo.setInstituicao(dto.instituicao());
         ativo.setDataAplicacao(dto.dataAplicacao());
         ativo.setVencimento(dto.vencimento());
+        ativo.setDataVencimento(dto.dataVencimento());
         ativo.setRentabilidade(dto.rentabilidade());
 
         // Saldo atual = Preço Atual × Quantidade (se preço atual informado); senão Preço Médio × Quantidade

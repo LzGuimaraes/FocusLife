@@ -24,6 +24,7 @@ public class ContasMapper {
         ativo.setInstituicao(dto.instituicao());
         ativo.setDataAplicacao(dto.dataAplicacao());
         ativo.setVencimento(dto.vencimento());
+        ativo.setDataVencimento(dto.dataVencimento());
         ativo.setRentabilidade(dto.rentabilidade());
         ativo.setPago(dto.pago());
         ativo.setFinancas(financas);
@@ -50,6 +51,7 @@ public class ContasMapper {
             ativo.getInstituicao(),
             ativo.getDataAplicacao(),
             ativo.getVencimento(),
+            ativo.getDataVencimento(),
             ativo.getRentabilidade(),
             ativo.getPago(),
             financasId
