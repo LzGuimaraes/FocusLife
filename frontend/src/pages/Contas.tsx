@@ -8,6 +8,7 @@ import { PageHeader, CardGrid, EmptyState, Spinner } from "../components/UI";
 import { InvestInfo, totalInvestido, saldoAtual, lucro, rentabilidade, fmtPct, fmtSigned } from "../components/InvestInfo";
 import { formatLocalDate, parseLocalDate } from "../utils/date";
 import ContaLogsModal from "../components/ContaLogsModal";
+import AtivoAutocomplete from "../components/AtivoAutocomplete";
 
 type Categoria = "CONTA" | "INVESTIMENTO";
 type CatInvest = "RENDA_FIXA" | "TESOURO_DIRETO" | "ACOES" | "FIIS" | "ETFS" | "CRIPTOMOEDAS";
@@ -104,6 +105,9 @@ export default function Contas() {
 
   const selectedFinanca = filterFinanca !== "all" ? financas.find(f => `${f.tipo}:${f.id}` === filterFinanca) : null;
   const walletType = selectedFinanca?.tipo;
+  const isInvestBranch = walletType === "INVESTIMENTO" || (!walletType && form.categoria === "INVESTIMENTO");
+  const isDespesaBranch = walletType === "DESPESAS" || (!walletType && form.categoria === "CONTA");
+  const isRendaVariavel = isInvestBranch && ["ACOES", "FIIS", "ETFS", "CRIPTOMOEDAS"].includes(form.categoriaInvestimento);
 
   const validate = (): boolean => {
     const e: Errors = {};
@@ -359,10 +363,7 @@ export default function Contas() {
 
       {/* ── Modal ── */}
       <Modal open={showModal} onClose={closeModal} title={editing ? "Editar Ativo" : "Novo Ativo"} onSubmit={handleSubmit} submitLabel="Salvar" width="540px">
-        <Input label="Nome / Ticker / Ativo" required value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} placeholder={walletType === "INVESTIMENTO" ? "Ex: PETR4, BTC, Tesouro Selic..." : "Ex: Aluguel, Internet..."} error={errors.nome} />
-        <DateInput label="Data de Vencimento" value={form.dataVencimento} onChange={e => setForm({ ...form, dataVencimento: e.target.value })} error={errors.dataVencimento} required />
-
-        {/* Categoria travada */}
+        {/* Categoria (travada ou seleção) */}
         {walletType ? (
           <div style={{ padding: "10px 14px", background: "#f8fafc", borderRadius: "10px", border: "1.5px solid #e2e8f0" }}>
             <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>Categoria: </span>
@@ -374,20 +375,36 @@ export default function Contas() {
           </Select>
         )}
 
+        {/* Categoria de Investimento (antes do Ativo, para o autocomplete saber o tipo) */}
+        {isInvestBranch && (
+          <Select label="Categoria de Investimento" required value={form.categoriaInvestimento} onChange={e => { setForm({ ...form, categoriaInvestimento: e.target.value as CatInvest | "", nome: "", precoAtual: "", quantidade: "", valorUnitario: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", rentabilidade: "" }); }} error={errors.categoriaInvestimento}>
+            <option value="">Selecione...</option>
+            {(Object.keys(catInfo) as CatInvest[]).map(ci => <option key={ci} value={ci}>{catInfo[ci].icon} {catInfo[ci].label}</option>)}
+          </Select>
+        )}
+
+        {/* Ativo: autocomplete (renda variável) ou texto */}
+        {isInvestBranch ? (
+          isRendaVariavel ? (
+            <div>
+              <label style={{ fontSize: "13px", fontWeight: 600, color: "#374151", display: "block", marginBottom: "6px" }}>Ativo (ticker) *</label>
+              <AtivoAutocomplete value={form.nome} error={errors.nome} onSelect={a => setForm({ ...form, nome: a.nome, precoAtual: a.precoAtual != null ? String(a.precoAtual) : form.precoAtual })} />
+            </div>
+          ) : (
+            <Input label="Nome / Ticker / Ativo" required value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} placeholder="Ex: Tesouro Selic 2029, CDB..." error={errors.nome} />
+          )
+        ) : (
+          <Input label="Nome / Ticker / Ativo" required value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} placeholder="Ex: Aluguel, Internet..." error={errors.nome} />
+        )}
+
+        <DateInput label="Data de Vencimento" value={form.dataVencimento} onChange={e => setForm({ ...form, dataVencimento: e.target.value })} error={errors.dataVencimento} required />
+
         {/* Pago (CONTA) */}
-        {(walletType === "DESPESAS" || (!walletType && form.categoria === "CONTA")) && (
+        {isDespesaBranch && (
           <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", background: form.pago ? "#d1fae5" : "#fef3c7", borderRadius: "10px", border: `1.5px solid ${form.pago ? "#10b981" : "#f59e0b"}` }}>
             <input type="checkbox" id="pago-check" checked={form.pago} onChange={e => setForm({ ...form, pago: e.target.checked })} style={{ width: "18px", height: "18px", accentColor: "#10b981", cursor: "pointer" }} />
             <label htmlFor="pago-check" style={{ fontSize: "14px", fontWeight: 600, color: form.pago ? "#047857" : "#b45309", cursor: "pointer" }}>{form.pago ? "✅ Pago" : "⏳ Pendente"} (opcional)</label>
           </div>
-        )}
-
-        {/* Categoria de Investimento */}
-        {(walletType === "INVESTIMENTO" || (!walletType && form.categoria === "INVESTIMENTO")) && (
-          <Select label="Categoria de Investimento" required value={form.categoriaInvestimento} onChange={e => { setForm({ ...form, categoriaInvestimento: e.target.value as CatInvest | "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", rentabilidade: "" }); }} error={errors.categoriaInvestimento}>
-            <option value="">Selecione...</option>
-            {(Object.keys(catInfo) as CatInvest[]).map(ci => <option key={ci} value={ci}>{catInfo[ci].icon} {catInfo[ci].label}</option>)}
-          </Select>
         )}
 
         {/* Campos específicos por categoria de investimento */}
