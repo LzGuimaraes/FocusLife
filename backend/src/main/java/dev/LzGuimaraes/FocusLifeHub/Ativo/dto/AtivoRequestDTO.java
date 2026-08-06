@@ -30,7 +30,6 @@ public record AtivoRequestDTO(
 
     String vencimento,
 
-    @NotNull(message = "A data de vencimento é obrigatória")
     @JsonFormat(pattern = "yyyy-MM-dd")
     LocalDate dataVencimento,
 

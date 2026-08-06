@@ -112,7 +112,7 @@ export default function Contas() {
   const validate = (): boolean => {
     const e: Errors = {};
     if (!form.nome.trim()) e.nome = "O nome é obrigatório.";
-    if (!form.dataVencimento) e.dataVencimento = "Informe a data de vencimento.";
+    if (!isRendaVariavel && !form.dataVencimento) e.dataVencimento = "Informe a data de vencimento.";
     if (!form.carteira_id) e.carteira_id = "Selecione uma carteira.";
     if (form.categoria === "INVESTIMENTO" && !form.categoriaInvestimento) e.categoriaInvestimento = "Selecione a categoria.";
     const ci = catInfo[form.categoriaInvestimento as CatInvest];
@@ -134,7 +134,8 @@ export default function Contas() {
     const carteiraKey = walletType ? filterFinanca : form.carteira_id;
     const [cTipo, cId] = carteiraKey.split(":");
     const base = form.categoria === "INVESTIMENTO" ? "/ativos" : "/despesas";
-    const payload: any = { nome: form.nome, dataVencimento: formatLocalDate(parseLocalDate(form.dataVencimento)) };
+    const payload: any = { nome: form.nome };
+    if (form.dataVencimento) payload.dataVencimento = formatLocalDate(parseLocalDate(form.dataVencimento));
     if (cTipo === "INVESTIMENTO") payload.carteira_investimento_id = parseInt(cId);
     else payload.carteira_dividas_id = parseInt(cId);
     if (form.categoria === "INVESTIMENTO") {
@@ -397,7 +398,7 @@ export default function Contas() {
           <Input label="Nome / Ticker / Ativo" required value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} placeholder="Ex: Aluguel, Internet..." error={errors.nome} />
         )}
 
-        <DateInput label="Data de Vencimento" value={form.dataVencimento} onChange={e => setForm({ ...form, dataVencimento: e.target.value })} error={errors.dataVencimento} required />
+        {!isRendaVariavel && (<DateInput label="Data de Vencimento" value={form.dataVencimento} onChange={e => setForm({ ...form, dataVencimento: e.target.value })} error={errors.dataVencimento} required />)}
 
         {/* Pago (CONTA) */}
         {isDespesaBranch && (
@@ -441,12 +442,18 @@ export default function Contas() {
               {/* Ações, FIIs, ETFs: preço médio × quantidade */}
               {(form.categoriaInvestimento === "ACOES" || form.categoriaInvestimento === "FIIS" || form.categoriaInvestimento === "ETFS") && (
                 <>
-                  <Input label={form.categoriaInvestimento === "ACOES" ? "Nome da Empresa (opcional)" : "Nome do Fundo (opcional)"} value={form.instituicao} onChange={e => setForm({ ...form, instituicao: e.target.value })} placeholder="Opcional" />
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
                     <NumberInput label="Preço Médio" required decimal value={form.valorUnitario} onChange={v => setForm({ ...form, valorUnitario: v })} error={errors.valorUnitario} placeholder="Ex: 35.50" />
                     <NumberInput label="Quantidade" required value={form.quantidade} onChange={v => setForm({ ...form, quantidade: v })} error={errors.quantidade} placeholder="Ex: 100" />
                   </div>
-                  <NumberInput label="Preço Atual (opcional)" decimal value={form.precoAtual} onChange={v => setForm({ ...form, precoAtual: v })} placeholder="Ex: 38.20" />
+                  {form.precoAtual ? (
+                    <div style={{ padding: "10px 14px", background: "#f8fafc", borderRadius: "10px", border: "1.5px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: "#64748b" }}>📊 Preço atual (sistema)</span>
+                      <span style={{ fontSize: "16px", fontWeight: 800, color: "#0f172a" }}>{fmt(parseFloat(form.precoAtual), "BRL")}</span>
+                    </div>
+                  ) : (
+                    <div style={{ padding: "10px 14px", background: "#f8fafc", borderRadius: "10px", border: "1.5px solid #e2e8f0", fontSize: "13px", color: "#94a3b8" }}>Selecione um ativo para ver o preço atual</div>
+                  )}
                   {form.valorUnitario && form.quantidade && (
                     <div style={{ padding: "10px 14px", background: "#ecfdf5", borderRadius: "10px", border: "1.5px solid #10b981", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontSize: "13px", fontWeight: 600, color: "#047857" }}>💰 Valor da Posição</span>
@@ -463,7 +470,14 @@ export default function Contas() {
                     <NumberInput label="Preço Médio" required decimal value={form.valorUnitario} onChange={v => setForm({ ...form, valorUnitario: v })} error={errors.valorUnitario} placeholder="Ex: 350000.00" />
                     <NumberInput label="Quantidade" required highPrecision value={form.quantidade} onChange={v => setForm({ ...form, quantidade: v })} error={errors.quantidade} placeholder="Ex: 0.05" />
                   </div>
-                  <NumberInput label="Preço Atual (opcional)" decimal value={form.precoAtual} onChange={v => setForm({ ...form, precoAtual: v })} placeholder="Ex: 365000.00" />
+                  {form.precoAtual ? (
+                    <div style={{ padding: "10px 14px", background: "#f8fafc", borderRadius: "10px", border: "1.5px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: "#64748b" }}>📊 Preço atual (sistema)</span>
+                      <span style={{ fontSize: "16px", fontWeight: 800, color: "#0f172a" }}>{fmt(parseFloat(form.precoAtual), "BRL")}</span>
+                    </div>
+                  ) : (
+                    <div style={{ padding: "10px 14px", background: "#f8fafc", borderRadius: "10px", border: "1.5px solid #e2e8f0", fontSize: "13px", color: "#94a3b8" }}>Selecione um ativo para ver o preço atual</div>
+                  )}
                   {form.valorUnitario && form.quantidade && (
                     <div style={{ padding: "10px 14px", background: "#ecfdf5", borderRadius: "10px", border: "1.5px solid #10b981", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontSize: "13px", fontWeight: 600, color: "#047857" }}>💰 Valor da Posição</span>
