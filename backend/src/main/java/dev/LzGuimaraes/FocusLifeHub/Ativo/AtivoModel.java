@@ -2,6 +2,7 @@ package dev.LzGuimaraes.FocusLifeHub.Ativo;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
+import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.AtivoCadastroModel;
 import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraInvestimentoModel;
 import dev.LzGuimaraes.FocusLifeHub.Financeiro.ItemFinanceiroModel;
 import jakarta.persistence.Entity;
@@ -40,6 +41,11 @@ public class AtivoModel extends ItemFinanceiroModel {
     private String vencimento;
 
     private Float rentabilidade;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ativo_cadastro_id")
+    @JsonIgnore
+    private AtivoCadastroModel ativoCadastro;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "carteira_investimento_id")

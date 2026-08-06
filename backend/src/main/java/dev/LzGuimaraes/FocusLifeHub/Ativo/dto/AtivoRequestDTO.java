@@ -1,6 +1,7 @@
 package dev.LzGuimaraes.FocusLifeHub.Ativo.dto;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 
@@ -34,6 +35,9 @@ public record AtivoRequestDTO(
     LocalDate dataVencimento,
 
     Float rentabilidade,
+
+    // ID do ativo do catálogo (ativo_cadastro) — renda variável envia
+    UUID ativo_cadastro_id,
 
     @NotNull(message = "O ID da carteira de investimento é obrigatório")
     Long carteira_investimento_id

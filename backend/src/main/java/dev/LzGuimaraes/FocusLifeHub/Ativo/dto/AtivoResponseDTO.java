@@ -1,6 +1,7 @@
 package dev.LzGuimaraes.FocusLifeHub.Ativo.dto;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 
@@ -20,5 +21,6 @@ public record AtivoResponseDTO(
     @JsonFormat(pattern = "yyyy-MM-dd")
     LocalDate dataVencimento,
     Float rentabilidade,
+    UUID ativo_cadastro_id,
     Long carteira_investimento_id
 ) {}

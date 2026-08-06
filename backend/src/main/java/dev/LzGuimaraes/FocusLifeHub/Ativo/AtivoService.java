@@ -1,6 +1,7 @@
 package dev.LzGuimaraes.FocusLifeHub.Ativo;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
@@ -11,6 +12,8 @@ import org.springframework.stereotype.Service;
 
 import dev.LzGuimaraes.FocusLifeHub.Ativo.dto.AtivoRequestDTO;
 import dev.LzGuimaraes.FocusLifeHub.Ativo.dto.AtivoResponseDTO;
+import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.AtivoCadastroModel;
+import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.AtivoCadastroRepository;
 import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraInvestimentoModel;
 import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraInvestimentoRepository;
 import dev.LzGuimaraes.FocusLifeHub.Exceptions.ResourceNotFoundException;
@@ -21,11 +24,14 @@ public class AtivoService {
 
     private final AtivoRepository ativoRepository;
     private final CarteiraInvestimentoRepository carteiraInvestimentoRepository;
+    private final AtivoCadastroRepository ativoCadastroRepository;
 
     public AtivoService(AtivoRepository ativoRepository,
-                        CarteiraInvestimentoRepository carteiraInvestimentoRepository) {
+                        CarteiraInvestimentoRepository carteiraInvestimentoRepository,
+                        AtivoCadastroRepository ativoCadastroRepository) {
         this.ativoRepository = ativoRepository;
         this.carteiraInvestimentoRepository = carteiraInvestimentoRepository;
+        this.ativoCadastroRepository = ativoCadastroRepository;
     }
 
     private Long getAuthenticatedUserId() {
@@ -44,6 +50,12 @@ public class AtivoService {
         return carteira;
     }
 
+    private AtivoCadastroModel resolveAtivoCadastro(UUID ativoCadastroId) {
+        return ativoCadastroRepository.findById(ativoCadastroId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Ativo do catálogo com ID " + ativoCadastroId + " não encontrado"));
+    }
+
     private void checkOwnership(AtivoModel ativo, Long userId) {
         CarteiraInvestimentoModel carteira = ativo.getCarteiraInvestimento();
         if (carteira == null || carteira.getUser() == null
@@ -54,6 +66,7 @@ public class AtivoService {
 
     private AtivoResponseDTO toResponse(AtivoModel ativo) {
         Long carteiraId = (ativo.getCarteiraInvestimento() != null) ? ativo.getCarteiraInvestimento().getId() : null;
+        UUID ativoCadastroId = (ativo.getAtivoCadastro() != null) ? ativo.getAtivoCadastro().getId() : null;
         return new AtivoResponseDTO(
             ativo.getId(),
             ativo.getNome(),
@@ -67,6 +80,7 @@ public class AtivoService {
             ativo.getVencimento(),
             ativo.getDataVencimento(),
             ativo.getRentabilidade(),
+            ativoCadastroId,
             carteiraId
         );
     }
@@ -110,6 +124,9 @@ public class AtivoService {
         ativo.setDataVencimento(dto.dataVencimento());
         ativo.setRentabilidade(dto.rentabilidade());
         ativo.setCarteiraInvestimento(carteira);
+        if (dto.ativo_cadastro_id() != null) {
+            ativo.setAtivoCadastro(resolveAtivoCadastro(dto.ativo_cadastro_id()));
+        }
 
         // Saldo atual = Preço Atual × Quantidade (se preço atual informado); senão Preço Médio × Quantidade
         if (dto.quantidade() != null && dto.valorUnitario() != null) {
@@ -159,6 +176,13 @@ public class AtivoService {
                 && (ativo.getCarteiraInvestimento() == null
                     || !ativo.getCarteiraInvestimento().getId().equals(dto.carteira_investimento_id()))) {
             ativo.setCarteiraInvestimento(resolveCarteira(dto.carteira_investimento_id(), userId));
+        }
+
+        // Reatribuição do ativo do catálogo
+        if (dto.ativo_cadastro_id() != null
+                && (ativo.getAtivoCadastro() == null
+                    || !ativo.getAtivoCadastro().getId().equals(dto.ativo_cadastro_id()))) {
+            ativo.setAtivoCadastro(resolveAtivoCadastro(dto.ativo_cadastro_id()));
         }
 
         return toResponse(ativoRepository.save(ativo));

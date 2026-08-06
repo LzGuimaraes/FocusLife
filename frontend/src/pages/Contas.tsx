@@ -23,12 +23,14 @@ interface Ativo {
   rentabilidade: number | null; pago: boolean | null;
   carteira_investimento_id: number | null;
   carteira_dividas_id: number | null;
+  ativo_cadastro_id: string | null;
 }
 interface Financa { id: number; nome: string; moeda: string; tipo: TipoCarteira; }
 interface FormData {
   nome: string; categoria: Categoria; categoriaInvestimento: CatInvest | "";
   quantidade: string; valorUnitario: string; precoAtual: string; saldo: string;
   instituicao: string; dataAplicacao: string; vencimento: string; dataVencimento: string; rentabilidade: string;
+  ativo_cadastro_id: string;
   carteira_id: string; pago: boolean;
 }
 const moedaS: Record<string, string> = { BRL: "R$", USD: "$", EUR: "€", GBP: "£", JPY: "¥" };
@@ -44,7 +46,7 @@ const catInfo: Record<CatInvest, { icon: string; label: string; color: string; b
   CRIPTOMOEDAS:     { icon: "₿",  label: "Criptomoedas",     color: "#f59e0b", bg: "#fef3c7", autoCalc: true },
 };
 
-const emptyForm: FormData = { nome: "", categoria: "INVESTIMENTO", categoriaInvestimento: "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", dataVencimento: "", rentabilidade: "", carteira_id: "", pago: false };
+const emptyForm: FormData = { nome: "", categoria: "INVESTIMENTO", categoriaInvestimento: "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", dataVencimento: "", rentabilidade: "", ativo_cadastro_id: "", carteira_id: "", pago: false };
 type Errors = Partial<Record<keyof FormData, string>>;
 
 export default function Contas() {
@@ -76,8 +78,8 @@ export default function Contas() {
     } catch { /* silencioso */ }
   };
 
-  const mapAtivo = (x: any): Ativo => ({ id: x.id, nome: x.nome, categoria: "INVESTIMENTO", categoriaInvestimento: x.categoriaInvestimento ?? null, quantidade: x.quantidade ?? null, valorUnitario: x.valorUnitario ?? null, precoAtual: x.precoAtual ?? null, saldo: x.saldo ?? 0, instituicao: x.instituicao ?? null, dataAplicacao: x.dataAplicacao ?? null, vencimento: x.vencimento ?? null, dataVencimento: x.dataVencimento ?? null, rentabilidade: x.rentabilidade ?? null, pago: null, carteira_investimento_id: x.carteira_investimento_id ?? null, carteira_dividas_id: null });
-  const mapDespesa = (x: any): Ativo => ({ id: x.id, nome: x.nome, categoria: "CONTA", categoriaInvestimento: null, quantidade: null, valorUnitario: null, precoAtual: null, saldo: x.saldo ?? 0, instituicao: null, dataAplicacao: null, vencimento: null, dataVencimento: x.dataVencimento ?? null, rentabilidade: null, pago: x.pago ?? null, carteira_investimento_id: null, carteira_dividas_id: x.carteira_dividas_id ?? null });
+  const mapAtivo = (x: any): Ativo => ({ id: x.id, nome: x.nome, categoria: "INVESTIMENTO", categoriaInvestimento: x.categoriaInvestimento ?? null, quantidade: x.quantidade ?? null, valorUnitario: x.valorUnitario ?? null, precoAtual: x.precoAtual ?? null, saldo: x.saldo ?? 0, instituicao: x.instituicao ?? null, dataAplicacao: x.dataAplicacao ?? null, vencimento: x.vencimento ?? null, dataVencimento: x.dataVencimento ?? null, rentabilidade: x.rentabilidade ?? null, pago: null, ativo_cadastro_id: x.ativo_cadastro_id ?? null, carteira_investimento_id: x.carteira_investimento_id ?? null, carteira_dividas_id: null });
+  const mapDespesa = (x: any): Ativo => ({ id: x.id, nome: x.nome, categoria: "CONTA", categoriaInvestimento: null, quantidade: null, valorUnitario: null, precoAtual: null, saldo: x.saldo ?? 0, instituicao: null, dataAplicacao: null, vencimento: null, dataVencimento: x.dataVencimento ?? null, rentabilidade: null, pago: x.pago ?? null, ativo_cadastro_id: null, carteira_investimento_id: null, carteira_dividas_id: x.carteira_dividas_id ?? null });
 
   const fetchAtivos = async () => {
     setLoading(true);
@@ -140,6 +142,7 @@ export default function Contas() {
     else payload.carteira_dividas_id = parseInt(cId);
     if (form.categoria === "INVESTIMENTO") {
       payload.categoriaInvestimento = form.categoriaInvestimento;
+      payload.ativo_cadastro_id = form.ativo_cadastro_id || null;
       payload.instituicao = form.instituicao || null;
       payload.dataAplicacao = form.dataAplicacao || null;
       payload.vencimento = form.vencimento || null;
@@ -176,7 +179,7 @@ export default function Contas() {
       const ckey = a.carteira_investimento_id != null
         ? `INVESTIMENTO:${a.carteira_investimento_id}`
         : `DESPESAS:${a.carteira_dividas_id}`;
-      setForm({ nome: a.nome, categoria: a.categoria, categoriaInvestimento: a.categoriaInvestimento || "", quantidade: a.quantidade?.toString() || "", valorUnitario: a.valorUnitario?.toString() || "", precoAtual: a.precoAtual?.toString() || "", saldo: a.saldo?.toString() || "0", instituicao: a.instituicao || "", dataAplicacao: a.dataAplicacao || "", vencimento: a.vencimento || "", dataVencimento: a.dataVencimento || "", rentabilidade: a.rentabilidade?.toString() || "", carteira_id: ckey, pago: a.pago ?? false });
+      setForm({ nome: a.nome, categoria: a.categoria, categoriaInvestimento: a.categoriaInvestimento || "", quantidade: a.quantidade?.toString() || "", valorUnitario: a.valorUnitario?.toString() || "", precoAtual: a.precoAtual?.toString() || "", saldo: a.saldo?.toString() || "0", instituicao: a.instituicao || "", dataAplicacao: a.dataAplicacao || "", vencimento: a.vencimento || "", dataVencimento: a.dataVencimento || "", rentabilidade: a.rentabilidade?.toString() || "", ativo_cadastro_id: a.ativo_cadastro_id ?? "", carteira_id: ckey, pago: a.pago ?? false });
     }
     else { setEditing(null); const def = financas.find(f => f.tipo === (defCat === "INVESTIMENTO" ? "INVESTIMENTO" : "DESPESAS")) || financas[0]; setForm({ ...emptyForm, categoria: defCat, carteira_id: filterFinanca !== "all" ? filterFinanca : (def ? `${def.tipo}:${def.id}` : "") }); }
     setShowModal(true);
@@ -389,7 +392,7 @@ export default function Contas() {
           isRendaVariavel ? (
             <div>
               <label style={{ fontSize: "13px", fontWeight: 600, color: "#374151", display: "block", marginBottom: "6px" }}>Ativo (ticker) *</label>
-              <AtivoAutocomplete value={form.nome} error={errors.nome} onSelect={a => setForm({ ...form, nome: a.nome, precoAtual: a.precoAtual != null ? String(a.precoAtual) : form.precoAtual })} />
+              <AtivoAutocomplete value={form.nome} error={errors.nome} onSelect={a => setForm({ ...form, nome: a.nome, ativo_cadastro_id: a.id, precoAtual: a.precoAtual != null ? String(a.precoAtual) : form.precoAtual })} />
             </div>
           ) : (
             <Input label="Nome / Ticker / Ativo" required value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} placeholder="Ex: Tesouro Selic 2029, CDB..." error={errors.nome} />
