@@ -23,7 +23,7 @@ export default function ContaLogsModal({ open, contaId, contaNome, onClose }: Pr
   useEffect(() => {
     if (!open || !contaId) return;
     setLoading(true);
-    api.get(`/contas/${contaId}/logs?page=${page}&size=${PAGE_SIZE}`)
+    api.get(`/despesas/${contaId}/logs?page=${page}&size=${PAGE_SIZE}`)
       .then(r => { setLogs(r.data.content || []); setTotalPages(r.data.totalPages || 0); })
       .catch(() => setLogs([]))
       .finally(() => setLoading(false));

@@ -1,4 +1,4 @@
-package dev.LzGuimaraes.FocusLifeHub.Contas;
+package dev.LzGuimaraes.FocusLifeHub.Ativo;
 
 public enum CategoriaInvestimento {
     RENDA_FIXA,

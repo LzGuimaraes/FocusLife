@@ -1,8 +1,8 @@
-package dev.LzGuimaraes.FocusLifeHub.Contas.dto;
+package dev.LzGuimaraes.FocusLifeHub.Despesa.dto;
 
 import java.time.LocalDateTime;
 
-public record ContaLogResponseDTO(
+public record DespesaLogResponseDTO(
     Long id,
     String acao,
     LocalDateTime criadoEm

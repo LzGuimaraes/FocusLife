@@ -12,8 +12,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import dev.LzGuimaraes.FocusLifeHub.Auth.MailService;
-import dev.LzGuimaraes.FocusLifeHub.Contas.ContasModel;
-import dev.LzGuimaraes.FocusLifeHub.Contas.ContasRepository;
+import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaModel;
+import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaRepository;
 import dev.LzGuimaraes.FocusLifeHub.Tarefas.Enum.TarefaStatus;
 import dev.LzGuimaraes.FocusLifeHub.Tarefas.TarefasModel;
 import dev.LzGuimaraes.FocusLifeHub.Tarefas.TarefasRepository;
@@ -24,16 +24,16 @@ public class DailyNotificationJob {
 
     private static final Logger log = LoggerFactory.getLogger(DailyNotificationJob.class);
 
-    private final ContasRepository contasRepository;
+    private final DespesaRepository despesaRepository;
     private final TarefasRepository tarefasRepository;
     private final EmailLogRepository emailLogRepository;
     private final MailService mailService;
 
-    public DailyNotificationJob(ContasRepository contasRepository,
+    public DailyNotificationJob(DespesaRepository despesaRepository,
                                 TarefasRepository tarefasRepository,
                                 EmailLogRepository emailLogRepository,
                                 MailService mailService) {
-        this.contasRepository = contasRepository;
+        this.despesaRepository = despesaRepository;
         this.tarefasRepository = tarefasRepository;
         this.emailLogRepository = emailLogRepository;
         this.mailService = mailService;
@@ -62,8 +62,8 @@ public class DailyNotificationJob {
      * na data e que ainda NÃO possuem email_log (CONTA_VENCIMENTO) para a
      * mesma conta/data (evita e-mail duplicado).
      */
-    public List<ContasModel> selecionarContasParaNotificar(LocalDate data) {
-        return contasRepository.findByPagoFalseAndDataVencimento(data)
+    public List<DespesaModel> selecionarContasParaNotificar(LocalDate data) {
+        return despesaRepository.findByPagoFalseAndDataVencimento(data)
                 .stream()
                 .filter(conta -> !emailLogRepository.existsByTipoAndReferenciaIdAndDataReferencia(
                         TipoEmailLog.CONTA_VENCIMENTO, conta.getId(), data))
@@ -71,33 +71,33 @@ public class DailyNotificationJob {
     }
 
     private void enviarEmailsDeVencimento(LocalDate data) {
-        List<ContasModel> contas = selecionarContasParaNotificar(data);
+        List<DespesaModel> contas = selecionarContasParaNotificar(data);
 
-        Map<UserModel, List<ContasModel>> porUsuario = contas.stream()
-                .filter(c -> c.getCarteiraAtiva() != null && c.getCarteiraAtiva().getUser() != null)
-                .collect(Collectors.groupingBy(c -> c.getCarteiraAtiva().getUser()));
+        Map<UserModel, List<DespesaModel>> porUsuario = contas.stream()
+                .filter(c -> c.getCarteiraDividas() != null && c.getCarteiraDividas().getUser() != null)
+                .collect(Collectors.groupingBy(c -> c.getCarteiraDividas().getUser()));
 
-        for (Map.Entry<UserModel, List<ContasModel>> entry : porUsuario.entrySet()) {
+        for (Map.Entry<UserModel, List<DespesaModel>> entry : porUsuario.entrySet()) {
             try {
                 UserModel usuario = entry.getKey();
-                List<ContasModel> contasDoUsuario = entry.getValue();
+                List<DespesaModel> contasDoUsuario = entry.getValue();
                 log.info("Enviando e-mail de vencimento para {} ({} contas)", usuario.getEmail(), contasDoUsuario.size());
                 enviarEmailParaUsuario(usuario, contasDoUsuario, data);
             } catch (Exception ex) {
                 // Falha em um usuário não pode impedir os demais
                 log.error("Falha ao enviar e-mail de vencimento para o usuário {} (contas: {})",
                         entry.getKey().getEmail(),
-                        entry.getValue().stream().map(ContasModel::getId).collect(Collectors.toList()),
+                        entry.getValue().stream().map(DespesaModel::getId).collect(Collectors.toList()),
                         ex);
             }
         }
     }
 
-    private void enviarEmailParaUsuario(UserModel usuario, List<ContasModel> contas, LocalDate data) throws Exception {
+    private void enviarEmailParaUsuario(UserModel usuario, List<DespesaModel> contas, LocalDate data) throws Exception {
         String subject = "FocusLife Hub — Contas vencendo hoje (" + data + ")";
         mailService.sendHtml(usuario.getEmail(), subject, EmailTemplate.contasVencendo(data, contas));
 
-        for (ContasModel conta : contas) {
+        for (DespesaModel conta : contas) {
             EmailLogModel emailLog = new EmailLogModel();
             emailLog.setUsuario_id(usuario.getId());
             emailLog.setTipo(TipoEmailLog.CONTA_VENCIMENTO);

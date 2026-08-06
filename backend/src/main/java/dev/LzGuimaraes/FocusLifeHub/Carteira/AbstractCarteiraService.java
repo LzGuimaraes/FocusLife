@@ -6,9 +6,10 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 
+import dev.LzGuimaraes.FocusLifeHub.Ativo.AtivoRepository;
 import dev.LzGuimaraes.FocusLifeHub.Carteira.dto.CarteiraRequestDTO;
 import dev.LzGuimaraes.FocusLifeHub.Carteira.dto.CarteiraResponseDTO;
-import dev.LzGuimaraes.FocusLifeHub.Contas.ContasRepository;
+import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaRepository;
 import dev.LzGuimaraes.FocusLifeHub.Exceptions.ResourceNotFoundException;
 import dev.LzGuimaraes.FocusLifeHub.User.UserModel;
 import dev.LzGuimaraes.FocusLifeHub.User.UserRepository;
@@ -22,15 +23,18 @@ public abstract class AbstractCarteiraService<T extends CarteiraModel> {
 
     private final CarteiraRepository<T> repository;
     private final UserRepository userRepository;
-    private final ContasRepository contasRepository;
+    private final AtivoRepository ativoRepository;
+    private final DespesaRepository despesaRepository;
 
     protected AbstractCarteiraService(
             CarteiraRepository<T> repository,
             UserRepository userRepository,
-            ContasRepository contasRepository) {
+            AtivoRepository ativoRepository,
+            DespesaRepository despesaRepository) {
         this.repository = repository;
         this.userRepository = userRepository;
-        this.contasRepository = contasRepository;
+        this.ativoRepository = ativoRepository;
+        this.despesaRepository = despesaRepository;
     }
 
     protected abstract T createEmpty();
@@ -104,11 +108,11 @@ public abstract class AbstractCarteiraService<T extends CarteiraModel> {
                 .orElseThrow(() -> new ResourceNotFoundException("Carteira com ID " + id + " não encontrada para exclusão"));
         checkOwnership(carteira, userId);
 
-        // Exclui as contas associadas antes para evitar violação de FK
+        // Exclui os itens associados antes para evitar violação de FK
         if (carteira instanceof CarteiraInvestimentoModel) {
-            contasRepository.deleteAll(contasRepository.findByCarteiraInvestimentoId(id));
+            ativoRepository.deleteAll(ativoRepository.findByCarteiraInvestimentoId(id));
         } else {
-            contasRepository.deleteAll(contasRepository.findByCarteiraDividasId(id));
+            despesaRepository.deleteAll(despesaRepository.findByCarteiraDividasId(id));
         }
 
         repository.delete(carteira);

@@ -75,19 +75,29 @@ export default function Contas() {
     } catch { /* silencioso */ }
   };
 
+  const mapAtivo = (x: any): Ativo => ({ id: x.id, nome: x.nome, categoria: "INVESTIMENTO", categoriaInvestimento: x.categoriaInvestimento ?? null, quantidade: x.quantidade ?? null, valorUnitario: x.valorUnitario ?? null, precoAtual: x.precoAtual ?? null, saldo: x.saldo ?? 0, instituicao: x.instituicao ?? null, dataAplicacao: x.dataAplicacao ?? null, vencimento: x.vencimento ?? null, dataVencimento: x.dataVencimento ?? null, rentabilidade: x.rentabilidade ?? null, pago: null, carteira_investimento_id: x.carteira_investimento_id ?? null, carteira_dividas_id: null });
+  const mapDespesa = (x: any): Ativo => ({ id: x.id, nome: x.nome, categoria: "CONTA", categoriaInvestimento: null, quantidade: null, valorUnitario: null, precoAtual: null, saldo: x.saldo ?? 0, instituicao: null, dataAplicacao: null, vencimento: null, dataVencimento: x.dataVencimento ?? null, rentabilidade: null, pago: x.pago ?? null, carteira_investimento_id: null, carteira_dividas_id: x.carteira_dividas_id ?? null });
+
   const fetchAtivos = async () => {
     setLoading(true);
     try {
-      let r;
       if (filterFinanca === "all") {
-        r = await api.get(`/contas/all?page=0&size=200`);
-        setAtivos(r.data.content);
+        const [a, d] = await Promise.all([
+          api.get(`/ativos/all?page=0&size=200`),
+          api.get(`/despesas/all?page=0&size=200`),
+        ]);
+        const invest: Ativo[] = (a.data.content ?? []).map(mapAtivo);
+        const despesas: Ativo[] = (d.data.content ?? []).map(mapDespesa);
+        setAtivos([...invest, ...despesas]);
       } else {
         const [tipo, id] = filterFinanca.split(":");
-        r = tipo === "INVESTIMENTO"
-          ? await api.get(`/contas/by-carteira-investimento/${id}`)
-          : await api.get(`/contas/by-carteira-dividas/${id}`);
-        setAtivos(r.data);
+        if (tipo === "INVESTIMENTO") {
+          const r = await api.get(`/ativos/by-carteira/${id}`);
+          setAtivos((r.data ?? []).map(mapAtivo));
+        } else {
+          const r = await api.get(`/despesas/by-carteira/${id}`);
+          setAtivos((r.data ?? []).map(mapDespesa));
+        }
       }
     } catch { toast.error("Erro ao carregar"); } finally { setLoading(false); }
   };
@@ -119,7 +129,8 @@ export default function Contas() {
     if (!validate()) return;
     const carteiraKey = walletType ? filterFinanca : form.carteira_id;
     const [cTipo, cId] = carteiraKey.split(":");
-    const payload: any = { nome: form.nome, categoria: form.categoria, dataVencimento: formatLocalDate(parseLocalDate(form.dataVencimento)) };
+    const base = form.categoria === "INVESTIMENTO" ? "/ativos" : "/despesas";
+    const payload: any = { nome: form.nome, dataVencimento: formatLocalDate(parseLocalDate(form.dataVencimento)) };
     if (cTipo === "INVESTIMENTO") payload.carteira_investimento_id = parseInt(cId);
     else payload.carteira_dividas_id = parseInt(cId);
     if (form.categoria === "INVESTIMENTO") {
@@ -136,30 +147,19 @@ export default function Contas() {
       } else {
         payload.saldo = parseFloat(form.saldo) || 0;
       }
-      payload.pago = null; // não se aplica a investimentos
-    }
-    if (form.categoria === "CONTA") {
+    } else {
       payload.saldo = parseFloat(form.saldo) || 0;
       payload.pago = form.pago;
-      // Campos exclusivos de INVESTIMENTO: sempre null numa Conta, mesmo ao editar um ativo que antes era investimento.
-      payload.categoriaInvestimento = null;
-      payload.quantidade = null;
-      payload.valorUnitario = null;
-      payload.precoAtual = null;
-      payload.instituicao = null;
-      payload.dataAplicacao = null;
-      payload.vencimento = null;
-      payload.rentabilidade = null;
     }
-    const promise = editing ? api.put(`/contas/alter/${editing.id}`, payload) : api.post("/contas/create", payload);
+    const promise = editing ? api.put(`${base}/alter/${editing.id}`, payload) : api.post(`${base}/create`, payload);
     toast.promise(promise, { loading: "Salvando...", success: () => { closeModal(); fetchAtivos(); return editing ? "Atualizado!" : "Criado!"; }, error: (err: any) => err?.response?.data?.message || "Erro ao salvar" });
   };
 
-  const handleDelete = async (id: number) => { toast("Excluir?", { action: { label: "Sim", onClick: () => { toast.promise(api.delete(`/contas/delete/${id}`), { loading: "Excluindo...", success: () => { fetchAtivos(); return "Excluído!"; }, error: "Erro" }); }}, cancel: { label: "Cancelar", onClick: () => {} } }); };
+  const handleDelete = async (a: Ativo) => { const base = a.categoria === "INVESTIMENTO" ? "/ativos" : "/despesas"; toast("Excluir?", { action: { label: "Sim", onClick: () => { toast.promise(api.delete(`${base}/delete/${a.id}`), { loading: "Excluindo...", success: () => { fetchAtivos(); return "Excluído!"; }, error: "Erro" }); }}, cancel: { label: "Cancelar", onClick: () => {} } }); };
 
   const togglePago = async (ativo: Ativo) => {
     const novo = !ativo.pago;
-    try { await api.put(`/contas/alter/${ativo.id}`, { ...ativo, pago: novo }); setAtivos(prev => prev.map(a => a.id === ativo.id ? { ...a, pago: novo } : a)); toast.success(novo ? "Pago!" : "Desmarcado"); }
+    try { await api.put(`/despesas/alter/${ativo.id}`, { ...ativo, pago: novo }); setAtivos(prev => prev.map(a => a.id === ativo.id ? { ...a, pago: novo } : a)); toast.success(novo ? "Pago!" : "Desmarcado"); }
     catch { toast.error("Erro"); }
   };
 
@@ -282,7 +282,7 @@ export default function Contas() {
               <div style={{ display: "flex", gap: "8px", marginTop: "auto", flexWrap: "wrap" }}>
                 {isConta && (<button onClick={() => togglePago(a)} style={{ ...btnSm, background: a.pago ? "#fef3c7" : "#d1fae5", color: a.pago ? "#b45309" : "#047857", fontWeight: 700 }}>{a.pago ? "↩ Desmarcar" : "✓ Pagar"}</button>)}
                 <button onClick={() => openModal(a)} style={btnSm}>✏️ Editar</button>
-                <button onClick={() => handleDelete(a.id)} style={{ ...btnSm, background: "#fee2e2", color: "#ef4444" }}>🗑</button>
+                <button onClick={() => handleDelete(a)} style={{ ...btnSm, background: "#fee2e2", color: "#ef4444" }}>🗑</button>
               </div>
             </div>
           );
@@ -343,8 +343,8 @@ export default function Contas() {
                           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                             {isConta && <button onClick={() => togglePago(a)} style={{ ...btnSm, background: a.pago ? "#fef3c7" : "#d1fae5", color: a.pago ? "#b45309" : "#047857", fontWeight: 700 }}>{a.pago ? "↩ Desmarcar" : "✓ Pagar"}</button>}
                             <button onClick={() => openModal(a)} style={btnSm}>✏️ Editar</button>
-                            <button onClick={() => setLogsConta(a)} style={btnSm} title="Ver logs">📜</button>
-                            <button onClick={() => handleDelete(a.id)} style={{ ...btnSm, background: "#fee2e2", color: "#ef4444" }}>🗑</button>
+                            {isConta && <button onClick={() => setLogsConta(a)} style={btnSm} title="Ver logs">📜</button>}
+                            <button onClick={() => handleDelete(a)} style={{ ...btnSm, background: "#fee2e2", color: "#ef4444" }}>🗑</button>
                           </div>
                         </td>
                       </tr>

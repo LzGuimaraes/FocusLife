@@ -1,16 +1,14 @@
-package dev.LzGuimaraes.FocusLifeHub.Contas.dto;
+package dev.LzGuimaraes.FocusLifeHub.Ativo.dto;
 
 import java.time.LocalDate;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 
-import dev.LzGuimaraes.FocusLifeHub.Contas.CategoriaAtivo;
-import dev.LzGuimaraes.FocusLifeHub.Contas.CategoriaInvestimento;
+import dev.LzGuimaraes.FocusLifeHub.Ativo.CategoriaInvestimento;
 
-public record ContasResponseDTO(
+public record AtivoResponseDTO(
     Long id,
     String nome,
-    CategoriaAtivo categoria,
     CategoriaInvestimento categoriaInvestimento,
     Float quantidade,
     Float valorUnitario,
@@ -22,7 +20,5 @@ public record ContasResponseDTO(
     @JsonFormat(pattern = "yyyy-MM-dd")
     LocalDate dataVencimento,
     Float rentabilidade,
-    Boolean pago,
-    Long carteira_investimento_id,
-    Long carteira_dividas_id
+    Long carteira_investimento_id
 ) {}

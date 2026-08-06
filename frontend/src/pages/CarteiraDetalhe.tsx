@@ -76,10 +76,13 @@ export default function CarteiraDetalhe() {
   const fetchAtivos = async () => {
     setLoading(true);
     try {
-      const r = carteiraTipo === "INVESTIMENTO"
-        ? await api.get(`/contas/by-carteira-investimento/${carteiraId}`)
-        : await api.get(`/contas/by-carteira-dividas/${carteiraId}`);
-      setAtivos(r.data);
+      if (carteiraTipo === "INVESTIMENTO") {
+        const r = await api.get(`/ativos/by-carteira/${carteiraId}`);
+        setAtivos((r.data ?? []).map((x: any): Ativo => ({ id: x.id, nome: x.nome, categoria: "INVESTIMENTO", categoriaInvestimento: x.categoriaInvestimento ?? null, quantidade: x.quantidade ?? null, valorUnitario: x.valorUnitario ?? null, precoAtual: x.precoAtual ?? null, saldo: x.saldo ?? 0, instituicao: x.instituicao ?? null, dataAplicacao: x.dataAplicacao ?? null, vencimento: x.vencimento ?? null, dataVencimento: x.dataVencimento ?? null, rentabilidade: x.rentabilidade ?? null, pago: null, carteira_investimento_id: x.carteira_investimento_id ?? null, carteira_dividas_id: null })));
+      } else {
+        const r = await api.get(`/despesas/by-carteira/${carteiraId}`);
+        setAtivos((r.data ?? []).map((x: any): Ativo => ({ id: x.id, nome: x.nome, categoria: "CONTA", categoriaInvestimento: null, quantidade: null, valorUnitario: null, precoAtual: null, saldo: x.saldo ?? 0, instituicao: null, dataAplicacao: null, vencimento: null, dataVencimento: x.dataVencimento ?? null, rentabilidade: null, pago: x.pago ?? null, carteira_investimento_id: null, carteira_dividas_id: x.carteira_dividas_id ?? null })));
+      }
     }
     catch { toast.error("Erro ao carregar"); }
     finally { setLoading(false); }
@@ -107,30 +110,19 @@ export default function CarteiraDetalhe() {
 
   const handleSubmit = async () => {
     if (!validate()) return;
-    const payload: any = { nome: form.nome, categoria: isInvest ? "INVESTIMENTO" : "CONTA", dataVencimento: formatLocalDate(parseLocalDate(form.dataVencimento)) };
+    const base = isInvest ? "/ativos" : "/despesas";
+    const payload: any = { nome: form.nome, dataVencimento: formatLocalDate(parseLocalDate(form.dataVencimento)) };
     if (isInvest) payload.carteira_investimento_id = carteiraId;
     else payload.carteira_dividas_id = carteiraId;
-    if (isInvest) { payload.categoriaInvestimento = form.categoriaInvestimento; payload.instituicao = form.instituicao || null; payload.dataAplicacao = form.dataAplicacao || null; payload.vencimento = form.vencimento || null; payload.rentabilidade = form.rentabilidade ? parseFloat(form.rentabilidade) : null; payload.precoAtual = form.precoAtual ? parseFloat(form.precoAtual) : null; const ci = catInfo[form.categoriaInvestimento as CatInvest]; if (ci?.autoCalc) { payload.valorUnitario = parseFloat(form.valorUnitario) || 0; payload.quantidade = parseFloat(form.quantidade) || 0; } else { payload.saldo = parseFloat(form.saldo) || 0; } payload.pago = null; /* não se aplica a investimentos */ }
-    if (isDespesa) {
-      payload.saldo = parseFloat(form.saldo) || 0;
-      payload.pago = form.pago;
-      // Campos exclusivos de INVESTIMENTO: sempre null numa Despesa.
-      payload.categoriaInvestimento = null;
-      payload.quantidade = null;
-      payload.valorUnitario = null;
-      payload.precoAtual = null;
-      payload.instituicao = null;
-      payload.dataAplicacao = null;
-      payload.vencimento = null;
-      payload.rentabilidade = null;
-    }
-    const promise = editing ? api.put(`/contas/alter/${editing.id}`, payload) : api.post("/contas/create", payload);
+    if (isInvest) { payload.categoriaInvestimento = form.categoriaInvestimento; payload.instituicao = form.instituicao || null; payload.dataAplicacao = form.dataAplicacao || null; payload.vencimento = form.vencimento || null; payload.rentabilidade = form.rentabilidade ? parseFloat(form.rentabilidade) : null; payload.precoAtual = form.precoAtual ? parseFloat(form.precoAtual) : null; const ci = catInfo[form.categoriaInvestimento as CatInvest]; if (ci?.autoCalc) { payload.valorUnitario = parseFloat(form.valorUnitario) || 0; payload.quantidade = parseFloat(form.quantidade) || 0; } else { payload.saldo = parseFloat(form.saldo) || 0; } }
+    else { payload.saldo = parseFloat(form.saldo) || 0; payload.pago = form.pago; }
+    const promise = editing ? api.put(`${base}/alter/${editing.id}`, payload) : api.post(`${base}/create`, payload);
     toast.promise(promise, { loading: "Salvando...", success: () => { closeModal(); fetchAtivos(); return editing ? "Atualizado!" : "Criado!"; }, error: (err: any) => err?.response?.data?.message || "Erro" });
   };
 
-  const handleDelete = async (id: number) => { toast("Excluir?", { action: { label: "Sim", onClick: () => { toast.promise(api.delete(`/contas/delete/${id}`), { loading: "Excluindo...", success: () => { fetchAtivos(); return "Excluído!"; }, error: "Erro" }); }}, cancel: { label: "Cancelar", onClick: () => {} } }); };
+  const handleDelete = async (id: number) => { const base = isInvest ? "/ativos" : "/despesas"; toast("Excluir?", { action: { label: "Sim", onClick: () => { toast.promise(api.delete(`${base}/delete/${id}`), { loading: "Excluindo...", success: () => { fetchAtivos(); return "Excluído!"; }, error: "Erro" }); }}, cancel: { label: "Cancelar", onClick: () => {} } }); };
 
-  const togglePago = async (ativo: Ativo) => { const novo = !ativo.pago; try { await api.put(`/contas/alter/${ativo.id}`, { ...ativo, pago: novo }); setAtivos(prev => prev.map(a => a.id === ativo.id ? { ...a, pago: novo } : a)); toast.success(novo ? "Pago!" : "Desmarcado"); } catch { toast.error("Erro"); } };
+  const togglePago = async (ativo: Ativo) => { const novo = !ativo.pago; try { await api.put(`/despesas/alter/${ativo.id}`, { ...ativo, pago: novo }); setAtivos(prev => prev.map(a => a.id === ativo.id ? { ...a, pago: novo } : a)); toast.success(novo ? "Pago!" : "Desmarcado"); } catch { toast.error("Erro"); } };
 
   const openModal = (a: Ativo | null = null) => { setErrors({}); if (a) { setEditing(a); setForm({ nome: a.nome, categoria: a.categoria, categoriaInvestimento: a.categoriaInvestimento || "", quantidade: a.quantidade?.toString() || "", valorUnitario: a.valorUnitario?.toString() || "", precoAtual: a.precoAtual?.toString() || "", saldo: a.saldo?.toString() || "0", instituicao: a.instituicao || "", dataAplicacao: a.dataAplicacao || "", vencimento: a.vencimento || "", dataVencimento: a.dataVencimento || "", rentabilidade: a.rentabilidade?.toString() || "", carteira_id: carteiraId.toString(), pago: a.pago ?? false }); } else { setEditing(null); setForm({ ...emptyForm, categoria: isInvest ? "INVESTIMENTO" : "CONTA", carteira_id: carteiraId.toString() }); } setShowModal(true); };
   const closeModal = () => { setShowModal(false); setEditing(null); };
@@ -309,7 +301,7 @@ export default function CarteiraDetalhe() {
                           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                             {isConta && <button onClick={() => togglePago(a)} style={{ ...btnSm, background: a.pago ? "#fef3c7" : "#d1fae5", color: a.pago ? "#b45309" : "#047857", fontWeight: 700 }}>{a.pago ? "↩ Desmarcar" : "✓ Pagar"}</button>}
                             <button onClick={() => openModal(a)} style={btnSm}>✏️ Editar</button>
-                            <button onClick={() => setLogsConta(a)} style={btnSm} title="Ver logs">📜</button>
+                            {isConta && <button onClick={() => setLogsConta(a)} style={btnSm} title="Ver logs">📜</button>}
                             <button onClick={() => handleDelete(a.id)} style={{ ...btnSm, background: "#fee2e2", color: "#ef4444" }}>🗑</button>
                           </div>
                         </td>

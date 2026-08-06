@@ -4,7 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import dev.LzGuimaraes.FocusLifeHub.Contas.ContasModel;
+import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaModel;
 import dev.LzGuimaraes.FocusLifeHub.Tarefas.TarefasModel;
 
 /**
@@ -31,7 +31,7 @@ public final class EmailTemplate {
         return html.toString();
     }
 
-    public static String contasVencendo(LocalDate data, List<ContasModel> contas) {
+    public static String contasVencendo(LocalDate data, List<DespesaModel> contas) {
         List<String> itens = contas.stream()
                 .map(c -> "<b>" + c.getNome() + "</b> — R$ "
                         + String.format("%.2f", c.getSaldo() != null ? c.getSaldo() : 0f))

@@ -1,4 +1,4 @@
-package dev.LzGuimaraes.FocusLifeHub.Contas;
+package dev.LzGuimaraes.FocusLifeHub.Despesa;
 
 import java.time.LocalDateTime;
 
@@ -13,11 +13,15 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Log de auditoria das despesas (mantém a tabela existente conta_log;
+ * o contaId referencia o ID da despesa).
+ */
 @Entity
 @Table(name = "conta_log")
 @Getter
 @Setter
-public class ContaLogModel {
+public class DespesaLogModel {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
