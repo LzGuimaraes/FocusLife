@@ -20,14 +20,15 @@ interface Ativo {
   instituicao: string | null; dataAplicacao: string | null;
   vencimento: string | null; dataVencimento: string | null;
   rentabilidade: number | null; pago: boolean | null;
-  financas_id: number;
+  carteira_investimento_id: number | null;
+  carteira_dividas_id: number | null;
 }
-interface Financa { id: number; nome: string; moeda: string; tipoCarteira: TipoCarteira; }
+interface Financa { id: number; nome: string; moeda: string; tipo: TipoCarteira; }
 interface FormData {
   nome: string; categoria: Categoria; categoriaInvestimento: CatInvest | "";
   quantidade: string; valorUnitario: string; precoAtual: string; saldo: string;
   instituicao: string; dataAplicacao: string; vencimento: string; dataVencimento: string; rentabilidade: string;
-  financas_id: string; pago: boolean;
+  carteira_id: string; pago: boolean;
 }
 const moedaS: Record<string, string> = { BRL: "R$", USD: "$", EUR: "€", GBP: "£", JPY: "¥" };
 const fmt = (v: number | undefined | null, m: string) => v != null ? `${moedaS[m] || m} ${v.toFixed(2)}` : "-";
@@ -42,7 +43,7 @@ const catInfo: Record<CatInvest, { icon: string; label: string; color: string; b
   CRIPTOMOEDAS:     { icon: "₿",  label: "Criptomoedas",     color: "#f59e0b", bg: "#fef3c7", autoCalc: true },
 };
 
-const emptyForm: FormData = { nome: "", categoria: "INVESTIMENTO", categoriaInvestimento: "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", dataVencimento: "", rentabilidade: "", financas_id: "", pago: false };
+const emptyForm: FormData = { nome: "", categoria: "INVESTIMENTO", categoriaInvestimento: "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", dataVencimento: "", rentabilidade: "", carteira_id: "", pago: false };
 type Errors = Partial<Record<keyof FormData, string>>;
 
 export default function Contas() {
@@ -59,19 +60,46 @@ export default function Contas() {
   const [errors, setErrors] = useState<Errors>({});
   const [logsConta, setLogsConta] = useState<Ativo | null>(null);
 
-  useEffect(() => { api.get("/financas/all?page=0&size=100").then(r => setFinancas(r.data.content)).catch(() => {}); }, []);
+  useEffect(() => { fetchCarteiras(); }, []);
   useEffect(() => { fetchAtivos(); }, [filterFinanca]);
 
-  const fetchAtivos = async () => { setLoading(true); try { let r; if (filterFinanca === "all") { r = await api.get(`/contas/all?page=0&size=200`); setAtivos(r.data.content); } else { r = await api.get(`/contas/by-financa/${filterFinanca}`); setAtivos(r.data); } } catch { toast.error("Erro ao carregar"); } finally { setLoading(false); } };
+  const fetchCarteiras = async () => {
+    try {
+      const [inv, div] = await Promise.all([
+        api.get("/carteiras-investimento/all?page=0&size=100"),
+        api.get("/carteiras-dividas/all?page=0&size=100"),
+      ]);
+      const invest: Financa[] = (inv.data.content ?? []).map((c: any) => ({ id: c.id, nome: c.nome, moeda: c.moeda, tipo: "INVESTIMENTO" }));
+      const despesas: Financa[] = (div.data.content ?? []).map((c: any) => ({ id: c.id, nome: c.nome, moeda: c.moeda, tipo: "DESPESAS" }));
+      setFinancas([...invest, ...despesas]);
+    } catch { /* silencioso */ }
+  };
 
-  const selectedFinanca = filterFinanca !== "all" ? financas.find(f => f.id.toString() === filterFinanca) : null;
-  const walletType = selectedFinanca?.tipoCarteira;
+  const fetchAtivos = async () => {
+    setLoading(true);
+    try {
+      let r;
+      if (filterFinanca === "all") {
+        r = await api.get(`/contas/all?page=0&size=200`);
+        setAtivos(r.data.content);
+      } else {
+        const [tipo, id] = filterFinanca.split(":");
+        r = tipo === "INVESTIMENTO"
+          ? await api.get(`/contas/by-carteira-investimento/${id}`)
+          : await api.get(`/contas/by-carteira-dividas/${id}`);
+        setAtivos(r.data);
+      }
+    } catch { toast.error("Erro ao carregar"); } finally { setLoading(false); }
+  };
+
+  const selectedFinanca = filterFinanca !== "all" ? financas.find(f => `${f.tipo}:${f.id}` === filterFinanca) : null;
+  const walletType = selectedFinanca?.tipo;
 
   const validate = (): boolean => {
     const e: Errors = {};
     if (!form.nome.trim()) e.nome = "O nome é obrigatório.";
     if (!form.dataVencimento) e.dataVencimento = "Informe a data de vencimento.";
-    if (!form.financas_id) e.financas_id = "Selecione uma carteira.";
+    if (!form.carteira_id) e.carteira_id = "Selecione uma carteira.";
     if (form.categoria === "INVESTIMENTO" && !form.categoriaInvestimento) e.categoriaInvestimento = "Selecione a categoria.";
     const ci = catInfo[form.categoriaInvestimento as CatInvest];
     if (ci?.autoCalc) {
@@ -89,7 +117,11 @@ export default function Contas() {
 
   const handleSubmit = async () => {
     if (!validate()) return;
-    const payload: any = { nome: form.nome, categoria: form.categoria, financas_id: parseInt(form.financas_id), dataVencimento: formatLocalDate(parseLocalDate(form.dataVencimento)) };
+    const carteiraKey = walletType ? filterFinanca : form.carteira_id;
+    const [cTipo, cId] = carteiraKey.split(":");
+    const payload: any = { nome: form.nome, categoria: form.categoria, dataVencimento: formatLocalDate(parseLocalDate(form.dataVencimento)) };
+    if (cTipo === "INVESTIMENTO") payload.carteira_investimento_id = parseInt(cId);
+    else payload.carteira_dividas_id = parseInt(cId);
     if (form.categoria === "INVESTIMENTO") {
       payload.categoriaInvestimento = form.categoriaInvestimento;
       payload.instituicao = form.instituicao || null;
@@ -127,19 +159,30 @@ export default function Contas() {
 
   const togglePago = async (ativo: Ativo) => {
     const novo = !ativo.pago;
-    try { await api.put(`/contas/alter/${ativo.id}`, { ...ativo, pago: novo, financas_id: ativo.financas_id }); setAtivos(prev => prev.map(a => a.id === ativo.id ? { ...a, pago: novo } : a)); toast.success(novo ? "Pago!" : "Desmarcado"); }
+    try { await api.put(`/contas/alter/${ativo.id}`, { ...ativo, pago: novo }); setAtivos(prev => prev.map(a => a.id === ativo.id ? { ...a, pago: novo } : a)); toast.success(novo ? "Pago!" : "Desmarcado"); }
     catch { toast.error("Erro"); }
   };
 
   const openModal = (a: Ativo | null = null) => {
     setErrors({});
     const defCat: Categoria = walletType === "INVESTIMENTO" ? "INVESTIMENTO" : "CONTA";
-    if (a) { setEditing(a); setForm({ nome: a.nome, categoria: a.categoria, categoriaInvestimento: a.categoriaInvestimento || "", quantidade: a.quantidade?.toString() || "", valorUnitario: a.valorUnitario?.toString() || "", precoAtual: a.precoAtual?.toString() || "", saldo: a.saldo?.toString() || "0", instituicao: a.instituicao || "", dataAplicacao: a.dataAplicacao || "", vencimento: a.vencimento || "", dataVencimento: a.dataVencimento || "", rentabilidade: a.rentabilidade?.toString() || "", financas_id: a.financas_id.toString(), pago: a.pago ?? false }); }
-    else { setEditing(null); setForm({ ...emptyForm, categoria: defCat, financas_id: filterFinanca !== "all" ? filterFinanca : (financas[0]?.id.toString() || "") }); }
+    if (a) {
+      setEditing(a);
+      const ckey = a.carteira_investimento_id != null
+        ? `INVESTIMENTO:${a.carteira_investimento_id}`
+        : `DESPESAS:${a.carteira_dividas_id}`;
+      setForm({ nome: a.nome, categoria: a.categoria, categoriaInvestimento: a.categoriaInvestimento || "", quantidade: a.quantidade?.toString() || "", valorUnitario: a.valorUnitario?.toString() || "", precoAtual: a.precoAtual?.toString() || "", saldo: a.saldo?.toString() || "0", instituicao: a.instituicao || "", dataAplicacao: a.dataAplicacao || "", vencimento: a.vencimento || "", dataVencimento: a.dataVencimento || "", rentabilidade: a.rentabilidade?.toString() || "", carteira_id: ckey, pago: a.pago ?? false });
+    }
+    else { setEditing(null); const def = financas.find(f => f.tipo === (defCat === "INVESTIMENTO" ? "INVESTIMENTO" : "DESPESAS")) || financas[0]; setForm({ ...emptyForm, categoria: defCat, carteira_id: filterFinanca !== "all" ? filterFinanca : (def ? `${def.tipo}:${def.id}` : "") }); }
     setShowModal(true);
   };
   const closeModal = () => { setShowModal(false); setEditing(null); };
-  const getMoeda = (fid: number) => financas.find(f => f.id === fid)?.moeda || "BRL";
+  const getCarteiraDeAtivo = (a: Ativo): Financa | undefined => {
+    if (a.carteira_investimento_id != null) return financas.find(f => f.tipo === "INVESTIMENTO" && f.id === a.carteira_investimento_id);
+    if (a.carteira_dividas_id != null) return financas.find(f => f.tipo === "DESPESAS" && f.id === a.carteira_dividas_id);
+    return undefined;
+  };
+  const getMoeda = (a: Ativo) => getCarteiraDeAtivo(a)?.moeda || "BRL";
 
   /* ── Sumários ── */
   const contas = ativos.filter(a => a.categoria === "CONTA");
@@ -208,7 +251,7 @@ export default function Contas() {
       {/* Filtro */}
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "20px" }}>
         <button onClick={() => setFilterFinanca("all")} style={fb(filterFinanca === "all")}>Todas</button>
-        {financas.map(f => (<button key={f.id} onClick={() => setFilterFinanca(f.id.toString())} style={fb(filterFinanca === f.id.toString())}>{f.tipoCarteira === "INVESTIMENTO" ? "📈" : "📋"} {f.nome}</button>))}
+        {financas.map(f => { const key = `${f.tipo}:${f.id}`; return (<button key={key} onClick={() => setFilterFinanca(key)} style={fb(filterFinanca === key)}>{f.tipo === "INVESTIMENTO" ? "📈" : "📋"} {f.nome}</button>); })}
 
         {/* Alternância de visualização: Cards ↔ Lista */}
         <div style={{ marginLeft: "auto", display: "flex", gap: "4px", background: "#eef2f7", padding: "3px", borderRadius: "10px" }}>
@@ -220,7 +263,7 @@ export default function Contas() {
       {loading ? <Spinner text="Carregando..." /> : ativos.length === 0 ? <EmptyState icon="💳" title="Nenhum ativo" text="Crie seu primeiro ativo!" actionLabel="Criar Ativo" onAction={() => openModal()} /> :
         viewMode === "cards" ? (
           <CardGrid>{ativos.map(a => {
-          const moeda = getMoeda(a.financas_id);
+          const moeda = getMoeda(a);
           const ci = catInfo[a.categoriaInvestimento as CatInvest];
           const isConta = a.categoria === "CONTA";
           const isInvest = a.categoria === "INVESTIMENTO";
@@ -260,7 +303,7 @@ export default function Contas() {
                 </thead>
                 <tbody>
                   {ativos.map(a => {
-                    const moeda = getMoeda(a.financas_id);
+                    const moeda = getMoeda(a);
                     const ci = catInfo[a.categoriaInvestimento as CatInvest];
                     const isConta = a.categoria === "CONTA";
                     const isInvest = a.categoria === "INVESTIMENTO";
@@ -420,11 +463,11 @@ export default function Contas() {
         {(walletType === "DESPESAS" || (!walletType && form.categoria === "CONTA")) && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
             <NumberInput label="Saldo" required decimal value={form.saldo} onChange={v => setForm({ ...form, saldo: v })} error={errors.saldo} placeholder="0.00" hint="Valor da conta/despesa neste vencimento" />
-            <Select label="Carteira" required value={form.financas_id} onChange={e => setForm({ ...form, financas_id: e.target.value })} error={errors.financas_id}>{financas.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}</Select>
+            <Select label="Carteira" required value={form.carteira_id} onChange={e => setForm({ ...form, carteira_id: e.target.value })} error={errors.carteira_id}>{financas.map(f => <option key={`${f.tipo}:${f.id}`} value={`${f.tipo}:${f.id}`}>{f.tipo === "INVESTIMENTO" ? "📈" : "📋"} {f.nome}</option>)}</Select>
           </div>
         )}
         {(walletType === "INVESTIMENTO" || (!walletType && form.categoria === "INVESTIMENTO")) && (
-          <Select label="Carteira" required value={form.financas_id} onChange={e => setForm({ ...form, financas_id: e.target.value })} error={errors.financas_id}>{financas.filter(f => f.tipoCarteira === "INVESTIMENTO").map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}</Select>
+          <Select label="Carteira" required value={form.carteira_id} onChange={e => setForm({ ...form, carteira_id: e.target.value })} error={errors.carteira_id}>{financas.filter(f => f.tipo === "INVESTIMENTO").map(f => <option key={`${f.tipo}:${f.id}`} value={`${f.tipo}:${f.id}`}>{f.nome}</option>)}</Select>
         )}
       </Modal>
       {logsConta && (

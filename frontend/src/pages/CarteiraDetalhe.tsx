@@ -14,9 +14,9 @@ import ContaLogsModal from "../components/ContaLogsModal";
 type CatInvest = "RENDA_FIXA" | "TESOURO_DIRETO" | "ACOES" | "FIIS" | "ETFS" | "CRIPTOMOEDAS";
 type TipoCarteira = "INVESTIMENTO" | "DESPESAS";
 
-interface Ativo { id: number; nome: string; categoria: "CONTA" | "INVESTIMENTO"; categoriaInvestimento: CatInvest | null; quantidade: number | null; valorUnitario: number | null; precoAtual: number | null; saldo: number; instituicao: string | null; dataAplicacao: string | null; vencimento: string | null; dataVencimento: string | null; rentabilidade: number | null; pago: boolean | null; financas_id: number; }
-interface Financa { id: number; nome: string; moeda: string; tipoCarteira: TipoCarteira; }
-interface FormData { nome: string; categoria: "CONTA" | "INVESTIMENTO"; categoriaInvestimento: CatInvest | ""; quantidade: string; valorUnitario: string; precoAtual: string; saldo: string; instituicao: string; dataAplicacao: string; vencimento: string; dataVencimento: string; rentabilidade: string; financas_id: string; pago: boolean; }
+interface Ativo { id: number; nome: string; categoria: "CONTA" | "INVESTIMENTO"; categoriaInvestimento: CatInvest | null; quantidade: number | null; valorUnitario: number | null; precoAtual: number | null; saldo: number; instituicao: string | null; dataAplicacao: string | null; vencimento: string | null; dataVencimento: string | null; rentabilidade: number | null; pago: boolean | null; carteira_investimento_id: number | null; carteira_dividas_id: number | null; }
+interface Financa { id: number; nome: string; moeda: string; tipo: TipoCarteira; }
+interface FormData { nome: string; categoria: "CONTA" | "INVESTIMENTO"; categoriaInvestimento: CatInvest | ""; quantidade: string; valorUnitario: string; precoAtual: string; saldo: string; instituicao: string; dataAplicacao: string; vencimento: string; dataVencimento: string; rentabilidade: string; carteira_id: string; pago: boolean; }
 
 const moedaS: Record<string, string> = { BRL: "R$", USD: "$", EUR: "€", GBP: "£", JPY: "¥" };
 const fmt = (v: number | null | undefined, m: string) => v != null ? `${moedaS[m] || m} ${v.toFixed(2)}` : "-";
@@ -36,13 +36,16 @@ const tipoLabel: Record<TipoCarteira, { icon: string; label: string; color: stri
   DESPESAS: { icon: "📋", label: "Despesas", color: "#ef4444", bg: "#fef2f2" },
 };
 
-const emptyForm: FormData = { nome: "", categoria: "INVESTIMENTO", categoriaInvestimento: "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", dataVencimento: "", rentabilidade: "", financas_id: "", pago: false };
+const emptyForm: FormData = { nome: "", categoria: "INVESTIMENTO", categoriaInvestimento: "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", dataVencimento: "", rentabilidade: "", carteira_id: "", pago: false };
 type Errors = Partial<Record<keyof FormData, string>>;
 
 export default function CarteiraDetalhe() {
-  const { id } = useParams<{ id: string }>();
+  const { tipo, id } = useParams<{ tipo: string; id: string }>();
   const navigate = useNavigate();
   const carteiraId = parseInt(id || "0");
+  // O tipo vem na rota: os IDs das duas tabelas podem colidir (ambas começam em 1)
+  const carteiraTipo: TipoCarteira = (tipo || "").toLowerCase() === "investimento" ? "INVESTIMENTO" : "DESPESAS";
+  const rotaTipo = carteiraTipo === "INVESTIMENTO" ? "investimento" : "dividas";
 
   const [ativos, setAtivos] = useState<Ativo[]>([]);
   const [carteira, setCarteira] = useState<Financa | null>(null);
@@ -56,24 +59,33 @@ export default function CarteiraDetalhe() {
   const [logsConta, setLogsConta] = useState<Ativo | null>(null);
 
   useEffect(() => {
-    api.get("/financas/all?page=0&size=100").then(r => {
-      setTodasCarteiras(r.data.content);
-      const found = r.data.content.find((f: Financa) => f.id === carteiraId);
-      if (found) setCarteira(found);
-      else navigate("/financas");
-    }).catch(() => {});
-  }, [carteiraId]);
+    const base = carteiraTipo === "INVESTIMENTO" ? "/carteiras-investimento" : "/carteiras-dividas";
+    Promise.all([
+      api.get(`${base}/all/${carteiraId}`),
+      api.get(`${base}/all?page=0&size=100`),
+    ]).then(([det, list]) => {
+      const found: Financa = { id: det.data.id, nome: det.data.nome, moeda: det.data.moeda, tipo: carteiraTipo };
+      setCarteira(found);
+      const todas: Financa[] = (list.data.content ?? []).map((c: any) => ({ id: c.id, nome: c.nome, moeda: c.moeda, tipo: carteiraTipo }));
+      setTodasCarteiras(todas);
+    }).catch(() => navigate("/financas"));
+  }, [carteiraId, carteiraTipo]);
 
   useEffect(() => { if (carteiraId) fetchAtivos(); }, [carteiraId]);
 
   const fetchAtivos = async () => {
     setLoading(true);
-    try { const r = await api.get(`/contas/by-financa/${carteiraId}`); setAtivos(r.data); }
+    try {
+      const r = carteiraTipo === "INVESTIMENTO"
+        ? await api.get(`/contas/by-carteira-investimento/${carteiraId}`)
+        : await api.get(`/contas/by-carteira-dividas/${carteiraId}`);
+      setAtivos(r.data);
+    }
     catch { toast.error("Erro ao carregar"); }
     finally { setLoading(false); }
   };
 
-  const walletType = carteira?.tipoCarteira;
+  const walletType = carteira?.tipo;
   const isInvest = walletType === "INVESTIMENTO";
   const isDespesa = walletType === "DESPESAS";
   const itemLabel = isInvest ? "Investimento" : "Despesa";
@@ -95,7 +107,9 @@ export default function CarteiraDetalhe() {
 
   const handleSubmit = async () => {
     if (!validate()) return;
-    const payload: any = { nome: form.nome, categoria: isInvest ? "INVESTIMENTO" : "CONTA", financas_id: carteiraId, dataVencimento: formatLocalDate(parseLocalDate(form.dataVencimento)) };
+    const payload: any = { nome: form.nome, categoria: isInvest ? "INVESTIMENTO" : "CONTA", dataVencimento: formatLocalDate(parseLocalDate(form.dataVencimento)) };
+    if (isInvest) payload.carteira_investimento_id = carteiraId;
+    else payload.carteira_dividas_id = carteiraId;
     if (isInvest) { payload.categoriaInvestimento = form.categoriaInvestimento; payload.instituicao = form.instituicao || null; payload.dataAplicacao = form.dataAplicacao || null; payload.vencimento = form.vencimento || null; payload.rentabilidade = form.rentabilidade ? parseFloat(form.rentabilidade) : null; payload.precoAtual = form.precoAtual ? parseFloat(form.precoAtual) : null; const ci = catInfo[form.categoriaInvestimento as CatInvest]; if (ci?.autoCalc) { payload.valorUnitario = parseFloat(form.valorUnitario) || 0; payload.quantidade = parseFloat(form.quantidade) || 0; } else { payload.saldo = parseFloat(form.saldo) || 0; } payload.pago = null; /* não se aplica a investimentos */ }
     if (isDespesa) {
       payload.saldo = parseFloat(form.saldo) || 0;
@@ -116,9 +130,9 @@ export default function CarteiraDetalhe() {
 
   const handleDelete = async (id: number) => { toast("Excluir?", { action: { label: "Sim", onClick: () => { toast.promise(api.delete(`/contas/delete/${id}`), { loading: "Excluindo...", success: () => { fetchAtivos(); return "Excluído!"; }, error: "Erro" }); }}, cancel: { label: "Cancelar", onClick: () => {} } }); };
 
-  const togglePago = async (ativo: Ativo) => { const novo = !ativo.pago; try { await api.put(`/contas/alter/${ativo.id}`, { ...ativo, pago: novo, financas_id: ativo.financas_id }); setAtivos(prev => prev.map(a => a.id === ativo.id ? { ...a, pago: novo } : a)); toast.success(novo ? "Pago!" : "Desmarcado"); } catch { toast.error("Erro"); } };
+  const togglePago = async (ativo: Ativo) => { const novo = !ativo.pago; try { await api.put(`/contas/alter/${ativo.id}`, { ...ativo, pago: novo }); setAtivos(prev => prev.map(a => a.id === ativo.id ? { ...a, pago: novo } : a)); toast.success(novo ? "Pago!" : "Desmarcado"); } catch { toast.error("Erro"); } };
 
-  const openModal = (a: Ativo | null = null) => { setErrors({}); if (a) { setEditing(a); setForm({ nome: a.nome, categoria: a.categoria, categoriaInvestimento: a.categoriaInvestimento || "", quantidade: a.quantidade?.toString() || "", valorUnitario: a.valorUnitario?.toString() || "", precoAtual: a.precoAtual?.toString() || "", saldo: a.saldo?.toString() || "0", instituicao: a.instituicao || "", dataAplicacao: a.dataAplicacao || "", vencimento: a.vencimento || "", dataVencimento: a.dataVencimento || "", rentabilidade: a.rentabilidade?.toString() || "", financas_id: a.financas_id.toString(), pago: a.pago ?? false }); } else { setEditing(null); setForm({ ...emptyForm, categoria: isInvest ? "INVESTIMENTO" : "CONTA", financas_id: carteiraId.toString() }); } setShowModal(true); };
+  const openModal = (a: Ativo | null = null) => { setErrors({}); if (a) { setEditing(a); setForm({ nome: a.nome, categoria: a.categoria, categoriaInvestimento: a.categoriaInvestimento || "", quantidade: a.quantidade?.toString() || "", valorUnitario: a.valorUnitario?.toString() || "", precoAtual: a.precoAtual?.toString() || "", saldo: a.saldo?.toString() || "0", instituicao: a.instituicao || "", dataAplicacao: a.dataAplicacao || "", vencimento: a.vencimento || "", dataVencimento: a.dataVencimento || "", rentabilidade: a.rentabilidade?.toString() || "", carteira_id: carteiraId.toString(), pago: a.pago ?? false }); } else { setEditing(null); setForm({ ...emptyForm, categoria: isInvest ? "INVESTIMENTO" : "CONTA", carteira_id: carteiraId.toString() }); } setShowModal(true); };
   const closeModal = () => { setShowModal(false); setEditing(null); };
 
   /* ── Sumários ── */
@@ -162,9 +176,9 @@ export default function CarteiraDetalhe() {
           </div>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {/* Seletor de carteira */}
-            <select value={carteiraId} onChange={e => navigate(`/financas/carteiras/${e.target.value}`)}
+            <select value={carteiraId} onChange={e => navigate(`/financas/carteiras/${rotaTipo}/${e.target.value}`)}
               style={{ padding: "8px 32px 8px 12px", fontSize: "13px", border: "1.5px solid #e2e8f0", borderRadius: "8px", background: "white", color: "#0f172a", cursor: "pointer", appearance: "none", backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1.5 3h9z'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 10px center", fontWeight: 500 }}>
-              {todasCarteiras.map(f => <option key={f.id} value={f.id}>{f.tipoCarteira === "INVESTIMENTO" ? "📈" : "📋"} {f.nome}</option>)}
+              {todasCarteiras.map(f => <option key={f.id} value={f.id}>{f.tipo === "INVESTIMENTO" ? "📈" : "📋"} {f.nome}</option>)}
             </select>
             {/* Alternância de visualização: Cards ↔ Lista */}
             <div style={{ display: "flex", gap: "4px", background: "#eef2f7", padding: "3px", borderRadius: "10px", alignSelf: "center" }}>

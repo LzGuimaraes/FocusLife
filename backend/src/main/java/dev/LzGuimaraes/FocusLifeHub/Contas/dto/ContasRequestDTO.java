@@ -29,8 +29,10 @@ public record ContasRequestDTO(
     @PositiveOrZero(message = "O preço atual não pode ser negativo.")
     Float precoAtual,
 
-    @NotNull(message = "O ID da carteira (financas_id) é obrigatório")
-    Long financas_id,
+    // Carteiras dedicadas: informe EXATAMENTE uma delas (a outra fica null)
+    Long carteira_investimento_id,
+
+    Long carteira_dividas_id,
 
     @PositiveOrZero(message = "O saldo não pode ser negativo.")
     Float saldo,

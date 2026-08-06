@@ -5,7 +5,9 @@ import java.time.LocalDate;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
-import dev.LzGuimaraes.FocusLifeHub.Financas.FinancasModel;
+import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraDividasModel;
+import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraInvestimentoModel;
+import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraModel;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -61,7 +63,20 @@ public class ContasModel {
     private Boolean pago;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "financas_id")
+    @JoinColumn(name = "carteira_investimento_id")
     @JsonIgnore
-    private FinancasModel financas;
+    private CarteiraInvestimentoModel carteiraInvestimento;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "carteira_dividas_id")
+    @JsonIgnore
+    private CarteiraDividasModel carteiraDividas;
+
+    /**
+     * Retorna a carteira dona deste ativo, independente do tipo
+     * (investimento ou dívidas). Usado para checagem de dono e e-mails.
+     */
+    public CarteiraModel getCarteiraAtiva() {
+        return carteiraInvestimento != null ? carteiraInvestimento : carteiraDividas;
+    }
 }

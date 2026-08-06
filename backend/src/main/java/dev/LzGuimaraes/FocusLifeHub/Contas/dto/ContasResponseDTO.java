@@ -23,5 +23,6 @@ public record ContasResponseDTO(
     LocalDate dataVencimento,
     Float rentabilidade,
     Boolean pago,
-    Long financas_id
+    Long carteira_investimento_id,
+    Long carteira_dividas_id
 ) {}

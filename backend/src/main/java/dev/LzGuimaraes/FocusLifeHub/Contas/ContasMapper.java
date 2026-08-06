@@ -2,14 +2,16 @@ package dev.LzGuimaraes.FocusLifeHub.Contas;
 
 import org.springframework.stereotype.Component;
 
+import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraDividasModel;
+import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraInvestimentoModel;
+import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraModel;
 import dev.LzGuimaraes.FocusLifeHub.Contas.dto.ContasRequestDTO;
 import dev.LzGuimaraes.FocusLifeHub.Contas.dto.ContasResponseDTO;
-import dev.LzGuimaraes.FocusLifeHub.Financas.FinancasModel;
 
 @Component
 public class ContasMapper {
 
-    public ContasModel toModel(ContasRequestDTO dto, FinancasModel financas) {
+    public ContasModel toModel(ContasRequestDTO dto, CarteiraModel carteira) {
         if (dto == null) {
             return null;
         }
@@ -27,7 +29,12 @@ public class ContasMapper {
         ativo.setDataVencimento(dto.dataVencimento());
         ativo.setRentabilidade(dto.rentabilidade());
         ativo.setPago(dto.pago());
-        ativo.setFinancas(financas);
+
+        if (carteira instanceof CarteiraInvestimentoModel) {
+            ativo.setCarteiraInvestimento((CarteiraInvestimentoModel) carteira);
+        } else if (carteira instanceof CarteiraDividasModel) {
+            ativo.setCarteiraDividas((CarteiraDividasModel) carteira);
+        }
 
         return ativo;
     }
@@ -37,7 +44,8 @@ public class ContasMapper {
             return null;
         }
 
-        Long financasId = (ativo.getFinancas() != null) ? ativo.getFinancas().getId() : null;
+        Long carteiraInvestimentoId = (ativo.getCarteiraInvestimento() != null) ? ativo.getCarteiraInvestimento().getId() : null;
+        Long carteiraDividasId = (ativo.getCarteiraDividas() != null) ? ativo.getCarteiraDividas().getId() : null;
 
         return new ContasResponseDTO(
             ativo.getId(),
@@ -54,7 +62,8 @@ public class ContasMapper {
             ativo.getDataVencimento(),
             ativo.getRentabilidade(),
             ativo.getPago(),
-            financasId
+            carteiraInvestimentoId,
+            carteiraDividasId
         );
     }
 }

@@ -1,6 +1,7 @@
 package dev.LzGuimaraes.FocusLifeHub.Contas;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -9,33 +10,38 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder; 
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
-import dev.LzGuimaraes.FocusLifeHub.Exceptions.ResourceNotFoundException;
+import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraDividasModel;
+import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraDividasRepository;
+import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraInvestimentoModel;
+import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraInvestimentoRepository;
+import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraModel;
 import dev.LzGuimaraes.FocusLifeHub.Contas.dto.ContaLogResponseDTO;
 import dev.LzGuimaraes.FocusLifeHub.Contas.dto.ContasRequestDTO;
 import dev.LzGuimaraes.FocusLifeHub.Contas.dto.ContasResponseDTO;
-import dev.LzGuimaraes.FocusLifeHub.Financas.FinancasModel;
-import dev.LzGuimaraes.FocusLifeHub.Financas.FinancasRepository;
-import dev.LzGuimaraes.FocusLifeHub.Financas.TipoCarteira;
+import dev.LzGuimaraes.FocusLifeHub.Exceptions.ResourceNotFoundException;
 import dev.LzGuimaraes.FocusLifeHub.config.JWTUserData;
 
 @Service
 public class ContasService {
 
     private final ContasRepository contasRepository;
-    private final FinancasRepository financasRepository;
+    private final CarteiraInvestimentoRepository carteiraInvestimentoRepository;
+    private final CarteiraDividasRepository carteiraDividasRepository;
     private final ContaLogRepository contaLogRepository;
     private final ContasMapper contasMapper;
 
     public ContasService(
             ContasRepository contasRepository,
-            FinancasRepository financasRepository,
+            CarteiraInvestimentoRepository carteiraInvestimentoRepository,
+            CarteiraDividasRepository carteiraDividasRepository,
             ContaLogRepository contaLogRepository,
             ContasMapper contasMapper) {
         this.contasRepository = contasRepository;
-        this.financasRepository = financasRepository;
+        this.carteiraInvestimentoRepository = carteiraInvestimentoRepository;
+        this.carteiraDividasRepository = carteiraDividasRepository;
         this.contaLogRepository = contaLogRepository;
         this.contasMapper = contasMapper;
     }
@@ -46,9 +52,49 @@ public class ContasService {
         return jwtData.userId();
     }
 
+    private boolean pertenceAoUsuario(ContasModel conta, Long userId) {
+        CarteiraModel carteira = conta.getCarteiraAtiva();
+        return carteira != null && carteira.getUser() != null
+                && carteira.getUser().getId().equals(userId);
+    }
+
+    /**
+     * Resolve a carteira informada no DTO (exatamente uma das duas colunas
+     * dedicadas) e valida que pertence ao usuário autenticado.
+     */
+    private CarteiraModel resolveCarteira(ContasRequestDTO dto, Long userId) {
+        boolean temInvestimento = dto.carteira_investimento_id() != null;
+        boolean temDividas = dto.carteira_dividas_id() != null;
+
+        if (temInvestimento == temDividas) {
+            throw new IllegalArgumentException(
+                    "Informe exatamente uma carteira (carteira_investimento_id OU carteira_dividas_id).");
+        }
+
+        if (temInvestimento) {
+            Long id = dto.carteira_investimento_id();
+            CarteiraInvestimentoModel carteira = carteiraInvestimentoRepository.findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Carteira de Investimento com ID " + id + " não encontrada"));
+            if (carteira.getUser() == null || !carteira.getUser().getId().equals(userId)) {
+                throw new ResourceNotFoundException("Carteira de Investimento com ID " + id + " não encontrada");
+            }
+            return carteira;
+        }
+
+        Long id = dto.carteira_dividas_id();
+        CarteiraDividasModel carteira = carteiraDividasRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Carteira de Dívidas com ID " + id + " não encontrada"));
+        if (carteira.getUser() == null || !carteira.getUser().getId().equals(userId)) {
+            throw new ResourceNotFoundException("Carteira de Dívidas com ID " + id + " não encontrada");
+        }
+        return carteira;
+    }
+
     public Page<ContasResponseDTO> getAllContas(Pageable pageable) {
         Long userId = getAuthenticatedUserId();
-        return contasRepository.findByFinancas_UserId(userId, pageable)
+        return contasRepository.findByCarteiraInvestimento_UserIdOrCarteiraDividas_UserId(userId, userId, pageable)
                 .map(contasMapper::toResponse);
     }
 
@@ -57,23 +103,38 @@ public class ContasService {
         ContasModel conta = contasRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Conta com ID " + id + " não encontrada"));
 
-        if (!conta.getFinancas().getUser().getId().equals(userId)) {
+        if (!pertenceAoUsuario(conta, userId)) {
             throw new ResourceNotFoundException("Conta com ID " + id + " não encontrada");
         }
 
         return contasMapper.toResponse(conta);
     }
 
-    public List<ContasResponseDTO> getContasByFinancaId(Long financasId) {
+    public List<ContasResponseDTO> getContasByCarteiraInvestimentoId(Long carteiraId) {
         Long userId = getAuthenticatedUserId();
-        FinancasModel financa = financasRepository.findById(financasId)
-                .orElseThrow(() -> new ResourceNotFoundException("Carteira (Financa) com ID " + financasId + " não encontrada"));
-
-        if (!financa.getUser().getId().equals(userId)) {
-            throw new ResourceNotFoundException("Carteira (Financa) com ID " + financasId + " não encontrada");
+        CarteiraInvestimentoModel carteira = carteiraInvestimentoRepository.findById(carteiraId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Carteira de Investimento com ID " + carteiraId + " não encontrada"));
+        if (carteira.getUser() == null || !carteira.getUser().getId().equals(userId)) {
+            throw new ResourceNotFoundException("Carteira de Investimento com ID " + carteiraId + " não encontrada");
         }
-        
-        return contasRepository.findByFinancasId(financasId)
+
+        return contasRepository.findByCarteiraInvestimentoId(carteiraId)
+                .stream()
+                .map(contasMapper::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<ContasResponseDTO> getContasByCarteiraDividasId(Long carteiraId) {
+        Long userId = getAuthenticatedUserId();
+        CarteiraDividasModel carteira = carteiraDividasRepository.findById(carteiraId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Carteira de Dívidas com ID " + carteiraId + " não encontrada"));
+        if (carteira.getUser() == null || !carteira.getUser().getId().equals(userId)) {
+            throw new ResourceNotFoundException("Carteira de Dívidas com ID " + carteiraId + " não encontrada");
+        }
+
+        return contasRepository.findByCarteiraDividasId(carteiraId)
                 .stream()
                 .map(contasMapper::toResponse)
                 .collect(Collectors.toList());
@@ -81,8 +142,11 @@ public class ContasService {
 
     public List<ContasResponseDTO> getContasVencendo(LocalDate data) {
         Long userId = getAuthenticatedUserId();
-        return contasRepository.findByFinancas_UserIdAndPagoFalseAndDataVencimento(userId, data)
-                .stream()
+        List<ContasModel> contas = new ArrayList<>();
+        contas.addAll(contasRepository.findByCarteiraInvestimento_UserIdAndPagoFalseAndDataVencimento(userId, data));
+        contas.addAll(contasRepository.findByCarteiraDividas_UserIdAndPagoFalseAndDataVencimento(userId, data));
+
+        return contas.stream()
                 .map(contasMapper::toResponse)
                 .collect(Collectors.toList());
     }
@@ -92,7 +156,7 @@ public class ContasService {
         ContasModel conta = contasRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Conta com ID " + id + " não encontrada"));
 
-        if (!conta.getFinancas().getUser().getId().equals(userId)) {
+        if (!pertenceAoUsuario(conta, userId)) {
             throw new ResourceNotFoundException("Conta com ID " + id + " não encontrada");
         }
 
@@ -103,23 +167,17 @@ public class ContasService {
 
     public ContasResponseDTO createConta(ContasRequestDTO dto) {
         Long userId = getAuthenticatedUserId();
+        CarteiraModel carteira = resolveCarteira(dto, userId);
 
-        FinancasModel financa = financasRepository.findById(dto.financas_id())
-                .orElseThrow(() -> new ResourceNotFoundException("Carteira (Financa) com ID " + dto.financas_id() + " não encontrada"));
-
-        if (!financa.getUser().getId().equals(userId)) {
-            throw new ResourceNotFoundException("Carteira (Financa) com ID " + dto.financas_id() + " não encontrada");
+        // Validar compatibilidade: Dívidas só aceita CONTA, Investimento só aceita INVESTIMENTO
+        if (carteira instanceof CarteiraDividasModel && dto.categoria() != CategoriaAtivo.CONTA) {
+            throw new IllegalArgumentException("Carteiras de Dívidas só aceitam ativos do tipo CONTA.");
         }
-
-        ContasModel ativo = contasMapper.toModel(dto, financa);
-
-        // Validar compatibilidade: DESPESAS só aceita CONTA, INVESTIMENTO só aceita INVESTIMENTO
-        if (financa.getTipoCarteira() == TipoCarteira.DESPESAS && dto.categoria() != CategoriaAtivo.CONTA) {
-            throw new IllegalArgumentException("Carteiras de Despesas só aceitam ativos do tipo CONTA.");
-        }
-        if (financa.getTipoCarteira() == TipoCarteira.INVESTIMENTO && dto.categoria() != CategoriaAtivo.INVESTIMENTO) {
+        if (carteira instanceof CarteiraInvestimentoModel && dto.categoria() != CategoriaAtivo.INVESTIMENTO) {
             throw new IllegalArgumentException("Carteiras de Investimento só aceitam ativos do tipo INVESTIMENTO.");
         }
+
+        ContasModel ativo = contasMapper.toModel(dto, carteira);
 
         // Saldo atual = Preço Atual × Quantidade (se preço atual informado); senão Preço Médio × Quantidade
         if (dto.categoria() == CategoriaAtivo.INVESTIMENTO
@@ -149,7 +207,7 @@ public class ContasService {
         ContasModel ativo = contasRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Ativo com ID " + id + " não encontrado para alteração"));
 
-        if (!ativo.getFinancas().getUser().getId().equals(userId)) {
+        if (!pertenceAoUsuario(ativo, userId)) {
             throw new ResourceNotFoundException("Ativo com ID " + id + " não encontrado para alteração");
         }
 
@@ -188,14 +246,24 @@ public class ContasService {
             ativo.setPago(null);
         }
 
-        if (dto.financas_id() != null && !dto.financas_id().equals(ativo.getFinancas().getId())) {
-            FinancasModel newFinanca = financasRepository.findById(dto.financas_id())
-                    .orElseThrow(() -> new ResourceNotFoundException("Nova carteira (Financa) com ID " + dto.financas_id() + " não encontrada"));
-
-            if (!newFinanca.getUser().getId().equals(userId)) {
-                throw new ResourceNotFoundException("Nova carteira (Financa) com ID " + dto.financas_id() + " não encontrada");
+        // Reatribuição de carteira (apenas se exatamente uma foi informada)
+        boolean temInvestimento = dto.carteira_investimento_id() != null;
+        boolean temDividas = dto.carteira_dividas_id() != null;
+        if (temInvestimento != temDividas) {
+            CarteiraModel nova = resolveCarteira(dto, userId);
+            if (nova instanceof CarteiraInvestimentoModel) {
+                if (ativo.getCarteiraInvestimento() == null
+                        || !ativo.getCarteiraInvestimento().getId().equals(nova.getId())) {
+                    ativo.setCarteiraInvestimento((CarteiraInvestimentoModel) nova);
+                    ativo.setCarteiraDividas(null);
+                }
+            } else {
+                if (ativo.getCarteiraDividas() == null
+                        || !ativo.getCarteiraDividas().getId().equals(nova.getId())) {
+                    ativo.setCarteiraDividas((CarteiraDividasModel) nova);
+                    ativo.setCarteiraInvestimento(null);
+                }
             }
-            ativo.setFinancas(newFinanca);
         }
 
         ContasModel updated = contasRepository.save(ativo);
@@ -204,11 +272,11 @@ public class ContasService {
 
     public void deleteConta(Long id) {
         Long userId = getAuthenticatedUserId();
-        
+
         ContasModel conta = contasRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Conta com ID " + id + " não encontrada para exclusão"));
-        
-        if (!conta.getFinancas().getUser().getId().equals(userId)) {
+
+        if (!pertenceAoUsuario(conta, userId)) {
             throw new ResourceNotFoundException("Conta com ID " + id + " não encontrada para exclusão");
         }
 

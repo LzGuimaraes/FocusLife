@@ -74,8 +74,8 @@ public class DailyNotificationJob {
         List<ContasModel> contas = selecionarContasParaNotificar(data);
 
         Map<UserModel, List<ContasModel>> porUsuario = contas.stream()
-                .filter(c -> c.getFinancas() != null && c.getFinancas().getUser() != null)
-                .collect(Collectors.groupingBy(c -> c.getFinancas().getUser()));
+                .filter(c -> c.getCarteiraAtiva() != null && c.getCarteiraAtiva().getUser() != null)
+                .collect(Collectors.groupingBy(c -> c.getCarteiraAtiva().getUser()));
 
         for (Map.Entry<UserModel, List<ContasModel>> entry : porUsuario.entrySet()) {
             try {

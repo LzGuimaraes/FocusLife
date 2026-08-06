@@ -35,9 +35,15 @@ public class ContasController {
         return ResponseEntity.ok(conta);
     }
 
-    @GetMapping("/by-financa/{financasId}")
-    public ResponseEntity<List<ContasResponseDTO>> getContasByFinancaId(@PathVariable Long financasId) {
-        List<ContasResponseDTO> contas = contasService.getContasByFinancaId(financasId);
+    @GetMapping("/by-carteira-investimento/{carteiraId}")
+    public ResponseEntity<List<ContasResponseDTO>> getContasByCarteiraInvestimentoId(@PathVariable Long carteiraId) {
+        List<ContasResponseDTO> contas = contasService.getContasByCarteiraInvestimentoId(carteiraId);
+        return ResponseEntity.ok(contas);
+    }
+
+    @GetMapping("/by-carteira-dividas/{carteiraId}")
+    public ResponseEntity<List<ContasResponseDTO>> getContasByCarteiraDividasId(@PathVariable Long carteiraId) {
+        List<ContasResponseDTO> contas = contasService.getContasByCarteiraDividasId(carteiraId);
         return ResponseEntity.ok(contas);
     }
 

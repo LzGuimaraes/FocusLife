@@ -32,7 +32,7 @@ export default function App() {
           <Route path="/auth/activate" element={<ActivateAccount />} />
           <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/financas" element={<PrivateRoute><Financas /></PrivateRoute>} />
-          <Route path="/financas/carteiras/:id" element={<PrivateRoute><CarteiraDetalhe /></PrivateRoute>} />
+          <Route path="/financas/carteiras/:tipo/:id" element={<PrivateRoute><CarteiraDetalhe /></PrivateRoute>} />
           <Route path="/contas" element={<PrivateRoute><Contas /></PrivateRoute>} />
           <Route path="/tarefas" element={<PrivateRoute><Tarefas /></PrivateRoute>} />
           <Route path="/materias" element={<PrivateRoute><Materias /></PrivateRoute>} />
