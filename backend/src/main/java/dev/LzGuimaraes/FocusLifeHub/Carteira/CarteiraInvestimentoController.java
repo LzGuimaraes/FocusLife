@@ -36,6 +36,12 @@ public class CarteiraInvestimentoController {
         return new ResponseEntity<>(created, HttpStatus.CREATED);
     }
 
+    @PostMapping("/duplicar/{id}")
+    public ResponseEntity<CarteiraResponseDTO> duplicate(@PathVariable Long id) {
+        CarteiraResponseDTO duplicated = carteiraInvestimentoService.duplicate(id);
+        return new ResponseEntity<>(duplicated, HttpStatus.CREATED);
+    }
+
     @PutMapping("/alter/{id}")
     public ResponseEntity<CarteiraResponseDTO> update(@PathVariable Long id, @Valid @RequestBody CarteiraRequestDTO dto) {
         return ResponseEntity.ok(carteiraInvestimentoService.update(id, dto));

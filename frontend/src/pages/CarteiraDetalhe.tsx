@@ -14,6 +14,7 @@ import AtivoAutocomplete from "../components/AtivoAutocomplete";
 /* ── Types ── */
 type CatInvest = "RENDA_FIXA" | "TESOURO_DIRETO" | "ACOES" | "FIIS" | "ETFS" | "CRIPTOMOEDAS";
 type TipoCarteira = "INVESTIMENTO" | "DESPESAS";
+type FiltroStatus = "all" | "pagas" | "nao_pagas" | "vencidas" | "pendentes";
 
 interface Ativo { id: number; nome: string; categoria: "CONTA" | "INVESTIMENTO"; categoriaInvestimento: CatInvest | null; quantidade: number | null; valorUnitario: number | null; precoAtual: number | null; saldo: number; instituicao: string | null; dataAplicacao: string | null; vencimento: string | null; dataVencimento: string | null; rentabilidade: number | null; pago: boolean | null; carteira_investimento_id: number | null; carteira_dividas_id: number | null; ativo_cadastro_id: string | null; }
 interface Financa { id: number; nome: string; moeda: string; tipo: TipoCarteira; }
@@ -31,6 +32,19 @@ const catInfo: Record<CatInvest, { icon: string; label: string; color: string; b
   ETFS: { icon: "📦", label: "ETFs", color: "#06b6d4", bg: "#ecfeff", autoCalc: true },
   CRIPTOMOEDAS: { icon: "₿", label: "Criptomoedas", color: "#f59e0b", bg: "#fef3c7", autoCalc: true },
 };
+
+const statusFilters: { key: FiltroStatus; label: string; icon: string; color: string }[] = [
+  { key: "all", label: "Todas", icon: "📋", color: "#6366f1" },
+  { key: "pagas", label: "Pagas", icon: "✅", color: "#10b981" },
+  { key: "nao_pagas", label: "Não pagas", icon: "⭕", color: "#64748b" },
+  { key: "vencidas", label: "Vencidas", icon: "🔴", color: "#ef4444" },
+  { key: "pendentes", label: "Pendentes", icon: "⏳", color: "#f59e0b" },
+];
+
+const classeFilters: { key: CatInvest | "all"; label: string; icon: string; color: string }[] = [
+  { key: "all", label: "Todas", icon: "📊", color: "#6366f1" },
+  ...(Object.keys(catInfo) as CatInvest[]).map(k => ({ key: k, label: catInfo[k].label, icon: catInfo[k].icon, color: catInfo[k].color })),
+];
 
 const tipoLabel: Record<TipoCarteira, { icon: string; label: string; color: string; bg: string }> = {
   INVESTIMENTO: { icon: "📈", label: "Investimentos", color: "#8b5cf6", bg: "#f5f3ff" },
@@ -57,6 +71,8 @@ export default function CarteiraDetalhe() {
   const [form, setForm] = useState<FormData>(emptyForm);
   const [errors, setErrors] = useState<Errors>({});
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
+  const [filterStatus, setFilterStatus] = useState<FiltroStatus>("all");
+  const [filterClasse, setFilterClasse] = useState<CatInvest | "all">("all");
   const [logsConta, setLogsConta] = useState<Ativo | null>(null);
 
   useEffect(() => {
@@ -152,6 +168,24 @@ export default function CarteiraDetalhe() {
       ]
     : [{ icon: "📋", label: "Total Despesas", value: fmt(totalDespesas, moeda), color: "#ef4444", bg: "#fef2f2" }, { icon: "✅", label: "Pagas", value: fmt(pagas, moeda), color: "#10b981", bg: "#d1fae5" }, { icon: "⏳", label: "Pendentes", value: fmt(pendentes, moeda), color: "#f59e0b", bg: "#fef3c7" }];
 
+  /* ── Filtros (status p/ despesas, classe p/ investimentos) ── */
+  const hojeStr = formatLocalDate(new Date());
+  const matchesStatus = (a: Ativo, s: FiltroStatus): boolean => {
+    if (s === "all" || a.categoria !== "CONTA") return true;
+    if (s === "pagas") return a.pago === true;
+    if (s === "nao_pagas") return a.pago === false;
+    if (s === "vencidas") return a.pago === false && a.dataVencimento != null && a.dataVencimento < hojeStr;
+    // pendentes: não pagas e não vencidas
+    return a.pago === false && (a.dataVencimento == null || a.dataVencimento >= hojeStr);
+  };
+  const matchesClasse = (a: Ativo, c: CatInvest | "all"): boolean => {
+    if (c === "all" || a.categoria !== "INVESTIMENTO") return true;
+    return a.categoriaInvestimento === c;
+  };
+  const countsStatus = (s: FiltroStatus) => contas.filter(a => matchesStatus(a, s)).length;
+  const countsClasse = (c: CatInvest | "all") => investimentos.filter(a => matchesClasse(a, c)).length;
+  const filteredAtivos = ativos.filter(a => matchesStatus(a, filterStatus) && matchesClasse(a, filterClasse));
+
   if (!carteira && !loading) return <Layout><Spinner text="Redirecionando..." /></Layout>;
 
   return (
@@ -221,11 +255,35 @@ export default function CarteiraDetalhe() {
         )}
       </div>
 
+      {/* ── Filtros: status (despesas) e classe (investimentos) ── */}
+      {(isDespesa || isInvest) && (
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "16px" }}>
+          {isDespesa && (
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", padding: "3px", background: "#f1f5f9", borderRadius: "10px" }}>
+              {statusFilters.map(sf => (
+                <button key={sf.key} onClick={() => setFilterStatus(sf.key)} style={statusBtn(filterStatus === sf.key, sf.color)} title={`${sf.label}: ${countsStatus(sf.key)} conta(s)`}>
+                  {sf.icon} {sf.label} <span style={{ opacity: 0.75, fontWeight: 600 }}>{countsStatus(sf.key)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {isInvest && (
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", padding: "3px", background: "#eef2ff", borderRadius: "10px" }}>
+              {classeFilters.map(cf => (
+                <button key={cf.key} onClick={() => setFilterClasse(cf.key)} style={statusBtn(filterClasse === cf.key, cf.color)} title={`${cf.label}: ${countsClasse(cf.key)} ativo(s)`}>
+                  {cf.icon} {cf.label} <span style={{ opacity: 0.75, fontWeight: 600 }}>{countsClasse(cf.key)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Lista de Ativos ── */}
       {loading ? <Spinner text={`Carregando ${isInvest ? "investimentos" : "despesas"}...`} /> :
-        ativos.length === 0 ? <EmptyState icon={isInvest ? "📈" : "📋"} title={`Nenhum ${itemLabel.toLowerCase()}`} text={`Crie seu primeiro ${itemLabel.toLowerCase()} nesta carteira!`} actionLabel={`Criar ${itemLabel}`} onAction={() => openModal()} /> :
+        filteredAtivos.length === 0 ? (ativos.length === 0 ? <EmptyState icon={isInvest ? "📈" : "📋"} title={`Nenhum ${itemLabel.toLowerCase()}`} text={`Crie seu primeiro ${itemLabel.toLowerCase()} nesta carteira!`} actionLabel={`Criar ${itemLabel}`} onAction={() => openModal()} /> : <EmptyState icon="🔍" title="Nenhum resultado" text="Nenhum item corresponde ao filtro selecionado." actionLabel="Limpar filtros" onAction={() => { setFilterStatus("all"); setFilterClasse("all"); }} />) :
         viewMode === "cards" ? (
-        <CardGrid>{ativos.map(a => {
+        <CardGrid>{filteredAtivos.map(a => {
           const ci = catInfo[a.categoriaInvestimento as CatInvest];
           const isConta = a.categoria === "CONTA";
           const isInv = a.categoria === "INVESTIMENTO";
@@ -264,7 +322,7 @@ export default function CarteiraDetalhe() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ativos.map(a => {
+                  {filteredAtivos.map(a => {
                     const ci = catInfo[a.categoriaInvestimento as CatInvest];
                     const isConta = a.categoria === "CONTA";
                     const isInv = a.categoria === "INVESTIMENTO";
@@ -293,11 +351,13 @@ export default function CarteiraDetalhe() {
                             {isInv && !temQtd && a.precoAtual == null && a.instituicao && <span style={{ fontSize: "12px", color: "#64748b" }}>🏦 {a.instituicao}</span>}
                             {isInv && !temQtd && a.precoAtual == null && a.dataAplicacao && <span style={{ fontSize: "12px", color: "#64748b" }}>🗓 {a.dataAplicacao}</span>}
                           </div>
-                        </td>                        <td style={tdStyle}>
+                        </td>
+                        <td style={tdStyle}>
                           <span style={{ fontSize: "13px", fontWeight: 600, color: vencida ? "#ef4444" : "#475569", whiteSpace: "nowrap" }}>
                             {a.dataVencimento ? parseLocalDate(a.dataVencimento).toLocaleDateString('pt-BR') : "-"}
                           </span>
-                        </td>                        <td style={{ ...tdStyle, textAlign: "right" }}>
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>
                           <span style={{ fontSize: "15px", fontWeight: 800, color: isConta ? (a.pago ? "#10b981" : "#f59e0b") : "#10b981", whiteSpace: "nowrap" }}>{fmt(saldoAtual(a), moeda)}</span>
                         </td>
                         <td style={tdStyle}>
@@ -373,5 +433,6 @@ export default function CarteiraDetalhe() {
 const cardStyle: React.CSSProperties = { background: "white", borderRadius: "12px", padding: "20px", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", transition: "all 0.25s ease", display: "flex", flexDirection: "column", borderLeft: "4px solid #6366f1" };
 const btnSm: React.CSSProperties = { padding: "7px 14px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 600, background: "#f1f5f9", color: "#64748b" };
 const viewBtn = (active: boolean): React.CSSProperties => ({ padding: "7px 14px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 600, background: active ? "white" : "transparent", color: active ? "#6366f1" : "#64748b", boxShadow: active ? "0 1px 3px rgba(0,0,0,0.12)" : "none", transition: "all 0.15s ease" });
+const statusBtn = (active: boolean, color: string): React.CSSProperties => ({ padding: "7px 14px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: active ? 700 : 500, background: active ? color : "white", color: active ? "#fff" : "#64748b", boxShadow: active ? "0 1px 3px rgba(0,0,0,0.18)" : "0 1px 2px rgba(0,0,0,0.04)", transition: "all 0.15s ease" });
 const thStyle: React.CSSProperties = { padding: "12px 16px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" };
 const tdStyle: React.CSSProperties = { padding: "12px 16px", borderTop: "1px solid #f1f5f9", verticalAlign: "middle" };

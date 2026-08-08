@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { TrendingUp, Receipt, Pencil, Trash2, FolderOpen, DollarSign, Briefcase } from "lucide-react";
+import { TrendingUp, Receipt, Pencil, Trash2, FolderOpen, DollarSign, Briefcase, Copy } from "lucide-react";
 import api from "../api/api";
 import Layout from "../components/Layout";
 import Modal from "../components/Modal";
@@ -72,6 +72,14 @@ export default function Financas() {
     toast("Excluir esta carteira?", { action: { label: "Sim", onClick: () => { toast.promise(api.delete(`${endpointBase(f.tipo)}/delete/${f.id}`), { loading: "Excluindo...", success: () => { fetchFinancas(); return "Excluída!"; }, error: "Erro" }); }}, cancel: { label: "Cancelar", onClick: () => {} } });
   };
 
+  const handleDuplicate = async (f: Financa) => {
+    toast.promise(api.post(`${endpointBase(f.tipo)}/duplicar/${f.id}`), {
+      loading: "Duplicando carteira...",
+      success: () => { fetchFinancas(); return `Cópia de "${f.nome}" criada!`; },
+      error: "Erro ao duplicar",
+    });
+  };
+
   const openModal = (f: Financa | null = null) => { setErrors({}); if (f) { setEditing(f); setForm({ nome: f.nome, moeda: f.moeda, tipo: f.tipo }); } else { setEditing(null); setForm({ nome: "", moeda: "BRL", tipo: "DESPESAS" }); } setShowModal(true); };
   const closeModal = () => { setShowModal(false); setEditing(null); };
 
@@ -117,6 +125,10 @@ export default function Financas() {
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => openModal(f)}>
                     <Pencil size={13} />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleDuplicate(f)}
+                    title="Duplicar carteira" aria-label={`Duplicar ${f.nome}`}>
+                    <Copy size={13} />
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => handleDelete(f)}
                     style={{ color: "#ef4444" }}>

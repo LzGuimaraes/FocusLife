@@ -55,6 +55,11 @@ const statusFilters: { key: FiltroStatus; label: string; icon: string; color: st
   { key: "pendentes", label: "Pendentes", icon: "⏳", color: "#f59e0b" },
 ];
 
+const classeFilters: { key: CatInvest | "all"; label: string; icon: string; color: string }[] = [
+  { key: "all", label: "Todas", icon: "📊", color: "#6366f1" },
+  ...(Object.keys(catInfo) as CatInvest[]).map(k => ({ key: k, label: catInfo[k].label, icon: catInfo[k].icon, color: catInfo[k].color })),
+];
+
 const emptyForm: FormData = { nome: "", categoria: "INVESTIMENTO", categoriaInvestimento: "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", dataVencimento: "", rentabilidade: "", ativo_cadastro_id: "", carteira_id: "", pago: false };
 type Errors = Partial<Record<keyof FormData, string>>;
 
@@ -68,13 +73,14 @@ export default function Contas() {
   
   const [filterFinanca, setFilterFinanca] = useState("all");
   const [filterStatus, setFilterStatus] = useState<FiltroStatus>("all");
+  const [filterClasse, setFilterClasse] = useState<CatInvest | "all">("all");
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
   const [form, setForm] = useState<FormData>(emptyForm);
   const [errors, setErrors] = useState<Errors>({});
   const [logsConta, setLogsConta] = useState<Ativo | null>(null);
 
   useEffect(() => { fetchCarteiras(); }, []);
-  useEffect(() => { setFilterStatus("all"); fetchAtivos(); }, [filterFinanca]);
+  useEffect(() => { setFilterStatus("all"); setFilterClasse("all"); fetchAtivos(); }, [filterFinanca]);
 
   const fetchCarteiras = async () => {
     try {
@@ -224,8 +230,16 @@ export default function Contas() {
     // pendentes: não pagas e não vencidas
     return a.pago === false && (a.dataVencimento == null || a.dataVencimento >= hojeStr);
   };
-  const filteredAtivos = ativos.filter(a => matchesStatus(a, filterStatus));
   const countsStatus = (s: FiltroStatus) => contas.filter(a => matchesStatus(a, s)).length;
+
+  /* ── Filtro por classe de ativo (investimentos) ── */
+  const showClassFilter = walletType === "INVESTIMENTO" || filterFinanca === "all";
+  const matchesClasse = (a: Ativo, c: CatInvest | "all"): boolean => {
+    if (c === "all" || a.categoria !== "INVESTIMENTO") return true;
+    return a.categoriaInvestimento === c;
+  };
+  const countsClasse = (c: CatInvest | "all") => investimentos.filter(a => matchesClasse(a, c)).length;
+  const filteredAtivos = ativos.filter(a => matchesStatus(a, filterStatus) && matchesClasse(a, filterClasse));
 
   // Distribuição por categoria de investimento (por valor de mercado atual)
   const distCategorias = (Object.keys(catInfo) as CatInvest[]).map(ci => {
@@ -296,6 +310,17 @@ export default function Contas() {
           </div>
         )}
 
+        {/* Filtro por classe de ativo (investimentos) */}
+        {showClassFilter && (
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", padding: "3px", background: "#eef2ff", borderRadius: "10px" }}>
+            {classeFilters.map(cf => (
+              <button key={cf.key} onClick={() => setFilterClasse(cf.key)} style={statusBtn(filterClasse === cf.key, cf.color)} title={`${cf.label}: ${countsClasse(cf.key)} ativo(s)`}>
+                {cf.icon} {cf.label} <span style={{ opacity: 0.75, fontWeight: 600 }}>{countsClasse(cf.key)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Alternância de visualização: Cards ↔ Lista */}
         <div style={{ marginLeft: "auto", display: "flex", gap: "4px", background: "#eef2f7", padding: "3px", borderRadius: "10px" }}>
           <button onClick={() => setViewMode("cards")} style={viewBtn(viewMode === "cards")} aria-label="Visualizar em cards">▦ Cards</button>
@@ -303,7 +328,7 @@ export default function Contas() {
         </div>
       </div>
 
-      {loading ? <Spinner text="Carregando..." /> : filteredAtivos.length === 0 ? (ativos.length === 0 ? <EmptyState icon="💳" title="Nenhum ativo" text="Crie seu primeiro ativo!" actionLabel="Criar Ativo" onAction={() => openModal()} /> : <EmptyState icon="🔍" title="Nenhum resultado" text="Nenhuma conta corresponde ao filtro selecionado." actionLabel="Limpar filtros" onAction={() => setFilterStatus("all")} />) :
+      {loading ? <Spinner text="Carregando..." /> : filteredAtivos.length === 0 ? (ativos.length === 0 ? <EmptyState icon="💳" title="Nenhum ativo" text="Crie seu primeiro ativo!" actionLabel="Criar Ativo" onAction={() => openModal()} /> : <EmptyState icon="🔍" title="Nenhum resultado" text="Nenhum ativo/conta corresponde ao filtro selecionado." actionLabel="Limpar filtros" onAction={() => { setFilterStatus("all"); setFilterClasse("all"); }} />) :
         viewMode === "cards" ? (
           <CardGrid>{filteredAtivos.map(a => {
           const moeda = getMoeda(a);
@@ -375,11 +400,13 @@ export default function Contas() {
                             {isInvest && !temQtd && a.precoAtual == null && a.instituicao && <span style={{ fontSize: "12px", color: "#64748b" }}>🏦 {a.instituicao}</span>}
                             {isInvest && !temQtd && a.precoAtual == null && a.dataAplicacao && <span style={{ fontSize: "12px", color: "#64748b" }}>🗓 {a.dataAplicacao}</span>}
                           </div>
-                        </td>                        <td style={tdStyle}>
+                        </td>
+                        <td style={tdStyle}>
                           <span style={{ fontSize: "13px", fontWeight: 600, color: vencida ? "#ef4444" : "#475569", whiteSpace: "nowrap" }}>
                             {a.dataVencimento ? parseLocalDate(a.dataVencimento).toLocaleDateString('pt-BR') : "-"}
                           </span>
-                        </td>                        <td style={{ ...tdStyle, textAlign: "right" }}>
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>
                           <span style={{ fontSize: "15px", fontWeight: 800, color: isConta ? (a.pago ? "#10b981" : "#f59e0b") : "#10b981", whiteSpace: "nowrap" }}>{fmt(saldoAtual(a), moeda)}</span>
                         </td>
                         <td style={tdStyle}>

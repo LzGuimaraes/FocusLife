@@ -6,9 +6,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 
+import dev.LzGuimaraes.FocusLifeHub.Ativo.AtivoModel;
 import dev.LzGuimaraes.FocusLifeHub.Ativo.AtivoRepository;
 import dev.LzGuimaraes.FocusLifeHub.Carteira.dto.CarteiraRequestDTO;
 import dev.LzGuimaraes.FocusLifeHub.Carteira.dto.CarteiraResponseDTO;
+import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaModel;
 import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaRepository;
 import dev.LzGuimaraes.FocusLifeHub.Exceptions.ResourceNotFoundException;
 import dev.LzGuimaraes.FocusLifeHub.User.UserModel;
@@ -116,5 +118,56 @@ public abstract class AbstractCarteiraService<T extends CarteiraModel> {
         }
 
         repository.delete(carteira);
+    }
+
+    /**
+     * Duplica uma carteira (nome " (cópia)") junto com todos os seus itens
+     * (ativos de investimento ou despesas), para o mesmo usuário.
+     */
+    @Transactional
+    public CarteiraResponseDTO duplicate(Long id) {
+        Long userId = getAuthenticatedUserId();
+        T source = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Carteira com ID " + id + " não encontrada para duplicação"));
+        checkOwnership(source, userId);
+
+        T copy = createEmpty();
+        String baseNome = source.getNome().replaceAll("\\s*\\(cópia\\)\\s*$", "");
+        copy.setNome(baseNome + " (cópia)");
+        copy.setMoeda(source.getMoeda());
+        copy.setUser(source.getUser());
+        T saved = repository.save(copy);
+
+        if (saved instanceof CarteiraInvestimentoModel investCopy) {
+            for (AtivoModel ativo : ativoRepository.findByCarteiraInvestimentoId(id)) {
+                AtivoModel novo = new AtivoModel();
+                novo.setNome(ativo.getNome());
+                novo.setSaldo(ativo.getSaldo());
+                novo.setDataVencimento(ativo.getDataVencimento());
+                novo.setCategoriaInvestimento(ativo.getCategoriaInvestimento());
+                novo.setQuantidade(ativo.getQuantidade());
+                novo.setValorUnitario(ativo.getValorUnitario());
+                novo.setPrecoAtual(ativo.getPrecoAtual());
+                novo.setInstituicao(ativo.getInstituicao());
+                novo.setDataAplicacao(ativo.getDataAplicacao());
+                novo.setVencimento(ativo.getVencimento());
+                novo.setRentabilidade(ativo.getRentabilidade());
+                novo.setAtivoCadastro(ativo.getAtivoCadastro());
+                novo.setCarteiraInvestimento(investCopy);
+                ativoRepository.save(novo);
+            }
+        } else if (saved instanceof CarteiraDividasModel dividasCopy) {
+            for (DespesaModel despesa : despesaRepository.findByCarteiraDividasId(id)) {
+                DespesaModel nova = new DespesaModel();
+                nova.setNome(despesa.getNome());
+                nova.setSaldo(despesa.getSaldo());
+                nova.setDataVencimento(despesa.getDataVencimento());
+                nova.setPago(despesa.getPago());
+                nova.setCarteiraDividas(dividasCopy);
+                despesaRepository.save(nova);
+            }
+        }
+
+        return toResponse(saved);
     }
 }
