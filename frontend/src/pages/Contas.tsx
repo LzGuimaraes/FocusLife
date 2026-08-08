@@ -13,6 +13,7 @@ import AtivoAutocomplete from "../components/AtivoAutocomplete";
 type Categoria = "CONTA" | "INVESTIMENTO";
 type CatInvest = "RENDA_FIXA" | "TESOURO_DIRETO" | "ACOES" | "FIIS" | "ETFS" | "CRIPTOMOEDAS";
 type TipoCarteira = "INVESTIMENTO" | "DESPESAS";
+type FiltroStatus = "all" | "pagas" | "nao_pagas" | "vencidas" | "pendentes";
 
 interface Ativo {
   id: number; nome: string; categoria: Categoria;
@@ -46,6 +47,14 @@ const catInfo: Record<CatInvest, { icon: string; label: string; color: string; b
   CRIPTOMOEDAS:     { icon: "₿",  label: "Criptomoedas",     color: "#f59e0b", bg: "#fef3c7", autoCalc: true },
 };
 
+const statusFilters: { key: FiltroStatus; label: string; icon: string; color: string }[] = [
+  { key: "all", label: "Todas", icon: "📋", color: "#6366f1" },
+  { key: "pagas", label: "Pagas", icon: "✅", color: "#10b981" },
+  { key: "nao_pagas", label: "Não pagas", icon: "⭕", color: "#64748b" },
+  { key: "vencidas", label: "Vencidas", icon: "🔴", color: "#ef4444" },
+  { key: "pendentes", label: "Pendentes", icon: "⏳", color: "#f59e0b" },
+];
+
 const emptyForm: FormData = { nome: "", categoria: "INVESTIMENTO", categoriaInvestimento: "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", dataVencimento: "", rentabilidade: "", ativo_cadastro_id: "", carteira_id: "", pago: false };
 type Errors = Partial<Record<keyof FormData, string>>;
 
@@ -58,13 +67,14 @@ export default function Contas() {
   
   
   const [filterFinanca, setFilterFinanca] = useState("all");
+  const [filterStatus, setFilterStatus] = useState<FiltroStatus>("all");
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
   const [form, setForm] = useState<FormData>(emptyForm);
   const [errors, setErrors] = useState<Errors>({});
   const [logsConta, setLogsConta] = useState<Ativo | null>(null);
 
   useEffect(() => { fetchCarteiras(); }, []);
-  useEffect(() => { fetchAtivos(); }, [filterFinanca]);
+  useEffect(() => { setFilterStatus("all"); fetchAtivos(); }, [filterFinanca]);
 
   const fetchCarteiras = async () => {
     try {
@@ -203,6 +213,20 @@ export default function Contas() {
   const contasPagas = contas.filter(a => a.pago).reduce((s, a) => s + (a.saldo || 0), 0);
   const contasNaoPagas = contas.filter(a => !a.pago).reduce((s, a) => s + (a.saldo || 0), 0);
 
+  /* ── Filtro de status (despesas) ── */
+  const hojeStr = formatLocalDate(new Date());
+  const showStatusFilter = walletType === "DESPESAS" || filterFinanca === "all";
+  const matchesStatus = (a: Ativo, s: FiltroStatus): boolean => {
+    if (s === "all" || a.categoria !== "CONTA") return true;
+    if (s === "pagas") return a.pago === true;
+    if (s === "nao_pagas") return a.pago === false;
+    if (s === "vencidas") return a.pago === false && a.dataVencimento != null && a.dataVencimento < hojeStr;
+    // pendentes: não pagas e não vencidas
+    return a.pago === false && (a.dataVencimento == null || a.dataVencimento >= hojeStr);
+  };
+  const filteredAtivos = ativos.filter(a => matchesStatus(a, filterStatus));
+  const countsStatus = (s: FiltroStatus) => contas.filter(a => matchesStatus(a, s)).length;
+
   // Distribuição por categoria de investimento (por valor de mercado atual)
   const distCategorias = (Object.keys(catInfo) as CatInvest[]).map(ci => {
     const items = investimentos.filter(a => a.categoriaInvestimento === ci);
@@ -261,6 +285,17 @@ export default function Contas() {
         <button onClick={() => setFilterFinanca("all")} style={fb(filterFinanca === "all")}>Todas</button>
         {financas.map(f => { const key = `${f.tipo}:${f.id}`; return (<button key={key} onClick={() => setFilterFinanca(key)} style={fb(filterFinanca === key)}>{f.tipo === "INVESTIMENTO" ? "📈" : "📋"} {f.nome}</button>); })}
 
+        {/* Filtro de status (despesas): pagas / não pagas / vencidas / pendentes */}
+        {showStatusFilter && (
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", padding: "3px", background: "#f1f5f9", borderRadius: "10px" }}>
+            {statusFilters.map(sf => (
+              <button key={sf.key} onClick={() => setFilterStatus(sf.key)} style={statusBtn(filterStatus === sf.key, sf.color)} title={`${sf.label}: ${countsStatus(sf.key)} conta(s)`}>
+                {sf.icon} {sf.label} <span style={{ opacity: 0.75, fontWeight: 600 }}>{countsStatus(sf.key)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Alternância de visualização: Cards ↔ Lista */}
         <div style={{ marginLeft: "auto", display: "flex", gap: "4px", background: "#eef2f7", padding: "3px", borderRadius: "10px" }}>
           <button onClick={() => setViewMode("cards")} style={viewBtn(viewMode === "cards")} aria-label="Visualizar em cards">▦ Cards</button>
@@ -268,9 +303,9 @@ export default function Contas() {
         </div>
       </div>
 
-      {loading ? <Spinner text="Carregando..." /> : ativos.length === 0 ? <EmptyState icon="💳" title="Nenhum ativo" text="Crie seu primeiro ativo!" actionLabel="Criar Ativo" onAction={() => openModal()} /> :
+      {loading ? <Spinner text="Carregando..." /> : filteredAtivos.length === 0 ? (ativos.length === 0 ? <EmptyState icon="💳" title="Nenhum ativo" text="Crie seu primeiro ativo!" actionLabel="Criar Ativo" onAction={() => openModal()} /> : <EmptyState icon="🔍" title="Nenhum resultado" text="Nenhuma conta corresponde ao filtro selecionado." actionLabel="Limpar filtros" onAction={() => setFilterStatus("all")} />) :
         viewMode === "cards" ? (
-          <CardGrid>{ativos.map(a => {
+          <CardGrid>{filteredAtivos.map(a => {
           const moeda = getMoeda(a);
           const ci = catInfo[a.categoriaInvestimento as CatInvest];
           const isConta = a.categoria === "CONTA";
@@ -310,7 +345,7 @@ export default function Contas() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ativos.map(a => {
+                  {filteredAtivos.map(a => {
                     const moeda = getMoeda(a);
                     const ci = catInfo[a.categoriaInvestimento as CatInvest];
                     const isConta = a.categoria === "CONTA";
@@ -500,6 +535,7 @@ export default function Contas() {
 }
 
 const fb = (active: boolean): React.CSSProperties => ({ padding: "7px 16px", borderRadius: "var(--radius-full)", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 500, background: active ? "#6366f1" : "white", color: active ? "white" : "#64748b", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" });
+const statusBtn = (active: boolean, color: string): React.CSSProperties => ({ padding: "7px 14px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: active ? 700 : 500, background: active ? color : "white", color: active ? "#fff" : "#64748b", boxShadow: active ? "0 1px 3px rgba(0,0,0,0.18)" : "0 1px 2px rgba(0,0,0,0.04)", transition: "all 0.15s ease" });
 const viewBtn = (active: boolean): React.CSSProperties => ({ padding: "7px 14px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 600, background: active ? "white" : "transparent", color: active ? "#6366f1" : "#64748b", boxShadow: active ? "0 1px 3px rgba(0,0,0,0.12)" : "none", transition: "all 0.15s ease" });
 const thStyle: React.CSSProperties = { padding: "12px 16px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" };
 const tdStyle: React.CSSProperties = { padding: "12px 16px", borderTop: "1px solid #f1f5f9", verticalAlign: "middle" };
