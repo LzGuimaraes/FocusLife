@@ -1,3 +1,43 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          port: ${{ secrets.VPS_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          known_hosts: ${{ secrets.KNOWN_HOSTS }}
+          script: |
+            set -e
+            echo "Running deploy on ${HOST:-remote}..."
+            # adapt path to your deployment location
+            DEPLOY_DIR=/home/${{ secrets.VPS_USER }}/apps/focuslife
+            mkdir -p "$DEPLOY_DIR"
+            cd "$DEPLOY_DIR"
+            # Ensure repository exists and is up-to-date
+            if [ -d .git ]; then
+              git fetch --all
+              git reset --hard origin/main
+            else
+              git clone https://github.com/${{ github.repository }} .
+            fi
+            # Pull images and restart according to production compose
+            docker compose -f docker-compose.prod.yml pull || true
+            docker compose -f docker-compose.prod.yml up -d --build
+            echo "Deploy finished."
 name: Deploy VPS
 
 on:
