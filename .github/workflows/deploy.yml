@@ -1,49 +1,8 @@
-name: Deploy to VPS
-
-on:
-  push:
-    branches: [ main ]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          port: ${{ secrets.VPS_PORT }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          passphrase: ${{ secrets.SSH_PASSPHRASE }}
-          known_hosts: ${{ secrets.KNOWN_HOSTS }}
-          script: |
-            set -e
-            echo "Running deploy on ${HOST:-remote}..."
-            # adapt path to your deployment location
-            DEPLOY_DIR=/home/${{ secrets.VPS_USER }}/apps/focuslife
-            mkdir -p "$DEPLOY_DIR"
-            cd "$DEPLOY_DIR"
-            # Ensure repository exists and is up-to-date
-            if [ -d .git ]; then
-              git fetch --all
-              git reset --hard origin/main
-            else
-              git clone https://github.com/${{ github.repository }} .
-            fi
-            # Pull images and restart according to production compose
-            docker compose -f docker-compose.prod.yml pull || true
-            docker compose -f docker-compose.prod.yml up -d --build
-            echo "Deploy finished."
 name: Deploy VPS
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -51,9 +10,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Validar secrets obrigatórios
         shell: bash
         env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PASSPHRASE: ${{ secrets.SSH_PASSPHRASE }}
+          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
           SPRING_DATASOURCE_URL: ${{ secrets.SPRING_DATASOURCE_URL }}
           SPRING_DATASOURCE_USERNAME: ${{ secrets.SPRING_DATASOURCE_USERNAME }}
           SPRING_DATASOURCE_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD }}
@@ -64,17 +32,25 @@ jobs:
           SPRING_MAIL_FROM: ${{ secrets.SPRING_MAIL_FROM }}
           APP_FRONTEND_URL: ${{ secrets.APP_FRONTEND_URL }}
           APP_BACKEND_URL: ${{ secrets.APP_BACKEND_URL }}
+          FRONTEND_PORT: ${{ secrets.FRONTEND_PORT }}
+          BACKEND_PORT: ${{ secrets.BACKEND_PORT }}
         run: |
           set -euo pipefail
           echo "==> Validando secrets obrigatórios..."
-          for var in SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD JWT_SECRET CORS_ALLOWED_ORIGINS SPRING_MAIL_USERNAME SPRING_MAIL_PASSWORD SPRING_MAIL_FROM APP_FRONTEND_URL APP_BACKEND_URL; do
-            if [ -z "${!var}" ]; then
+          required=(VPS_HOST VPS_USER SSH_PRIVATE_KEY SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD JWT_SECRET CORS_ALLOWED_ORIGINS SPRING_MAIL_USERNAME SPRING_MAIL_PASSWORD SPRING_MAIL_FROM APP_FRONTEND_URL APP_BACKEND_URL)
+          missing=0
+          for var in "${required[@]}"; do
+            if [ -z "${!var:-}" ]; then
               echo "  MISSING: $var"
+              missing=1
             else
               echo "  SET: $var"
             fi
           done
-          echo "==> Resultado da validação de variáveis de ambiente acima."
+          if [ "$missing" -eq 1 ]; then
+            echo "ERROR: Um ou mais secrets obrigatórios estão faltando. Corrija antes de prosseguir."
+            exit 1
+          fi
           echo "==> Verificando formatação de CORS_ALLOWED_ORIGINS..."
           if [[ -z "$CORS_ALLOWED_ORIGINS" ]]; then
             echo "  ERROR: CORS_ALLOWED_ORIGINS está vazio"
@@ -91,12 +67,14 @@ jobs:
         shell: bash
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
         run: |
           echo "Runner IP: $(curl -s https://api.ipify.org)"
-          if timeout 10 bash -c "cat < /dev/null > /dev/tcp/${VPS_HOST}/22"; then
-            echo "Porta 22 acessível"
+          PORT=${VPS_PORT:-22}
+          if timeout 10 bash -c "cat < /dev/null > /dev/tcp/${VPS_HOST}/${PORT}"; then
+            echo "Porta ${PORT} acessível"
           else
-            echo "Porta 22 bloqueada (timeout) - verificar firewall do provedor"
+            echo "Porta ${PORT} bloqueada (timeout) - verificar firewall do provedor"
             exit 1
           fi
 
@@ -105,43 +83,49 @@ jobs:
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          known_hosts: ${{ secrets.KNOWN_HOSTS }}
           script: |
             set -e
             echo "Entrando no projeto..."
-            cd /opt/docker/projects/focuslife
+            cd /opt/docker/projects/focuslife || mkdir -p /opt/docker/projects/focuslife && cd /opt/docker/projects/focuslife
 
             echo "Removendo .env antigo (se existir)..."
             rm -f .env
 
             echo "Criando novo arquivo .env com as variáveis..."
             cat > .env <<EOF
-            SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}
-            SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}
-            SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS }}
-            SPRING_MAIL_USERNAME=${{ secrets.SPRING_MAIL_USERNAME }}
-            SPRING_MAIL_PASSWORD=${{ secrets.SPRING_MAIL_PASSWORD }}
-            SPRING_MAIL_FROM=${{ secrets.SPRING_MAIL_FROM }}
-            APP_FRONTEND_URL=${{ secrets.APP_FRONTEND_URL }}
-            APP_BACKEND_URL=${{ secrets.APP_BACKEND_URL }}
-            FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}
-            BACKEND_PORT=${{ secrets.BACKEND_PORT }}
-            EOF
+SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}
+SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}
+SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}
+JWT_SECRET=${{ secrets.JWT_SECRET }}
+CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS }}
+SPRING_MAIL_USERNAME=${{ secrets.SPRING_MAIL_USERNAME }}
+SPRING_MAIL_PASSWORD=${{ secrets.SPRING_MAIL_PASSWORD }}
+SPRING_MAIL_FROM=${{ secrets.SPRING_MAIL_FROM }}
+APP_FRONTEND_URL=${{ secrets.APP_FRONTEND_URL }}
+APP_BACKEND_URL=${{ secrets.APP_BACKEND_URL }}
+FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}
+BACKEND_PORT=${{ secrets.BACKEND_PORT }}
+EOF
 
             echo "Atualizando repositório..."
-            git fetch origin
-            git reset --hard origin/main
+            if [ -d .git ]; then
+              git fetch origin
+              git reset --hard origin/main
+            else
+              git clone https://github.com/${{ github.repository }} .
+            fi
 
             echo "Parando containers antigos..."
-            docker compose down
+            docker compose down || true
 
             echo "Construindo novas imagens..."
-            docker compose up -d --build
+            docker compose -f docker-compose.prod.yml up -d --build
 
             echo "Limpando imagens antigas..."
-            docker image prune -af
+            docker image prune -af || true
 
             echo "Deploy concluído!"
