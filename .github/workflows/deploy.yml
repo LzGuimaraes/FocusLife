@@ -86,17 +86,16 @@ jobs:
           port: ${{ secrets.VPS_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
-          known_hosts: ${{ secrets.KNOWN_HOSTS }}
           script: |
             set -e
             echo "Entrando no projeto..."
             cd /opt/docker/projects/focuslife || mkdir -p /opt/docker/projects/focuslife && cd /opt/docker/projects/focuslife
 
-            echo "Removendo .env antigo (se existir)..."
-            rm -f .env
+            echo "Removendo .env.production antigo (se existir)..."
+            rm -f .env.production
 
-            echo "Criando novo arquivo .env com as variáveis..."
-            cat > .env <<EOF
+            echo "Criando novo arquivo .env.production com as variáveis (usado por docker-compose.prod.yml)..."
+            cat > .env.production <<EOF
             SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}
             SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}
             SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}
@@ -110,6 +109,9 @@ jobs:
             FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}
             BACKEND_PORT=${{ secrets.BACKEND_PORT }}
             EOF
+
+            # Also write .env for backwards compatibility
+            cp .env.production .env || true
 
             echo "Atualizando repositório..."
             if [ -d .git ]; then
