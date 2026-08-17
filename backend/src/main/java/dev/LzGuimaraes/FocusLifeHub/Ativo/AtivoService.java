@@ -1,6 +1,8 @@
 package dev.LzGuimaraes.FocusLifeHub.Ativo;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -18,6 +20,7 @@ import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraInvestimentoModel;
 import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraInvestimentoRepository;
 import dev.LzGuimaraes.FocusLifeHub.Exceptions.ResourceNotFoundException;
 import dev.LzGuimaraes.FocusLifeHub.config.JWTUserData;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AtivoService {
@@ -194,5 +197,31 @@ public class AtivoService {
                 .orElseThrow(() -> new ResourceNotFoundException("Ativo com ID " + id + " não encontrado para exclusão"));
         checkOwnership(ativo, userId);
         ativoRepository.deleteById(id);
+    }
+
+    @Transactional
+    public void deleteAllAtivos() {
+        ativoRepository.deleteAllInBatch();
+    }
+
+    @Transactional
+    public void bulkUpdatePrices(List<AtivoPriceUpdate> updates) {
+        if (updates == null || updates.isEmpty()) return;
+        Map<Long, Float> map = updates.stream()
+                .filter(u -> u.ativoId != null && u.precoAtual != null)
+                .collect(Collectors.toMap(u -> u.ativoId, u -> u.precoAtual));
+        if (map.isEmpty()) return;
+        Set<Long> ids = map.keySet();
+        List<AtivoModel> ativos = ativoRepository.findAllById(ids);
+        for (AtivoModel ativo : ativos) {
+            Float novo = map.get(ativo.getId());
+            if (novo != null) {
+                ativo.setPrecoAtual(novo);
+                if (ativo.getQuantidade() != null) {
+                    ativo.setSaldo(novo * ativo.getQuantidade());
+                }
+            }
+        }
+        ativoRepository.saveAll(ativos);
     }
 }

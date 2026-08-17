@@ -51,6 +51,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/auth/forgot-password").permitAll()
                 .requestMatchers(HttpMethod.POST, "/auth/reset-password").permitAll()
                 .requestMatchers("/admin/**").hasRole("ADMIN")
+                .requestMatchers("/ativos/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated())
             .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)
             .build();

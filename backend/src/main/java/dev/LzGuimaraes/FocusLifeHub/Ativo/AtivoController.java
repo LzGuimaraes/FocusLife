@@ -52,4 +52,23 @@ public class AtivoController {
         ativoService.delete(id);
         return ResponseEntity.noContent().build();
     }
+
+    // Admin-only: delete all ativos (used by third-party sync)
+    @DeleteMapping("/admin/delete-all")
+    public ResponseEntity<Void> deleteAll() {
+        ativoService.deleteAllAtivos();
+        return ResponseEntity.noContent().build();
+    }
+
+    // Admin-only: bulk update prices for ativos
+    @PostMapping("/admin/update-prices")
+    public ResponseEntity<Void> bulkUpdatePrices(@RequestBody List<AtivoPriceUpdate> updates) {
+        ativoService.bulkUpdatePrices(updates);
+        return ResponseEntity.ok().build();
+    }
+}
+
+class AtivoPriceUpdate {
+    public Long ativoId;
+    public Float precoAtual;
 }

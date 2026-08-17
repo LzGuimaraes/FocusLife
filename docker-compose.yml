@@ -18,6 +18,8 @@ services:
       APP_BACKEND_URL: ${APP_BACKEND_URL}
 
     restart: unless-stopped
+    depends_on:
+      - db
     networks:
       - proxy
     labels:
@@ -42,6 +44,21 @@ services:
       - traefik.http.routers.frontend.tls.certresolver=letsencrypt
       - traefik.http.services.frontend.loadbalancer.server.port=80
 
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: focuslife
+      POSTGRES_USER: focuslife
+      POSTGRES_PASSWORD: focuslifepw
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - proxy
+
 networks:
   proxy:
     external: true
+
+volumes:
+  pgdata:
