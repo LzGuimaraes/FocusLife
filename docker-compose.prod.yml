@@ -1,5 +1,22 @@
-version: '3.8'
 services:
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: focuslife
+      POSTGRES_USER: focuslife
+      POSTGRES_PASSWORD: focuslifepw
+    volumes:
+      - focuslife_pgdata:/var/lib/postgresql/data
+    networks:
+      - focuslife-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U focuslife -d focuslife"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
   backend:
     build: ./backend
     env_file:
@@ -22,8 +39,12 @@ services:
       - traefik.http.routers.backend.entrypoints=websecure
       - traefik.http.routers.backend.tls.certresolver=letsencrypt
       - traefik.http.services.backend.loadbalancer.server.port=8080
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - proxy
+      - focuslife-internal
 
   frontend:
     build: ./frontend
@@ -42,3 +63,7 @@ services:
 networks:
   proxy:
     external: true
+  focuslife-internal:
+
+volumes:
+  focuslife_pgdata:
