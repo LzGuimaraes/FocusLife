@@ -10,4 +10,5 @@ import org.springframework.stereotype.Repository;
 public interface AtivoCadastroRepository extends JpaRepository<AtivoCadastroModel, UUID> {
     List<AtivoCadastroModel> findAllByOrderByNomeAsc();
     List<AtivoCadastroModel> findByNomeContainingIgnoreCaseOrderByNomeAsc(String nome);
+    java.util.Optional<AtivoCadastroModel> findByNomeIgnoreCase(String nome);
 }
