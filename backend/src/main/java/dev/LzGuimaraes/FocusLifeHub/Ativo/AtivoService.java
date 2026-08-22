@@ -77,13 +77,21 @@ public class AtivoService {
     private AtivoResponseDTO toResponse(AtivoModel ativo) {
         Long carteiraId = (ativo.getCarteiraInvestimento() != null) ? ativo.getCarteiraInvestimento().getId() : null;
         UUID ativoCadastroId = (ativo.getAtivoCadastro() != null) ? ativo.getAtivoCadastro().getId() : null;
+
+        // Preço atual "ao vivo": usa o preço do catálogo (fonte da verdade)
+        // quando o card está vinculado; senão, mantém o preço guardado no card.
+        Float precoAtual = ativo.getPrecoAtual();
+        if (ativo.getAtivoCadastro() != null && ativo.getAtivoCadastro().getPrecoAtual() != null) {
+            precoAtual = ativo.getAtivoCadastro().getPrecoAtual();
+        }
+
         return new AtivoResponseDTO(
             ativo.getId(),
             ativo.getNome(),
             ativo.getCategoriaInvestimento(),
             ativo.getQuantidade(),
             ativo.getValorUnitario(),
-            ativo.getPrecoAtual(),
+            precoAtual,
             ativo.getSaldo(),
             ativo.getInstituicao(),
             ativo.getDataAplicacao(),
