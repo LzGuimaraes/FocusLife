@@ -79,6 +79,7 @@ public class AtivoController {
     }
 
     // Admin-only: sync catálogo de ativos (upsert into ativo_cadastro)
+    // Sempre sobrescreve preço/tipo dos ativos já existentes (não depende de "changed").
     @PostMapping("/admin/sync")
     public ResponseEntity<Map<String, Integer>> syncAtivos(@RequestBody List<AtivoCadastroSyncDTO> payload) {
         if (payload == null) {
@@ -97,31 +98,24 @@ public class AtivoController {
             }
 
             String nome = dto.getNome().trim();
-            String tipoStr = dto.getTipo().trim();
             TipoAtivoCadastro tipo;
             try {
-                tipo = TipoAtivoCadastro.valueOf(tipoStr);
+                tipo = TipoAtivoCadastro.valueOf(dto.getTipo().trim().toUpperCase());
             } catch (Exception ex) {
-                try { tipo = TipoAtivoCadastro.valueOf(tipoStr.toUpperCase()); }
-                catch (Exception ex2) { invalid++; log.warn("Tipo inválido para ativo '{}' : {}", nome, tipoStr); continue; }
+                invalid++;
+                log.warn("Tipo inválido para ativo '{}' : {}", nome, dto.getTipo());
+                continue;
             }
 
             Optional<AtivoCadastroModel> opt = ativoCadastroRepository.findByNomeIgnoreCase(nome);
             if (opt.isPresent()) {
                 AtivoCadastroModel existing = opt.get();
-                boolean changed = false;
-                if (dto.getPrecoAtual() != null && !dto.getPrecoAtual().equals(existing.getPrecoAtual())) {
+                existing.setTipo(tipo);
+                if (dto.getPrecoAtual() != null) {
                     existing.setPrecoAtual(dto.getPrecoAtual());
-                    changed = true;
                 }
-                if (existing.getTipo() == null || !existing.getTipo().equals(tipo)) {
-                    existing.setTipo(tipo);
-                    changed = true;
-                }
-                if (changed) {
-                    ativoCadastroRepository.save(existing);
-                    updated++;
-                }
+                ativoCadastroRepository.save(existing);
+                updated++;
             } else {
                 AtivoCadastroModel novo = new AtivoCadastroModel();
                 novo.setNome(nome);
