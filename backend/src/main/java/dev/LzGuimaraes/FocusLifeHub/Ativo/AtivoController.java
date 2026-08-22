@@ -2,9 +2,6 @@ package dev.LzGuimaraes.FocusLifeHub.Ativo;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,23 +11,17 @@ import org.springframework.web.bind.annotation.*;
 
 import dev.LzGuimaraes.FocusLifeHub.Ativo.dto.AtivoRequestDTO;
 import dev.LzGuimaraes.FocusLifeHub.Ativo.dto.AtivoResponseDTO;
-import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.AtivoCadastroModel;
-import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.AtivoCadastroRepository;
-import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.TipoAtivoCadastro;
 import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.dto.AtivoCadastroSyncDTO;
 import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/ativos")
 public class AtivoController {
-    private static final Logger log = LoggerFactory.getLogger(AtivoController.class);
 
     private final AtivoService ativoService;
-    private final AtivoCadastroRepository ativoCadastroRepository;
 
-    public AtivoController(AtivoService ativoService, AtivoCadastroRepository ativoCadastroRepository) {
+    public AtivoController(AtivoService ativoService) {
         this.ativoService = ativoService;
-        this.ativoCadastroRepository = ativoCadastroRepository;
     }
 
     @GetMapping("/all")
@@ -78,56 +69,11 @@ public class AtivoController {
         return ResponseEntity.ok().build();
     }
 
-    // Admin-only: sync catálogo de ativos (upsert into ativo_cadastro)
-    // Sempre sobrescreve preço/tipo dos ativos já existentes (não depende de "changed").
+    // Admin-only: sync catálogo de ativos (upsert into ativo_cadastro) e
+    // propaga o novo preço para as posições (cards) que usam cada ativo.
     @PostMapping("/admin/sync")
     public ResponseEntity<Map<String, Integer>> syncAtivos(@RequestBody List<AtivoCadastroSyncDTO> payload) {
-        if (payload == null) {
-            return ResponseEntity.badRequest().body(Map.of("received", 0, "created", 0, "updated", 0, "invalid", 0));
-        }
-
-        int received = payload.size();
-        int created = 0;
-        int updated = 0;
-        int invalid = 0;
-
-        for (AtivoCadastroSyncDTO dto : payload) {
-            if (dto == null || dto.getNome() == null || dto.getNome().isBlank() || dto.getTipo() == null) {
-                invalid++;
-                continue;
-            }
-
-            String nome = dto.getNome().trim();
-            TipoAtivoCadastro tipo;
-            try {
-                tipo = TipoAtivoCadastro.valueOf(dto.getTipo().trim().toUpperCase());
-            } catch (Exception ex) {
-                invalid++;
-                log.warn("Tipo inválido para ativo '{}' : {}", nome, dto.getTipo());
-                continue;
-            }
-
-            Optional<AtivoCadastroModel> opt = ativoCadastroRepository.findByNomeIgnoreCase(nome);
-            if (opt.isPresent()) {
-                AtivoCadastroModel existing = opt.get();
-                existing.setTipo(tipo);
-                if (dto.getPrecoAtual() != null) {
-                    existing.setPrecoAtual(dto.getPrecoAtual());
-                }
-                ativoCadastroRepository.save(existing);
-                updated++;
-            } else {
-                AtivoCadastroModel novo = new AtivoCadastroModel();
-                novo.setNome(nome);
-                novo.setTipo(tipo);
-                novo.setPrecoAtual(dto.getPrecoAtual());
-                ativoCadastroRepository.save(novo);
-                created++;
-            }
-        }
-
-        log.info("/ativos/admin/sync: received={}, created={}, updated={}, invalid={}", received, created, updated, invalid);
-        return ResponseEntity.ok(Map.of("received", received, "created", created, "updated", updated, "invalid", invalid));
+        return ResponseEntity.ok(ativoService.syncCatalogo(payload));
     }
 }
 

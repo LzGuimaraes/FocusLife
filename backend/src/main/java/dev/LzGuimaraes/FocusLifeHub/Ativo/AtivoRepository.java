@@ -1,6 +1,7 @@
 package dev.LzGuimaraes.FocusLifeHub.Ativo;
 
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -11,4 +12,5 @@ import org.springframework.stereotype.Repository;
 public interface AtivoRepository extends JpaRepository<AtivoModel, Long> {
     Page<AtivoModel> findByCarteiraInvestimento_UserId(Long userId, Pageable pageable);
     List<AtivoModel> findByCarteiraInvestimentoId(Long carteiraId);
+    List<AtivoModel> findByAtivoCadastroId(UUID ativoCadastroId);
 }

@@ -2,9 +2,13 @@ package dev.LzGuimaraes.FocusLifeHub.Ativo;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,6 +20,8 @@ import dev.LzGuimaraes.FocusLifeHub.Ativo.dto.AtivoRequestDTO;
 import dev.LzGuimaraes.FocusLifeHub.Ativo.dto.AtivoResponseDTO;
 import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.AtivoCadastroModel;
 import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.AtivoCadastroRepository;
+import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.TipoAtivoCadastro;
+import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.dto.AtivoCadastroSyncDTO;
 import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraInvestimentoModel;
 import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraInvestimentoRepository;
 import dev.LzGuimaraes.FocusLifeHub.Exceptions.ResourceNotFoundException;
@@ -24,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AtivoService {
+    private static final Logger log = LoggerFactory.getLogger(AtivoService.class);
 
     private final AtivoRepository ativoRepository;
     private final CarteiraInvestimentoRepository carteiraInvestimentoRepository;
@@ -223,5 +230,75 @@ public class AtivoService {
             }
         }
         ativoRepository.saveAll(ativos);
+    }
+
+    /**
+     * Sincroniza o catálogo de ativos (ativo_cadastro) e propaga o novo preço
+     * para as posições (ativo) que referenciam cada ativo do catálogo,
+     * recalculando o saldo (precoAtual × quantidade).
+     */
+    @Transactional
+    public Map<String, Integer> syncCatalogo(List<AtivoCadastroSyncDTO> payload) {
+        int received = (payload == null) ? 0 : payload.size();
+        int created = 0;
+        int updated = 0;
+        int invalid = 0;
+
+        if (payload == null || payload.isEmpty()) {
+            return Map.of("received", received, "created", created, "updated", updated, "invalid", invalid);
+        }
+
+        for (AtivoCadastroSyncDTO dto : payload) {
+            if (dto == null || dto.getNome() == null || dto.getNome().isBlank() || dto.getTipo() == null) {
+                invalid++;
+                continue;
+            }
+
+            String nome = dto.getNome().trim();
+            TipoAtivoCadastro tipo;
+            try {
+                tipo = TipoAtivoCadastro.valueOf(dto.getTipo().trim().toUpperCase());
+            } catch (Exception ex) {
+                invalid++;
+                log.warn("Tipo inválido para ativo '{}' : {}", nome, dto.getTipo());
+                continue;
+            }
+
+            AtivoCadastroModel cadastro;
+            Optional<AtivoCadastroModel> opt = ativoCadastroRepository.findByNomeIgnoreCase(nome);
+            if (opt.isPresent()) {
+                cadastro = opt.get();
+                cadastro.setTipo(tipo);
+                if (dto.getPrecoAtual() != null) {
+                    cadastro.setPrecoAtual(dto.getPrecoAtual());
+                }
+                cadastro = ativoCadastroRepository.save(cadastro);
+                updated++;
+            } else {
+                AtivoCadastroModel novo = new AtivoCadastroModel();
+                novo.setNome(nome);
+                novo.setTipo(tipo);
+                novo.setPrecoAtual(dto.getPrecoAtual());
+                cadastro = ativoCadastroRepository.save(novo);
+                created++;
+            }
+
+            // Propaga o novo preço para as posições (cards) que usam este ativo do catálogo
+            if (dto.getPrecoAtual() != null) {
+                List<AtivoModel> posicoes = ativoRepository.findByAtivoCadastroId(cadastro.getId());
+                for (AtivoModel posicao : posicoes) {
+                    posicao.setPrecoAtual(dto.getPrecoAtual());
+                    if (posicao.getQuantidade() != null) {
+                        posicao.setSaldo(dto.getPrecoAtual() * posicao.getQuantidade());
+                    }
+                }
+                if (!posicoes.isEmpty()) {
+                    ativoRepository.saveAll(posicoes);
+                }
+            }
+        }
+
+        log.info("/ativos/admin/sync: received={}, created={}, updated={}, invalid={}", received, created, updated, invalid);
+        return Map.of("received", received, "created", created, "updated", updated, "invalid", invalid);
     }
 }
