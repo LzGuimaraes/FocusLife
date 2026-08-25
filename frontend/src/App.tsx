@@ -13,6 +13,7 @@ import CarteiraDetalhe from "./pages/CarteiraDetalhe";
 import Contas from "./pages/Contas";
 import Tarefas from "./pages/Tarefas";
 import Materias from "./pages/Materias";
+import Treinos from "./pages/Treinos";
 import Metas from "./pages/Metas";
 import Estudos from "./pages/Estudos";
 import ComoFunciona from "./pages/ComoFunciona";
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="/contas" element={<PrivateRoute><Contas /></PrivateRoute>} />
           <Route path="/tarefas" element={<PrivateRoute><Tarefas /></PrivateRoute>} />
           <Route path="/materias" element={<PrivateRoute><Materias /></PrivateRoute>} />
+          <Route path="/treinos" element={<PrivateRoute><Treinos /></PrivateRoute>} />
           <Route path="/metas" element={<PrivateRoute><Metas /></PrivateRoute>} />
           <Route path="/estudos" element={<PrivateRoute><Estudos /></PrivateRoute>} />
           <Route path="/como-funciona" element={<PrivateRoute><ComoFunciona /></PrivateRoute>} />

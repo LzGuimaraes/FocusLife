@@ -9,6 +9,7 @@ const baseNavItems = [
   { path: "/dashboard", label: "Dashboard", icon: "🏠", color: "#6366f1" },
   { path: "/tarefas",   label: "Tarefas",   icon: "✓",  color: "#06b6d4" },
   { path: "/materias",  label: "Matérias",  icon: "📝", color: "#ec4899" },
+  { path: "/treinos",   label: "Treinos",   icon: "💪", color: "#8b5cf6" },
   { path: "/metas",     label: "Metas",     icon: "🎯", color: "#f59e0b" },
   { path: "/financas",  label: "Finanças",  icon: "💰", color: "#10b981" },
   { path: "/como-funciona", label: "Como Funciona", icon: "❓", color: "#8b5cf6" },
