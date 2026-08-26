@@ -9,6 +9,7 @@ public record WeekHistoryDTO(
     Integer completedCount,
     Integer executedCount,
     Integer consistencyPercent,
+    Integer executionAveragePercent,
     String evaluationKey,
     String evaluationLabel,
     String evaluationMessage

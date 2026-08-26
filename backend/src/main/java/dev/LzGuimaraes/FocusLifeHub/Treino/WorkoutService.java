@@ -217,7 +217,7 @@ public class WorkoutService {
                 history.add(new WeekHistoryDTO(
                     summary.start(), summary.end(),
                     summary.plannedCount(), summary.completedCount(), summary.executedCount(),
-                    summary.consistencyPercent(),
+                    summary.consistencyPercent(), summary.executionAveragePercent(),
                     summary.evaluationKey(), summary.evaluationLabel(), summary.evaluationMessage()));
             }
             weekEnd = weekStart.minusDays(1);
@@ -325,6 +325,13 @@ public class WorkoutService {
                                 c.setSession(session);
                                 c.setWorkoutExerciseId(e.getId());
                                 c.setExerciseName(e.getName());
+                                // Snapshot das métricas: histórico imutável mesmo
+                                // se o treino for editado depois (regra crítica).
+                                c.setSets(e.getSets());
+                                c.setRepetitions(e.getRepetitions());
+                                c.setWeight(e.getWeight());
+                                c.setDurationMinutes(e.getDurationMinutes());
+                                c.setDistanceKm(e.getDistanceKm());
                                 c.setCompleted(false);
                                 return c;
                             }).collect(Collectors.toList());
@@ -336,8 +343,10 @@ public class WorkoutService {
     private WorkoutOccurrenceDTO buildOccurrence(WorkoutModel workout, LocalDate date, WorkoutSessionModel session) {
         List<ExerciseChecklistItemDTO> exercises;
         if (session != null) {
-            // Checklist vem das ocorrências (snapshots). Quando o treino ainda
-            // existe, enriquecemos com as métricas atuais da definição.
+            // Checklist vem das ocorrências (snapshots). Priorizamos os valores
+            // congelados no momento da materialização; só usamos a definição
+            // atual como fallback para ocorrências antigas criadas antes dos
+            // snapshots existirem (colunas NULL).
             Map<Long, WorkoutExerciseModel> defs = workout.getExercises().stream()
                     .collect(Collectors.toMap(WorkoutExerciseModel::getId, e -> e, (a, b) -> a));
             exercises = session.getCompletions().stream()
@@ -346,11 +355,11 @@ public class WorkoutService {
                         WorkoutExerciseModel def = defs.get(c.getWorkoutExerciseId());
                         return new ExerciseChecklistItemDTO(
                             c.getWorkoutExerciseId(), c.getId(), c.getExerciseName(),
-                            def != null ? def.getSets() : null,
-                            def != null ? def.getRepetitions() : null,
-                            def != null ? def.getWeight() : null,
-                            def != null ? def.getDurationMinutes() : null,
-                            def != null ? def.getDistanceKm() : null,
+                            c.getSets() != null ? c.getSets() : (def != null ? def.getSets() : null),
+                            c.getRepetitions() != null ? c.getRepetitions() : (def != null ? def.getRepetitions() : null),
+                            c.getWeight() != null ? c.getWeight() : (def != null ? def.getWeight() : null),
+                            c.getDurationMinutes() != null ? c.getDurationMinutes() : (def != null ? def.getDurationMinutes() : null),
+                            c.getDistanceKm() != null ? c.getDistanceKm() : (def != null ? def.getDistanceKm() : null),
                             c.getNotes(), c.getCompleted());
                     }).collect(Collectors.toList());
         } else {
@@ -376,7 +385,8 @@ public class WorkoutService {
                 .sorted(Comparator.comparing(WorkoutExerciseCompletionModel::getId))
                 .map(c -> new ExerciseChecklistItemDTO(
                     c.getWorkoutExerciseId(), c.getId(), c.getExerciseName(),
-                    null, null, null, null, null, c.getNotes(), c.getCompleted()))
+                    c.getSets(), c.getRepetitions(), c.getWeight(),
+                    c.getDurationMinutes(), c.getDistanceKm(), c.getNotes(), c.getCompleted()))
                 .collect(Collectors.toList());
 
         return new WorkoutOccurrenceDTO(
@@ -400,7 +410,8 @@ public class WorkoutService {
         return new WeekSummaryDTO(
             summary.start(), summary.end(),
             summary.plannedCount(), summary.completedCount(), summary.executedCount(),
-            summary.consistencyPercent(), streaks[0], streaks[1],
+            summary.consistencyPercent(), summary.executionAveragePercent(),
+            streaks[0], streaks[1],
             summary.hasPlannedWorkouts(),
             summary.evaluationKey(), summary.evaluationLabel(), summary.evaluationMessage());
     }
@@ -420,11 +431,14 @@ public class WorkoutService {
         int sumPct = sessions.stream()
                 .mapToInt(s -> s.getCompletionPercentage() == null ? 0 : s.getCompletionPercentage()).sum();
 
-        Integer consistency = planned > 0 ? Math.round(sumPct / (float) planned) : null;
+        // Consistência por quantidade: concluídos / planejados.
+        Integer consistency = planned > 0 ? Math.round(completed * 100f / planned) : null;
+        // Execução média: média do percentual de TODAS as ocorrências (considera parciais).
+        Integer executionAverage = planned > 0 ? Math.round(sumPct / (float) planned) : null;
 
-        String[] evaluation = evaluate(consistency, planned);
+        String[] evaluation = evaluate(consistency, planned, completed);
         return new WeekSummaryDTO(
-            start, end, planned, completed, executed, consistency, null, null,
+            start, end, planned, completed, executed, consistency, executionAverage, null, null,
             planned > 0, evaluation[0], evaluation[1], evaluation[2]);
     }
 
@@ -520,7 +534,9 @@ public class WorkoutService {
     }
 
     /** Avaliação objetiva do desempenho semanal (chave, rótulo, mensagem). */
-    private String[] evaluate(Integer consistency, int planned) {
+    private String[] evaluate(Integer consistency, int planned, int completed) {
+        String texto = "Você concluiu " + completed + " dos " + planned
+                + (planned == 1 ? " treino planejado" : " treinos planejados") + " esta semana.";
         if (planned == 0) {
             return new String[]{"NO_PLANNED", "Sem treinos", "Nenhum treino planejado para esta semana."};
         }
@@ -528,15 +544,15 @@ public class WorkoutService {
             return new String[]{"NONE", "Nenhum realizado", "Nenhum treino realizado nesta semana."};
         }
         if (consistency >= 90) {
-            return new String[]{"EXCELLENT", "Excelente", "Excelente semana! Consistência alta, continue assim."};
+            return new String[]{"EXCELLENT", "Excelente", texto + " Excelente semana, continue assim!"};
         }
         if (consistency >= 75) {
-            return new String[]{"GOOD", "Muito bom", "Muito bom! Você manteve uma boa consistência."};
+            return new String[]{"GOOD", "Muito bom", texto};
         }
         if (consistency >= 50) {
-            return new String[]{"REGULAR", "Regular", "Semana regular. Busque manter pelo menos 75% de consistência."};
+            return new String[]{"REGULAR", "Regular", texto + " Busque manter pelo menos 75% de consistência."};
         }
-        return new String[]{"LOW", "Baixa", "Semana com baixa consistência. Revise sua rotina para recuperar o ritmo."};
+        return new String[]{"LOW", "Baixa", texto + " Revise sua rotina para recuperar o ritmo."};
     }
 
     private Map<String, WorkoutSessionModel> indexSessions(List<WorkoutSessionModel> sessions) {

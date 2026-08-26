@@ -9,6 +9,7 @@ public record WeekSummaryDTO(
     Integer completedCount,
     Integer executedCount,
     Integer consistencyPercent,
+    Integer executionAveragePercent,
     Integer currentStreak,
     Integer bestStreak,
     Boolean hasPlannedWorkouts,

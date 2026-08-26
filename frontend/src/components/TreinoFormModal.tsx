@@ -82,6 +82,16 @@ export default function TreinoFormModal({ open, editing, onClose, onSaved }: Pro
   const updateExercise = (i: number, patch: Partial<ExerciseForm>) =>
     setExercises(list => list.map((e, idx) => (idx === i ? { ...e, ...patch } : e)));
 
+  const moveExercise = (i: number, dir: -1 | 1) => {
+    setExercises(list => {
+      const j = i + dir;
+      if (j < 0 || j >= list.length) return list;
+      const next = [...list];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  };
+
   const handleSubmit = async () => {
     const e: typeof errors = {};
     if (!title.trim()) e.title = "O título do treino é obrigatório.";
@@ -141,10 +151,20 @@ export default function TreinoFormModal({ open, editing, onClose, onSaved }: Pro
                 <div style={{ flex: 1 }}>
                   <Input label="Nome do exercício" value={ex.name} onChange={e => updateExercise(i, { name: e.target.value })} placeholder="Ex: Flexão, Supino, Corrida" />
                 </div>
-                <button type="button" onClick={() => setExercises(list => list.filter((_, idx) => idx !== i))} title="Remover exercício"
-                  style={{ flexShrink: 0, padding: "9px 12px", borderRadius: "8px", border: "none", cursor: "pointer", background: "#fee2e2", color: "#dc2626", fontWeight: 600, fontSize: "13px" }}>
-                  ✕
-                </button>
+                <div style={{ display: "flex", gap: "6px", flexShrink: 0, paddingBottom: "10px" }}>
+                  <button type="button" onClick={() => moveExercise(i, -1)} disabled={i === 0} title="Mover para cima"
+                    style={{ padding: "8px 10px", borderRadius: "8px", border: "none", cursor: i === 0 ? "not-allowed" : "pointer", background: "#eef2ff", color: "#6366f1", fontWeight: 600, fontSize: "13px", opacity: i === 0 ? 0.4 : 1 }}>
+                    ↑
+                  </button>
+                  <button type="button" onClick={() => moveExercise(i, 1)} disabled={i === exercises.length - 1} title="Mover para baixo"
+                    style={{ padding: "8px 10px", borderRadius: "8px", border: "none", cursor: i === exercises.length - 1 ? "not-allowed" : "pointer", background: "#eef2ff", color: "#6366f1", fontWeight: 600, fontSize: "13px", opacity: i === exercises.length - 1 ? 0.4 : 1 }}>
+                    ↓
+                  </button>
+                  <button type="button" onClick={() => setExercises(list => list.filter((_, idx) => idx !== i))} title="Remover exercício"
+                    style={{ padding: "8px 12px", borderRadius: "8px", border: "none", cursor: "pointer", background: "#fee2e2", color: "#dc2626", fontWeight: 600, fontSize: "13px" }}>
+                    ✕
+                  </button>
+                </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: "10px" }}>
                 <NumberInput label="Séries" value={ex.sets} onChange={v => updateExercise(i, { sets: v })} placeholder="—" />

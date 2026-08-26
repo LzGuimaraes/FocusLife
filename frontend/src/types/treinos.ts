@@ -66,7 +66,10 @@ export interface WeekSummary {
   plannedCount: number;
   completedCount: number;
   executedCount: number;
+  /** Consistência por quantidade: concluídos / planejados × 100. */
   consistencyPercent: number | null;
+  /** Execução média: média do % de todas as ocorrências (considera parciais). */
+  executionAveragePercent: number | null;
   currentStreak: number;
   bestStreak: number;
   hasPlannedWorkouts: boolean;
@@ -89,6 +92,7 @@ export interface WeekHistory {
   completedCount: number;
   executedCount: number;
   consistencyPercent: number | null;
+  executionAveragePercent: number | null;
   evaluationKey: string;
   evaluationLabel: string;
   evaluationMessage: string;

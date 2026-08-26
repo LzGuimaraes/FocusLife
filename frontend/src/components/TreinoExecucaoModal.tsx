@@ -4,6 +4,7 @@ import api from "../api/api";
 import Modal from "./Modal";
 import { ProgressBar } from "./UI";
 import { parseLocalDate } from "../utils/date";
+import { formatExerciseMetrics } from "../utils/workout";
 import type { ExerciseChecklistItem, WorkoutOccurrence, WorkoutSession } from "../types/treinos";
 
 interface Props {
@@ -17,16 +18,6 @@ const statusStyle = (s: string) =>
   s === "COMPLETED" ? { label: "Concluído", bg: "#d1fae5", color: "#047857" }
   : s === "PARTIAL" ? { label: "Realizado parcialmente", bg: "#dbeafe", color: "#1d4ed8" }
   : { label: "Não realizado", bg: "#fef3c7", color: "#b45309" };
-
-const fmtMetrics = (e: ExerciseChecklistItem) => {
-  const parts: string[] = [];
-  if (e.sets) parts.push(`${e.sets} séries`);
-  if (e.repetitions) parts.push(`${e.repetitions} reps`);
-  if (e.weight) parts.push(`${e.weight} kg`);
-  if (e.durationMinutes) parts.push(`${e.durationMinutes} min`);
-  if (e.distanceKm) parts.push(`${e.distanceKm} km`);
-  return parts.join(" · ");
-};
 
 const fmtDateTime = (iso: string | null) => {
   if (!iso) return "";
@@ -114,7 +105,7 @@ export default function TreinoExecucaoModal({ open, occurrence, onClose, onUpdat
                 </span>
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: "block", fontSize: "14px", fontWeight: 600, color: ex.completed ? "#047857" : "#0f172a" }}>{ex.name}</span>
-                  {fmtMetrics(ex) && <span style={{ display: "block", fontSize: "12px", color: "var(--color-text-muted)", marginTop: "2px" }}>{fmtMetrics(ex)}</span>}
+                  {formatExerciseMetrics(ex) && <span style={{ display: "block", fontSize: "12px", color: "var(--color-text-muted)", marginTop: "2px" }}>{formatExerciseMetrics(ex)}</span>}
                   {ex.notes && <span style={{ display: "block", fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px", fontStyle: "italic" }}>{ex.notes}</span>}
                 </span>
               </button>

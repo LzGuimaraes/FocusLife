@@ -6,6 +6,7 @@ import TreinoFormModal from "../components/TreinoFormModal";
 import TreinoExecucaoModal from "../components/TreinoExecucaoModal";
 import { PageHeader, CardGrid, EmptyState, Spinner, ProgressBar } from "../components/UI";
 import { formatLocalDate, parseLocalDate } from "../utils/date";
+import { formatExerciseMetrics } from "../utils/workout";
 import type { WeekHistory, WeekResponse, WeekSummary, Workout, WorkoutOccurrence } from "../types/treinos";
 
 /* ── Constantes de semana ── */
@@ -50,6 +51,18 @@ const statusOf = (occ: WorkoutOccurrence): { label: string; bg: string; color: s
   return { label: "Pendente", bg: "#fef3c7", color: "#b45309" };
 };
 
+/** Ação principal do card (spec: Iniciar / Continuar / Ver treino). */
+const actionOf = (occ: WorkoutOccurrence): { label: string; icon: string; bg: string } => {
+  const s = occ.session;
+  if (s?.status === "COMPLETED") return { label: "Ver treino", icon: "👁", bg: "#10b981" };
+  if (s?.status === "PARTIAL") return { label: "Continuar treino", icon: "▶", bg: "#2563eb" };
+  if (s) return { label: "Iniciar treino", icon: "▶", bg: "#8b5cf6" };
+  return { label: "Ver treino", icon: "👁", bg: "#6366f1" }; // futuro (planejado)
+};
+
+/** Quantos exercícios aparecem no card antes de colapsar ("+ Ver todos os N"). */
+const EXERCISES_COLLAPSED = 4;
+
 export default function Treinos() {
   const [week, setWeek] = useState<WeekResponse | null>(null);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
@@ -58,6 +71,12 @@ export default function Treinos() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [formModal, setFormModal] = useState<{ open: boolean; editing: Workout | null }>({ open: false, editing: null });
   const [execModal, setExecModal] = useState<{ open: boolean; occurrence: WorkoutOccurrence | null }>({ open: false, occurrence: null });
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const toggleExpand = (occ: WorkoutOccurrence) => {
+    const key = `${occ.workoutId}-${occ.date}`;
+    setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const fetchWeek = useCallback(async (offset: number) => {
     const { start, end } = getWeekRange(offset);
@@ -187,7 +206,7 @@ export default function Treinos() {
           </div>
 
           {/* ── Resumo da semana ── */}
-          {week && <SummarySection summary={week.summary} />}
+          {week && <SummarySection summary={week.summary} occurrences={week.occurrences} />}
 
           {/* ── Semana sem treinos planejados ── */}
           {week && week.summary.plannedCount === 0 && (
@@ -207,24 +226,15 @@ export default function Treinos() {
                   </div>
                   <CardGrid>
                     {group.items.map(occ => (
-                      <div key={occ.workoutId + occ.date} style={{ background: "white", borderRadius: "var(--radius-lg)", padding: "18px", boxShadow: "var(--shadow-sm)", cursor: "pointer", transition: "all var(--transition-base)", borderLeft: "4px solid #8b5cf6", display: "flex", flexDirection: "column", gap: "8px" }}
-                        onClick={() => setExecModal({ open: true, occurrence: occ })}
-                        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "var(--shadow-lg)"; }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "var(--shadow-sm)"; }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "8px" }}>
-                          <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text)", margin: 0 }}>{occ.title}</h3>
-                          <Badge status={statusOf(occ)} />
-                        </div>
-                        {occ.description && <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0 }}>{occ.description}</p>}
-                        <p style={{ fontSize: "12px", color: "var(--color-text-muted)", margin: 0 }}>
-                          {occ.exercises.length} {occ.exercises.length === 1 ? "exercício" : "exercícios"} · {fmtDate(occ.date)}
-                        </p>
-                        {occ.session && occ.session.status !== "PENDING" && <ProgressBar value={occ.session.completionPercentage} />}
-                        <div style={{ display: "flex", gap: "8px", marginTop: "4px" }} onClick={e => e.stopPropagation()}>
-                          <button onClick={() => openEdit(occ.workoutId)} style={btnSm}>✏️ Editar</button>
-                          <button onClick={() => handleDelete(occ.workoutId)} style={{ ...btnSm, background: "var(--color-danger-light)", color: "var(--color-danger)" }}>🗑 Excluir</button>
-                        </div>
-                      </div>
+                      <WorkoutCard
+                        key={occ.workoutId + occ.date}
+                        occ={occ}
+                        expanded={!!expanded[`${occ.workoutId}-${occ.date}`]}
+                        onToggleExpand={() => toggleExpand(occ)}
+                        onOpen={() => setExecModal({ open: true, occurrence: occ })}
+                        onEdit={() => openEdit(occ.workoutId)}
+                        onDelete={() => handleDelete(occ.workoutId)}
+                      />
                     ))}
                   </CardGrid>
                 </div>
@@ -269,25 +279,113 @@ function Badge({ status }: { status: { label: string; bg: string; color: string 
   return <span style={{ background: status.bg, color: status.color, padding: "3px 10px", borderRadius: "var(--radius-full)", fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>{status.label}</span>;
 }
 
-function SummarySection({ summary }: { summary: WeekSummary }) {
+/* ── Card do treino (resumo completo, com exercícios visíveis) ── */
+function WorkoutCard({ occ, expanded, onToggleExpand, onOpen, onEdit, onDelete }: {
+  occ: WorkoutOccurrence;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  onOpen: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const badge = statusOf(occ);
+  const action = actionOf(occ);
+  const total = occ.exercises.length;
+  const done = occ.exercises.filter(e => e.completed).length;
+  const pct = occ.session?.completionPercentage ?? 0;
+  const showAll = expanded || total <= EXERCISES_COLLAPSED;
+  const visible = showAll ? occ.exercises : occ.exercises.slice(0, EXERCISES_COLLAPSED);
+
+  return (
+    <div style={{ background: "white", borderRadius: "var(--radius-lg)", padding: "18px", boxShadow: "var(--shadow-sm)", cursor: "pointer", transition: "all var(--transition-base)", borderLeft: "4px solid #8b5cf6", display: "flex", flexDirection: "column", gap: "10px" }}
+      onClick={onOpen}
+      onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "var(--shadow-lg)"; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "var(--shadow-sm)"; }}>
+      {/* Título + status */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "8px" }}>
+        <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text)", margin: 0 }}>{occ.title}</h3>
+        <Badge status={badge} />
+      </div>
+      {/* Dia da semana + data */}
+      <p style={{ fontSize: "12px", color: "var(--color-text-muted)", margin: 0 }}>📅 {DAY_LABEL[occ.dayOfWeek]} · {fmtDate(occ.date)}</p>
+      {/* Descrição cadastrada */}
+      {occ.description && <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0 }}>{occ.description}</p>}
+
+      {/* Exercícios cadastrados (regra: visíveis direto no card) */}
+      {total > 0 && (
+        <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "10px" }}>
+          <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.06em", color: "#8b5cf6", textTransform: "uppercase" }}>Exercícios</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: "7px", marginTop: "8px" }}>
+            {visible.map((ex, i) => (
+              <div key={ex.completionId ?? ex.workoutExerciseId} style={{ display: "flex", gap: "8px", alignItems: "baseline" }}>
+                <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: 600, width: "18px", flexShrink: 0, textAlign: "right" }}>{i + 1}.</span>
+                <div style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>{ex.name}</span>
+                  {formatExerciseMetrics(ex) && <span style={{ display: "block", fontSize: "12px", color: "var(--color-text-muted)" }}>{formatExerciseMetrics(ex)}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+          {total > EXERCISES_COLLAPSED && (
+            <button type="button" onClick={e => { e.stopPropagation(); onToggleExpand(); }} style={btnExpand}>
+              {expanded ? "− Ocultar exercícios" : `+ Ver todos os ${total} exercícios`}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Progresso */}
+      <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "10px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+          <span style={{ fontSize: "12px", fontWeight: 600, color: "#374151" }}>{done}/{total} exercícios concluídos</span>
+          <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text)" }}>{pct}%</span>
+        </div>
+        <ProgressBar value={pct} />
+      </div>
+
+      {/* Ações */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginTop: "2px", flexWrap: "wrap" }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={onEdit} style={btnSm}>✏️ Editar</button>
+          <button onClick={onDelete} style={{ ...btnSm, background: "var(--color-danger-light)", color: "var(--color-danger)" }}>🗑 Excluir</button>
+        </div>
+        <button onClick={onOpen} style={{ padding: "9px 18px", borderRadius: "10px", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 700, background: action.bg, color: "#fff", transition: "all var(--transition-fast)", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "6px" }}
+          onMouseEnter={e => { e.currentTarget.style.filter = "brightness(0.92)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+          onMouseLeave={e => { e.currentTarget.style.filter = "none"; e.currentTarget.style.transform = "translateY(0)"; }}>
+          <span style={{ fontSize: "10px" }}>{action.icon}</span> {action.label}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SummarySection({ summary, occurrences }: { summary: WeekSummary; occurrences: WorkoutOccurrence[] }) {
   const evalInfo = EVAL[summary.evaluationKey] ?? EVAL.NO_PLANNED;
   return (
     <div style={{ marginBottom: "12px" }}>
       <h2 style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text)", margin: "0 0 10px" }}>Esta semana</h2>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "14px" }}>
         <StatCard icon="📋" label="Treinos planejados" value={summary.plannedCount} />
-        <StatCard icon="✅" label="Treinos realizados" value={summary.executedCount} />
+        <StatCard icon="✅" label="Treinos concluídos" value={summary.completedCount} />
         <StatCard icon="📈" label="Consistência" value={summary.consistencyPercent != null ? `${summary.consistencyPercent}%` : "—"} />
+        <StatCard icon="🎯" label="Execução média" value={summary.executionAveragePercent != null ? `${summary.executionAveragePercent}%` : "—"} />
         <StatCard icon="🔥" label="Sequência atual" value={summary.currentStreak > 0 ? `${summary.currentStreak} semana${summary.currentStreak > 1 ? "s" : ""}` : "0"} sub={summary.bestStreak > 0 ? `Maior: ${summary.bestStreak} semana${summary.bestStreak > 1 ? "s" : ""}` : undefined} />
       </div>
 
       {summary.hasPlannedWorkouts ? (
         <div style={{ marginTop: "14px", background: "white", borderRadius: "var(--radius-lg)", padding: "18px", boxShadow: "var(--shadow-sm)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-            <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>Consistência semanal</span>
+            <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>Consistência semanal ({summary.completedCount}/{summary.plannedCount})</span>
             <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text)" }}>{summary.consistencyPercent ?? 0}%</span>
           </div>
           <ProgressBar value={summary.consistencyPercent ?? 0} />
+
+          <div style={{ display: "flex", justifyContent: "space-between", margin: "14px 0 8px" }}>
+            <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>Execução média (com parciais)</span>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text)" }}>{summary.executionAveragePercent ?? 0}%</span>
+          </div>
+          <ProgressBar value={summary.executionAveragePercent ?? 0} color="#8b5cf6" />
+
           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "12px" }}>
             <span style={{ fontSize: "24px" }}>{evalInfo.emoji}</span>
             <div>
@@ -295,6 +393,25 @@ function SummarySection({ summary }: { summary: WeekSummary }) {
               <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", margin: "2px 0 0" }}>{summary.evaluationMessage}</p>
             </div>
           </div>
+
+          {occurrences.length > 0 && (
+            <div style={{ borderTop: "1px solid #f1f5f9", marginTop: "14px", paddingTop: "12px" }}>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text-secondary)" }}>Por treino</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "8px" }}>
+                {occurrences.map(occ => {
+                  const p = occ.session?.completionPercentage;
+                  return (
+                    <div key={occ.workoutId + occ.date} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "13px", color: "var(--color-text)", fontWeight: 500 }}>{occ.title}</span>
+                      <span style={{ fontSize: "12px", fontWeight: 700, color: p == null ? "#94a3b8" : p >= 100 ? "#047857" : p > 0 ? "#1d4ed8" : "#b45309" }}>
+                        {p == null ? "Planejado" : `${p}%`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div style={{ marginTop: "14px", background: "white", borderRadius: "var(--radius-lg)", padding: "16px", boxShadow: "var(--shadow-sm)", textAlign: "center", color: "var(--color-text-secondary)", fontSize: "14px" }}>
@@ -348,3 +465,4 @@ function HistorySection({ history, onOpen }: { history: WeekHistory[]; onOpen: (
 
 const navBtn: React.CSSProperties = { padding: "8px 16px", borderRadius: "var(--radius-md)", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 600, background: "white", color: "var(--color-text-secondary)", boxShadow: "var(--shadow-sm)", transition: "all var(--transition-fast)" };
 const btnSm: React.CSSProperties = { padding: "7px 14px", borderRadius: "var(--radius-md)", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 600, background: "var(--color-bg)", color: "var(--color-text-secondary)", transition: "all var(--transition-fast)" };
+const btnExpand: React.CSSProperties = { marginTop: "8px", padding: "6px 12px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 600, background: "#f3f0ff", color: "#7c3aed", width: "100%", textAlign: "center", transition: "all var(--transition-fast)" };

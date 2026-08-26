@@ -36,6 +36,23 @@ public class WorkoutExerciseCompletionModel {
     @Column(name = "exercise_name")
     private String exerciseName;
 
+    /**
+     * Snapshot das métricas do exercício no momento em que a ocorrência foi
+     * materializada. Garante que editar o treino (ex.: "Flexão 4×15 → 5×20")
+     * NÃO reescreva o histórico já realizado (regra crítica).
+     */
+    private Integer sets;
+
+    private Integer repetitions;
+
+    private Float weight;
+
+    @Column(name = "duration_minutes")
+    private Integer durationMinutes;
+
+    @Column(name = "distance_km")
+    private Float distanceKm;
+
     private Boolean completed = false;
 
     private String notes;
