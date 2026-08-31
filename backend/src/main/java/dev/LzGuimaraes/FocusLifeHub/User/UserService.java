@@ -55,6 +55,8 @@ public class UserService {
 
         if (dto.password() != null && !dto.password().isBlank()) {
             user.setPassword(passwordEncoder.encode(dto.password()));
+            // Invalida todos os JWTs emitidos antes da troca de senha
+            user.setTokenVersion((user.getTokenVersion() == null ? 0 : user.getTokenVersion()) + 1);
         }
 
         UserModel updatedUser = userRepository.save(user);

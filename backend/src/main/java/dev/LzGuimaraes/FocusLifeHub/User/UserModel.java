@@ -36,8 +36,10 @@ public class UserModel implements UserDetails {
     private String password;
     private Boolean enabled = false;
     private String activationCode;
+    private Instant activationCodeExpiration;
     private String resetPasswordToken;
     private Instant resetPasswordTokenExpiration;
+    private Integer tokenVersion = 0;
 
     @Enumerated(EnumType.STRING)
     private Role role = Role.USER;

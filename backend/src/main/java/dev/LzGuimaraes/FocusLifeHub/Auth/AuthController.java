@@ -1,5 +1,6 @@
 package dev.LzGuimaraes.FocusLifeHub.Auth;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.mail.MessagingException;
@@ -27,7 +28,10 @@ import dev.LzGuimaraes.FocusLifeHub.User.dto.request.RegisterUserRequest;
 import dev.LzGuimaraes.FocusLifeHub.User.dto.request.ResetPasswordRequest;
 import dev.LzGuimaraes.FocusLifeHub.User.dto.response.LoginResponse;
 import dev.LzGuimaraes.FocusLifeHub.User.dto.response.MessageResponse;
+import dev.LzGuimaraes.FocusLifeHub.config.TokenBlacklistService;
 import dev.LzGuimaraes.FocusLifeHub.config.TokenConfig;
+import dev.LzGuimaraes.FocusLifeHub.config.RateLimitService;
+import dev.LzGuimaraes.FocusLifeHub.config.JWTUserData;
 import dev.LzGuimaraes.FocusLifeHub.Auth.MailService;
 
 import java.time.Instant;
@@ -42,24 +46,40 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final TokenConfig tokenConfig;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final RateLimitService rateLimitService;
     private final MailService mailService;
 
     @Value("${app.frontend.url:https://focus.lzguimaraes.com.br}")
     private String frontendUrl;
 
-    public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager, TokenConfig tokenConfig, MailService mailService) {
+    public AuthController(UserRepository userRepository,
+                          PasswordEncoder passwordEncoder,
+                          AuthenticationManager authenticationManager,
+                          TokenConfig tokenConfig,
+                          TokenBlacklistService tokenBlacklistService,
+                          RateLimitService rateLimitService,
+                          MailService mailService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.tokenConfig = tokenConfig;
+        this.tokenBlacklistService = tokenBlacklistService;
+        this.rateLimitService = rateLimitService;
         this.mailService = mailService;
     }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(
             @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest,
             HttpServletResponse response
     ) {
+        if (!rateLimitService.allow(httpRequest, "login", 10)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new MessageResponse("Muitas tentativas de login. Tente novamente em instantes."));
+        }
+
         UsernamePasswordAuthenticationToken userAndPass = new UsernamePasswordAuthenticationToken(
                 request.email(),
                 request.password()
@@ -90,13 +110,20 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<MessageResponse> register(@Valid @RequestBody RegisterUserRequest request) {
-        log.info("Registro solicitado para email={}", request.email());
+    public ResponseEntity<MessageResponse> register(@Valid @RequestBody RegisterUserRequest request, HttpServletRequest httpRequest) {
+        if (!rateLimitService.allow(httpRequest, "register", 5)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new MessageResponse("Muitas tentativas de cadastro. Tente novamente em instantes."));
+        }
 
+        // Anti-enumeração: a resposta NÃO revela se o e-mail já existe.
+        // Para quem já tem conta não é enviado e-mail, mas a resposta é idêntica
+        // à de sucesso (mesmo status e mesma mensagem), impedindo que um
+        // atacante valide e-mails em massa.
         if (userRepository.existsByEmail(request.email())) {
-            log.warn("Tentativa de registro com email já existente={}", request.email());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new MessageResponse("Este e-mail já está em uso."));
+            log.warn("Tentativa de registro com e-mail já existente (resposta ocultada do cliente)");
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(new MessageResponse("Usuário criado. Enviamos um e-mail de ativação. Verifique sua caixa de entrada e também a pasta de spam."));
         }
 
         UserModel newUser = new UserModel();
@@ -105,6 +132,7 @@ public class AuthController {
         newUser.setPassword(passwordEncoder.encode(request.password()));
         newUser.setEnabled(false);
         newUser.setActivationCode(UUID.randomUUID().toString());
+        newUser.setActivationCodeExpiration(Instant.now().plusSeconds(24 * 60 * 60));
 
         userRepository.save(newUser);
         log.info("Usuário salvo com ID={} e email={}", newUser.getId(), newUser.getEmail());
@@ -148,15 +176,23 @@ public class AuthController {
 
     @GetMapping("/activate")
     public ResponseEntity<MessageResponse> activateAccount(@RequestParam("code") String code) {
-        log.info("Ativação solicitada com code={}", code);
         Optional<UserModel> optionalUser = userRepository.findByActivationCode(code);
         if (optionalUser.isEmpty()) {
-            log.warn("Código de ativação inválido={}", code);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new MessageResponse("Código de ativação inválido ou expirado."));
         }
 
         UserModel user = optionalUser.get();
+
+        if (user.getActivationCodeExpiration() != null && user.getActivationCodeExpiration().isBefore(Instant.now())) {
+            log.warn("Código de ativação expirado para email={}", user.getEmail());
+            user.setActivationCode(null);
+            user.setActivationCodeExpiration(null);
+            userRepository.save(user);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new MessageResponse("Este link de ativação expirou. Solicite um novo cadastro ou entre em contato com o suporte."));
+        }
+
         if (Boolean.TRUE.equals(user.getEnabled())) {
             log.info("Conta já ativada para email={}", user.getEmail());
             return ResponseEntity.ok(new MessageResponse("Conta já ativada."));
@@ -164,6 +200,7 @@ public class AuthController {
 
         user.setEnabled(true);
         user.setActivationCode(null);
+        user.setActivationCodeExpiration(null);
         userRepository.save(user);
         log.info("Conta ativada com sucesso para email={}", user.getEmail());
 
@@ -171,7 +208,12 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<MessageResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) throws MessagingException {
+    public ResponseEntity<MessageResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request, HttpServletRequest httpRequest) throws MessagingException {
+        if (!rateLimitService.allow(httpRequest, "forgot-password", 5)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new MessageResponse("Muitas solicitações de redefinição. Tente novamente em instantes."));
+        }
+
         Optional<UserModel> optionalUser = userRepository.findByEmail(request.email());
         if (optionalUser.isEmpty()) {
             return ResponseEntity.ok(new MessageResponse("Se houver uma conta associada a este e-mail, você receberá instruções para redefinir a senha."));
@@ -218,11 +260,14 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        log.info("Reset de senha solicitado para token={}", request.token());
+    public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request, HttpServletRequest httpRequest) {
+        if (!rateLimitService.allow(httpRequest, "reset-password", 5)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new MessageResponse("Muitas tentativas de redefinição. Tente novamente em instantes."));
+        }
+
         Optional<UserModel> optionalUser = userRepository.findByResetPasswordToken(request.token());
         if (optionalUser.isEmpty()) {
-            log.warn("Token de reset inválido ou não encontrado={}", request.token());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new MessageResponse("Token inválido ou expirado."));
         }
@@ -237,6 +282,8 @@ public class AuthController {
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setResetPasswordToken(null);
         user.setResetPasswordTokenExpiration(null);
+        // Invalida todos os JWTs emitidos antes da redefinição de senha
+        user.setTokenVersion((user.getTokenVersion() == null ? 0 : user.getTokenVersion()) + 1);
         userRepository.save(user);
         log.info("Senha redefinida com sucesso para email={}", user.getEmail());
 
@@ -244,7 +291,15 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<?> logout(HttpServletResponse response) {
+    public ResponseEntity<?> logout(HttpServletRequest httpRequest, HttpServletResponse response) {
+        // Revoga o token atual na denylist, mesmo que o cookie não possa ser
+        // limpo (ex.: token expirado não chega ao logout autenticado).
+        String token = extractToken(httpRequest);
+        if (token != null) {
+            tokenConfig.validateToken(token).ifPresent(userData ->
+                    tokenBlacklistService.revoke(userData.jti(), userData.expiresAt()));
+        }
+
         ResponseCookie deleteCookie = ResponseCookie.from("jwt", "")
                 .httpOnly(true)
                 .secure(true)
@@ -255,5 +310,20 @@ public class AuthController {
 
         response.addHeader(HttpHeaders.SET_COOKIE, deleteCookie.toString());
         return ResponseEntity.ok(new MessageResponse("Logout successful"));
+    }
+
+    private String extractToken(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7);
+        }
+        if (request.getCookies() != null) {
+            for (jakarta.servlet.http.Cookie cookie : request.getCookies()) {
+                if ("jwt".equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
+        }
+        return null;
     }
 }
