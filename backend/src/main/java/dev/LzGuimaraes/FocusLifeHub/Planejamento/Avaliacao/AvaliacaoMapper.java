@@ -32,6 +32,8 @@ public class AvaliacaoMapper {
         destino.setPeso((req.peso() != null) ? req.peso() : BigDecimal.ONE);
         destino.setNotaMaxima((req.nota_maxima() != null) ? req.nota_maxima() : BigDecimal.TEN);
         destino.setContaNoScore(pontua);
+        destino.setBloqueadora(req.bloqueadora() != null && req.bloqueadora());
+        destino.setNotaMinima(req.nota_minima());
         destino.setOrdem((req.ordem() != null) ? req.ordem() : ordem);
     }
 
@@ -43,6 +45,8 @@ public class AvaliacaoMapper {
         destino.setPeso(origem.getPeso());
         destino.setNotaMaxima(origem.getNotaMaxima());
         destino.setContaNoScore(origem.getContaNoScore());
+        destino.setBloqueadora(origem.getBloqueadora());
+        destino.setNotaMinima(origem.getNotaMinima());
         destino.setOrdem(origem.getOrdem());
     }
 
@@ -126,6 +130,8 @@ public class AvaliacaoMapper {
                 p.getNotaMaxima(),
                 p.getContaNoScore(),
                 obrigatoria,
+                p.getBloqueadora(),
+                p.getNotaMinima(),
                 p.getOrdem(),
                 toRegrasResponse(regras),
                 notaAtribuida,

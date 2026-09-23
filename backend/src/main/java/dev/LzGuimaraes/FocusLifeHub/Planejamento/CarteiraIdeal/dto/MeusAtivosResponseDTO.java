@@ -50,6 +50,10 @@ public record MeusAtivosResponseDTO(
             /* ── Meta já definida (null quando ainda não há meta) ── */
             Long meta_id,
             BigDecimal percentual_ideal,
+            /** Tolerância (p.p. sobre o % ideal) — amplia o alvo e define o teto do aporte. */
+            BigDecimal tolerancia,
+            /** Teto de concentração (%) do ativo (null = sem teto). */
+            BigDecimal limite_maximo,
             Integer prioridade_manual,
             Long subclasse_id,
             String subclasse_nome

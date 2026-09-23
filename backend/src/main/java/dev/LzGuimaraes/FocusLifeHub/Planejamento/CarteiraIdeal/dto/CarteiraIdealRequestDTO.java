@@ -36,6 +36,16 @@ public record CarteiraIdealRequestDTO(
 
             Integer ordem,
 
+            /** Faixa (em pontos percentuais) em que a classe é considerada EQUILIBRADA. */
+            @DecimalMin(value = "0.0", message = "A tolerância não pode ser negativa")
+            @DecimalMax(value = "100.0", message = "A tolerância não pode passar de 100%")
+            BigDecimal tolerancia,
+
+            /** Teto de concentração (%). Acima dele, a classe não recebe novos aportes. */
+            @DecimalMin(value = "0.0", message = "O limite máximo não pode ser negativo")
+            @DecimalMax(value = "100.0", message = "O limite máximo não pode passar de 100%")
+            BigDecimal limite_maximo,
+
             @Size(max = 50, message = "Uma classe pode ter no máximo 50 subclasses")
             List<SubclasseIdealRequestDTO> subclasses
     ) {}
@@ -49,6 +59,14 @@ public record CarteiraIdealRequestDTO(
             @DecimalMin(value = "0.0", message = "O percentual ideal não pode ser negativo")
             @DecimalMax(value = "100.0", message = "O percentual ideal não pode passar de 100%")
             BigDecimal percentual_ideal,
+
+            @DecimalMin(value = "0.0", message = "A tolerância não pode ser negativa")
+            @DecimalMax(value = "100.0", message = "A tolerância não pode passar de 100%")
+            BigDecimal tolerancia,
+
+            @DecimalMin(value = "0.0", message = "O limite máximo não pode ser negativo")
+            @DecimalMax(value = "100.0", message = "O limite máximo não pode passar de 100%")
+            BigDecimal limite_maximo,
 
             Integer ordem
     ) {}
@@ -71,6 +89,19 @@ public record CarteiraIdealRequestDTO(
             @DecimalMin(value = "0", message = "A prioridade manual vai de 0 a 10")
             @DecimalMax(value = "10", message = "A prioridade manual vai de 0 a 10")
             Integer prioridade_manual,
+
+            /**
+             * Faixa (em pontos percentuais SOBRE o % ideal do ativo) que ainda é
+             * aceita como "no alvo" — e o teto do aporte do ativo.
+             */
+            @DecimalMin(value = "0.0", message = "A tolerância não pode ser negativa")
+            @DecimalMax(value = "100.0", message = "A tolerância não pode passar de 100%")
+            BigDecimal tolerancia,
+
+            /** Teto de concentração do ativo (%). Acima dele não há novo aporte. */
+            @DecimalMin(value = "0.0", message = "O limite máximo não pode ser negativo")
+            @DecimalMax(value = "100.0", message = "O limite máximo não pode passar de 100%")
+            BigDecimal limite_maximo,
 
             Integer ordem
     ) {}

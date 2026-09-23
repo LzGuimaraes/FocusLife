@@ -85,8 +85,35 @@ public class ScoreConfigService {
         if (dto.peso_prioridade() != null) {
             config.setPesoPrioridade(dto.peso_prioridade());
         }
+        if (dto.peso_momento() != null) {
+            config.setPesoMomento(dto.peso_momento());
+        }
+        if (dto.momento_faixa_1() != null) {
+            config.setMomentoFaixa1(dto.momento_faixa_1());
+        }
+        if (dto.momento_faixa_2() != null) {
+            config.setMomentoFaixa2(dto.momento_faixa_2());
+        }
+        if (dto.momento_faixa_3() != null) {
+            config.setMomentoFaixa3(dto.momento_faixa_3());
+        }
+        if (dto.momento_faixa_4() != null) {
+            config.setMomentoFaixa4(dto.momento_faixa_4());
+        }
+        if (dto.redistribuir() != null) {
+            config.setRedistribuir(dto.redistribuir());
+        }
         if (dto.estrategia_aporte() != null) {
             config.setEstrategiaAporte(dto.estrategia_aporte());
+        }
+
+        // As faixas do fator de momento precisam ser crescentes: fora de ordem o
+        // fator ficaria ambíguo (duas faixas cobrindo a mesma nota).
+        if (config.getMomentoFaixa1().compareTo(config.getMomentoFaixa2()) >= 0
+                || config.getMomentoFaixa2().compareTo(config.getMomentoFaixa3()) >= 0
+                || config.getMomentoFaixa3().compareTo(config.getMomentoFaixa4()) >= 0) {
+            throw new BusinessRuleException(
+                    "As faixas da nota de momento devem ser crescentes (ex.: 25, 50, 75, 90).");
         }
 
         // Sem nenhum peso não existe fórmula: o denominador seria zero.
@@ -115,9 +142,15 @@ public class ScoreConfigService {
                 config.getPesoDeficit(),
                 config.getPesoExcesso(),
                 config.getPesoPrioridade(),
+                config.getPesoMomento(),
                 // α efetivo: é 0 quando o ativo não tem Quality Score (termo sai da conta).
                 config.getPesoQuality(),
                 config.somaPesos(),
+                config.getMomentoFaixa1(),
+                config.getMomentoFaixa2(),
+                config.getMomentoFaixa3(),
+                config.getMomentoFaixa4(),
+                config.getRedistribuir(),
                 config.getEstrategiaAporte(),
                 personalizada,
                 catalogo(config));

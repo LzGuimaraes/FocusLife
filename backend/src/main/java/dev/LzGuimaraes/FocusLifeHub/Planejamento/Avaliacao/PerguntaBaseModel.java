@@ -49,6 +49,20 @@ public abstract class PerguntaBaseModel {
     @Column(name = "conta_no_score", nullable = false)
     private Boolean contaNoScore = true;
 
+    /**
+     * CRITÉRIO ELIMINATÓRIO: se esta pergunta for reprovada, o ativo entra em
+     * "NÃO APORTAR" — independentemente do déficit. O déficit continua
+     * existindo e sendo mostrado; o que muda é a elegibilidade para NOVOS
+     * aportes. A reprovação é a nota abaixo de `notaMinima` (ou nota zero,
+     * quando `notaMinima` não for definida).
+     */
+    @Column(nullable = false)
+    private Boolean bloqueadora = false;
+
+    /** Nota mínima para o critério bloqueador ser aprovado (null = qualquer nota > 0). */
+    @Column(name = "nota_minima", precision = 9, scale = 4)
+    private BigDecimal notaMinima;
+
     @Column(nullable = false)
     private Integer ordem = 0;
 }

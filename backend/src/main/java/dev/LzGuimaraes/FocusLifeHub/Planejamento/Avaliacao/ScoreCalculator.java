@@ -121,45 +121,53 @@ public class ScoreCalculator {
        CONTRIBUTION SCORE (Módulo 6) — prioridade de aporte
        ══════════════════════════════════════════════════════════════════ */
 
-    /** Pesos configurados pelo usuário (α, β, γ, δ). */
+    /** Pesos configurados pelo usuário (α, β, γ, δ, ε). */
     public record TermosContribution(
             BigDecimal quality,
             BigDecimal deficit,
             BigDecimal excesso,
-            BigDecimal prioridade
+            BigDecimal prioridade,
+            BigDecimal momento
     ) {}
 
     /**
      * Contribution Score (0–100) com os termos JÁ normalizados em 0..1:
      *
-     *      C = 100 × (α·Q̂ + β·D̂ − γ·Ê + δ·P̂) / (α + β + γ + δ)
+     *      C = 100 × (α·Q̂ + β·D̂ − γ·Ê + δ·P̂ + ε·M̂) / (α + β + γ + δ + ε)
      *
      * `qualityNormalizada` nula significa "ativo ainda sem avaliação": o termo
      * de qualidade sai da conta e o denominador é renormalizado (α deixa de
      * contar), para não punir o ativo por uma nota que não existe.
+     * `momentoNormalizado` é o FATOR de momento (0 a 1) do ativo.
      * O resultado é limitado ao intervalo [0, 100].
      */
     public BigDecimal contributionScore(Double qualityNormalizada,
                                         double deficitNormalizado,
                                         double excessoNormalizado,
                                         double prioridadeNormalizada,
+                                        Double momentoNormalizado,
                                         TermosContribution pesos) {
 
         BigDecimal pesoQuality = (qualityNormalizada != null) ? nz(pesos.quality()) : BigDecimal.ZERO;
         BigDecimal pesoDeficit = nz(pesos.deficit());
         BigDecimal pesoExcesso = nz(pesos.excesso());
         BigDecimal pesoPrioridade = nz(pesos.prioridade());
+        BigDecimal pesoMomento = (momentoNormalizado != null) ? nz(pesos.momento()) : BigDecimal.ZERO;
 
         BigDecimal numerador = BigDecimal.ZERO;
         if (qualityNormalizada != null) {
             numerador = numerador.add(pesoQuality.multiply(BigDecimal.valueOf(qualityNormalizada), MC), MC);
+        }
+        if (momentoNormalizado != null) {
+            numerador = numerador.add(pesoMomento.multiply(BigDecimal.valueOf(momentoNormalizado), MC), MC);
         }
         numerador = numerador
                 .add(pesoDeficit.multiply(BigDecimal.valueOf(deficitNormalizado), MC), MC)
                 .subtract(pesoExcesso.multiply(BigDecimal.valueOf(excessoNormalizado), MC), MC)
                 .add(pesoPrioridade.multiply(BigDecimal.valueOf(prioridadeNormalizada), MC), MC);
 
-        BigDecimal denominador = pesoQuality.add(pesoDeficit).add(pesoExcesso).add(pesoPrioridade);
+        BigDecimal denominador = pesoQuality.add(pesoDeficit).add(pesoExcesso)
+                .add(pesoPrioridade).add(pesoMomento);
         if (denominador.compareTo(BigDecimal.ZERO) == 0) {
             return BigDecimal.ZERO.setScale(ESCALA, RoundingMode.HALF_UP);
         }
@@ -172,6 +180,35 @@ public class ScoreCalculator {
             score = CEM;
         }
         return score.setScale(ESCALA, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * FATOR DE MOMENTO (0 a 1) a partir da nota de momento e das faixas
+     * configuradas: até faixa1 → 0 | até faixa2 → 0,25 | até faixa3 → 0,50 |
+     * até faixa4 → 0,75 | acima → 1,00.
+     *
+     * Nota ausente (ativo sem checklist de MOMENTO) devolve 1,00: o fator é
+     * NEUTRO, porque "sem avaliação" não é "momento ruim" (§22 do spec).
+     */
+    public BigDecimal fatorMomento(BigDecimal notaMomento,
+                                   BigDecimal faixa1, BigDecimal faixa2,
+                                   BigDecimal faixa3, BigDecimal faixa4) {
+        if (notaMomento == null) {
+            return BigDecimal.ONE.setScale(ESCALA, RoundingMode.HALF_UP);
+        }
+        BigDecimal fator;
+        if (notaMomento.compareTo(nz(faixa1)) <= 0) {
+            fator = BigDecimal.ZERO;
+        } else if (notaMomento.compareTo(nz(faixa2)) <= 0) {
+            fator = new BigDecimal("0.25");
+        } else if (notaMomento.compareTo(nz(faixa3)) <= 0) {
+            fator = new BigDecimal("0.50");
+        } else if (notaMomento.compareTo(nz(faixa4)) <= 0) {
+            fator = new BigDecimal("0.75");
+        } else {
+            fator = BigDecimal.ONE;
+        }
+        return fator.setScale(ESCALA, RoundingMode.HALF_UP);
     }
 
     /** Normaliza para 0..1 usando o maior valor do conjunto (0 se não houver). */

@@ -29,6 +29,10 @@ export interface PerguntaDraft {
   peso: string;
   nota_maxima: string;
   conta_no_score: boolean;
+  /** Critério eliminatório: reprovada, o ativo fica em NÃO APORTAR. */
+  bloqueadora: boolean;
+  /** Nota mínima para aprovar (vazio = qualquer nota > 0). */
+  nota_minima: string;
   regras: RegraDraft[];
 }
 
@@ -38,7 +42,8 @@ export const novaRegraDraft = (): RegraDraft => ({
 
 export const novaPerguntaDraft = (tipo: TipoPergunta = "SIM_NAO"): PerguntaDraft => ({
   key: novaChave(), titulo: "", descricao: "", tipo,
-  peso: "1", nota_maxima: "10", conta_no_score: !ehInformativo(tipo), regras: [],
+  peso: "1", nota_maxima: "10", conta_no_score: !ehInformativo(tipo),
+  bloqueadora: false, nota_minima: "", regras: [],
 });
 
 export const perguntaParaDraft = (p: Pergunta): PerguntaDraft => ({
@@ -49,6 +54,8 @@ export const perguntaParaDraft = (p: Pergunta): PerguntaDraft => ({
   peso: numParaTexto(p.peso),
   nota_maxima: numParaTexto(p.nota_maxima),
   conta_no_score: p.conta_no_score,
+  bloqueadora: Boolean(p.bloqueadora),
+  nota_minima: numParaTexto(p.nota_minima ?? null),
   regras: (p.regras ?? []).map(r => ({
     key: novaChave(),
     texto: r.texto ?? "",
@@ -87,6 +94,12 @@ export function draftParaPayload(d: PerguntaDraft, ordem: number): PerguntaPaylo
     peso: textoParaNum(d.peso) || 1,
     nota_maxima: textoParaNum(d.nota_maxima) || 10,
     conta_no_score: ehInformativo(tipo) ? false : d.conta_no_score,
+    // Critério eliminatório só faz sentido em pergunta que pontua: em pergunta
+    // informativa não existe "reprovar" (não há nota).
+    bloqueadora: !ehInformativo(tipo) && d.bloqueadora,
+    nota_minima: (!ehInformativo(tipo) && d.bloqueadora)
+      ? textoParaNumOuNull(d.nota_minima)
+      : null,
     ordem,
     regras,
   };
@@ -213,6 +226,28 @@ export default function PerguntaEditor({ pergunta, index, total, onChange, onRem
             style={{ width: "16px", height: "16px", accentColor: "#6366f1", cursor: informativo ? "not-allowed" : "pointer" }} />
           Entra no score
         </label>
+
+        {/* ── Critério eliminatório (§8): reprovado, o ativo fica em NÃO APORTAR ── */}
+        <label title="Se esta pergunta for reprovada, o ativo não recebe novos aportes — o déficit continua existindo e sendo mostrado."
+          style={{
+            display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", fontWeight: 600,
+            color: informativo ? "#94a3b8" : (pergunta.bloqueadora ? "#b91c1c" : "#374151"), paddingBottom: "9px",
+          }}>
+          <input type="checkbox" checked={!informativo && pergunta.bloqueadora} disabled={informativo}
+            onChange={e => patch({ bloqueadora: e.target.checked, nota_minima: e.target.checked ? pergunta.nota_minima : "" })}
+            style={{ width: "16px", height: "16px", accentColor: "#dc2626", cursor: informativo ? "not-allowed" : "pointer" }} />
+          🚫 Critério eliminatório
+        </label>
+
+        {!informativo && pergunta.bloqueadora && (
+          <div>
+            <label style={labelStyle}>Nota mínima</label>
+            <input value={pergunta.nota_minima} inputMode="decimal" aria-label="Nota mínima para aprovar"
+              placeholder="0"
+              onChange={e => patch({ nota_minima: apenasNumero(e.target.value) })}
+              style={{ ...controlStyle, width: "80px", textAlign: "right" }} />
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: "2px", marginLeft: "auto", paddingBottom: "4px" }}>
           <button type="button" onClick={() => onMove(-1)} disabled={index === 0}

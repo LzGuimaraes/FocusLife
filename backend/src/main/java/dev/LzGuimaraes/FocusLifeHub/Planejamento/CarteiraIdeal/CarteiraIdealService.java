@@ -140,6 +140,8 @@ public class CarteiraIdealService {
             CarteiraIdealClasseModel classe = new CarteiraIdealClasseModel();
             classe.setClasse(c.classe());
             classe.setPercentualIdeal(calculator.percentualNormalizado(c.percentual_ideal()));
+            classe.setTolerancia(toleranciaDe(c.tolerancia()));
+            classe.setLimiteMaximo(c.limite_maximo());
             classe.setOrdem(c.ordem() == null ? 0 : c.ordem());
             classe.setCarteiraInvestimento(carteira);
             classe = classeRepository.save(classe);
@@ -149,6 +151,8 @@ public class CarteiraIdealService {
                 CarteiraIdealSubclasseModel sub = new CarteiraIdealSubclasseModel();
                 sub.setNome(s.nome().trim());
                 sub.setPercentualIdeal(calculator.percentualNormalizado(s.percentual_ideal()));
+                sub.setTolerancia(toleranciaDe(s.tolerancia()));
+                sub.setLimiteMaximo(s.limite_maximo());
                 sub.setOrdem(s.ordem() == null ? ordemSub : s.ordem());
                 sub.setClasse(classe);
                 sub = subclasseRepository.save(sub);
@@ -173,6 +177,8 @@ public class CarteiraIdealService {
                 meta.setSubclasse(sub);
             }
             meta.setPercentualIdeal(calculator.percentualNormalizado(m.percentual_ideal()));
+            meta.setTolerancia(toleranciaDe(m.tolerancia()));
+            meta.setLimiteMaximo(m.limite_maximo());
             meta.setPrioridadeManual(m.prioridade_manual() == null ? 0 : m.prioridade_manual());
             meta.setOrdem(m.ordem() == null ? ordemMeta : m.ordem());
             metaAtivoRepository.save(meta);
@@ -268,7 +274,9 @@ public class CarteiraIdealService {
                         calculator.moeda(vSubIdeal),
                         calculator.moeda(vSubAtual),
                         calculator.moeda(Math.max(0d, vSubIdeal - vSubAtual)),
-                        calculator.moeda(Math.max(0d, vSubAtual - vSubIdeal))));
+                        calculator.moeda(Math.max(0d, vSubAtual - vSubIdeal)),
+                        sub.getTolerancia(),
+                        sub.getLimiteMaximo()));
             }
 
             List<ComparativoResponseDTO.AtivoComparativoDTO> ativosDtos = new ArrayList<>();
@@ -292,6 +300,8 @@ public class CarteiraIdealService {
                         calculator.moeda(vAtivoAtual),
                         calculator.moeda(Math.max(0d, vAtivoIdeal - vAtivoAtual)),
                         calculator.moeda(Math.max(0d, vAtivoAtual - vAtivoIdeal)),
+                        meta.getTolerancia(),
+                        meta.getLimiteMaximo(),
                         meta.getPrioridadeManual(),
                         true));
             }
@@ -314,6 +324,8 @@ public class CarteiraIdealService {
                         calculator.moeda(vAtivoAtual),
                         calculator.moeda(0d),
                         calculator.moeda(vAtivoAtual),
+                        null,
+                        null,
                         0,
                         false));
             }
@@ -327,6 +339,8 @@ public class CarteiraIdealService {
                     calculator.moeda(vAtual),
                     calculator.moeda(Math.max(0d, vIdeal - vAtual)),
                     calculator.moeda(Math.max(0d, vAtual - vIdeal)),
+                    (ideal != null) ? ideal.getTolerancia() : BigDecimal.ZERO,
+                    (ideal != null) ? ideal.getLimiteMaximo() : null,
                     subDtos,
                     ativosDtos));
         }
@@ -431,6 +445,8 @@ public class CarteiraIdealService {
                             calculator.percentual(acumulado.valor, total),
                             (meta != null) ? meta.getId() : null,
                             (meta != null) ? meta.getPercentualIdeal() : null,
+                            (meta != null) ? meta.getTolerancia() : null,
+                            (meta != null) ? meta.getLimiteMaximo() : null,
                             (meta != null) ? meta.getPrioridadeManual() : null,
                             (subclasseLinha != null) ? subclasseLinha.getId() : null,
                             (subclasseLinha != null) ? subclasseLinha.getNome() : null);
@@ -607,6 +623,14 @@ public class CarteiraIdealService {
         return percentualIdeal.doubleValue() / 100d * total;
     }
 
+    /** Tolerância nunca negativa (null vira 0 = sem faixa de equilíbrio extra). */
+    private BigDecimal toleranciaDe(BigDecimal tolerancia) {
+        if (tolerancia == null || tolerancia.signum() < 0) {
+            return BigDecimal.ZERO.setScale(PercentualCalculator.ESCALA_PERCENTUAL, RoundingMode.HALF_UP);
+        }
+        return calculator.percentualNormalizado(tolerancia);
+    }
+
     private String chaveSubclasse(CategoriaInvestimento classe, String nome) {
         return classe.name() + "|" + nome.trim().toLowerCase();
     }
@@ -627,10 +651,13 @@ public class CarteiraIdealService {
                         c.getId(),
                         c.getClasse(),
                         c.getPercentualIdeal(),
+                        c.getTolerancia(),
+                        c.getLimiteMaximo(),
                         c.getOrdem(),
                         porClasse.getOrDefault(c.getId(), List.of()).stream()
                                 .map(s -> new CarteiraIdealResponseDTO.SubclasseIdealResponseDTO(
-                                        s.getId(), s.getNome(), s.getPercentualIdeal(), s.getOrdem()))
+                                        s.getId(), s.getNome(), s.getPercentualIdeal(),
+                                        s.getTolerancia(), s.getLimiteMaximo(), s.getOrdem()))
                                 .toList()))
                 .toList();
     }
@@ -645,6 +672,8 @@ public class CarteiraIdealService {
                         (m.getSubclasse() != null) ? m.getSubclasse().getId() : null,
                         (m.getSubclasse() != null) ? m.getSubclasse().getNome() : null,
                         m.getPercentualIdeal(),
+                        m.getTolerancia(),
+                        m.getLimiteMaximo(),
                         m.getPrioridadeManual(),
                         m.getOrdem()))
                 .toList();

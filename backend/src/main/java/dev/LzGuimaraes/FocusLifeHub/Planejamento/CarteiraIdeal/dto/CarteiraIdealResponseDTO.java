@@ -22,6 +22,8 @@ public record CarteiraIdealResponseDTO(
             Long id,
             CategoriaInvestimento classe,
             BigDecimal percentual_ideal,
+            BigDecimal tolerancia,
+            BigDecimal limite_maximo,
             Integer ordem,
             List<SubclasseIdealResponseDTO> subclasses
     ) {}
@@ -30,6 +32,8 @@ public record CarteiraIdealResponseDTO(
             Long id,
             String nome,
             BigDecimal percentual_ideal,
+            BigDecimal tolerancia,
+            BigDecimal limite_maximo,
             Integer ordem
     ) {}
 
@@ -41,6 +45,8 @@ public record CarteiraIdealResponseDTO(
             Long subclasse_id,
             String subclasse_nome,
             BigDecimal percentual_ideal,
+            BigDecimal tolerancia,
+            BigDecimal limite_maximo,
             Integer prioridade_manual,
             Integer ordem
     ) {}

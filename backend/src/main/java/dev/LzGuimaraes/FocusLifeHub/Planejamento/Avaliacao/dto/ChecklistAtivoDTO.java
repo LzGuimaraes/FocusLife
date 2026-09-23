@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+import dev.LzGuimaraes.FocusLifeHub.Planejamento.Avaliacao.TipoChecklist;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -32,6 +33,9 @@ public final class ChecklistAtivoDTO {
             /** Quando informado, o checklist nasce com as perguntas do modelo (snapshot). */
             Long modelo_id,
 
+            /** QUALIDADE (padrão) ou MOMENTO — eixos independentes do motor de decisão. */
+            TipoChecklist tipo,
+
             @DecimalMin(value = "0.0001", message = "O peso deve ser maior que zero")
             BigDecimal peso,
 
@@ -45,6 +49,8 @@ public final class ChecklistAtivoDTO {
     public record UpdateRequest(
             @Size(max = 120, message = "O nome deve ter no máximo 120 caracteres")
             String nome,
+
+            TipoChecklist tipo,
 
             @DecimalMin(value = "0.0001", message = "O peso deve ser maior que zero")
             BigDecimal peso,
@@ -61,6 +67,7 @@ public final class ChecklistAtivoDTO {
             String ticker,
             String nome,
             Long modelo_origem_id,
+            TipoChecklist tipo,
             BigDecimal peso,
             Integer ordem,
             Boolean ativa,
@@ -108,6 +115,19 @@ public final class ChecklistAtivoDTO {
             int total_respondidas,
 
             /** Quality Score do ativo: média dos checklists ponderada por `peso`. */
-            BigDecimal quality_score
+            BigDecimal quality_score,
+
+            /**
+             * Nota de MOMENTO (checklists do tipo MOMENTO), na mesma escala 0–100.
+             * null = sem avaliação de momento (o fator não é aplicado, e o ativo
+             * NÃO é tratado como ruim).
+             */
+            BigDecimal momento_score,
+
+            /**
+             * Critérios eliminatórios reprovados (texto legível). Vazio = ativo
+             * elegível para aporte. Não vazio = NÃO APORTAR, mesmo com déficit.
+             */
+            List<String> bloqueios
     ) {}
 }

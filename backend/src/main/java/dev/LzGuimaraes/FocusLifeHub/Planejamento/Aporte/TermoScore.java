@@ -6,9 +6,12 @@ import java.math.BigDecimal;
  * Termos do Contribution Score (Módulo 6).
  *
  * Os termos são FIXOS de propósito: a fórmula é sempre
- * {@code α·Qualidade + β·Déficit − γ·Excesso + δ·Prioridade}, e o que o
- * usuário configura são os PESOS (α, β, γ, δ). Assim a fórmula fica
+ * {@code α·Qualidade + β·Déficit − γ·Excesso + δ·Prioridade + ε·Momento}, e o
+ * que o usuário configura são os PESOS (α, β, γ, δ, ε). Assim a fórmula fica
  * auditável e explicável — sem avaliação de expressão/script arbitrário.
+ *
+ * O termo MOMENTO é sempre multiplicado pelo FATOR DE MOMENTO do ativo (0 a 1),
+ * derivado da nota de momento por faixas configuráveis.
  *
  * "Outros fatores futuros" entram como novos termos desta enum + um peso
  * novo na configuração.
@@ -29,7 +32,12 @@ public enum TermoScore {
 
     PRIORIDADE("Prioridade manual",
             "A prioridade de 0 a 10 que você definiu na meta do ativo (0 = desempate neutro).",
-            new BigDecimal("1"));
+            new BigDecimal("1")),
+
+    MOMENTO("Momento / valuation",
+            "Nota dos checklists de MOMENTO (é hora de aportar?). Entra como FATOR 0 a 1: 0 bloqueia, 1 prioriza. "
+                    + "Não altera a qualidade do ativo.",
+            new BigDecimal("3"));
 
     private final String label;
     private final String descricao;

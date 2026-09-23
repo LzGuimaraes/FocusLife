@@ -46,6 +46,11 @@ export interface MetaDraft {
   subclasse_id: number | null;
   subclasse_nome_posicao: string | null;
 
+  /** Tolerância (p.p. sobre o % ideal) — dentro dela o ativo conta como no alvo. */
+  tolerancia: string;
+  /** Teto de concentração do ativo (%). */
+  limite_maximo: string;
+
   /* ── Situação atual (informativo, vem das posições) ── */
   percentual_atual: number | null;
   valor_atual: number | null;
@@ -68,6 +73,8 @@ export function novaMetaPlanejada(classe: CategoriaInvestimento): MetaDraft {
     sugestao_catalogo_nome: null,
     subclasse_id: null,
     subclasse_nome_posicao: null,
+    tolerancia: "",
+    limite_maximo: "",
     percentual_atual: null,
     valor_atual: null,
   };
@@ -160,6 +167,8 @@ export default function MetasEditor({
                   <th style={{ ...th, textAlign: "right" }}>% ideal</th>
                   <th style={{ ...th, textAlign: "right" }}>Valor ideal</th>
                   <th style={{ ...th, textAlign: "center" }}>Prioridade</th>
+                  <th style={{ ...th, textAlign: "right" }}>±</th>
+                  <th style={{ ...th, textAlign: "right" }}>máx %</th>
                   <th style={{ ...th, textAlign: "left" }}>Subclasse</th>
                 </tr>
               </thead>
@@ -208,6 +217,20 @@ export default function MetasEditor({
                           onChange={e => atualizar(m.key, { prioridade_manual: e.target.value.replace(/[^0-9]/g, "") })}
                           title="0 a 10 — desempata a ordem dos aportes"
                           style={{ ...controlStyle, width: "60px", textAlign: "right", opacity: m.incluir ? 1 : 0.5 }} />
+                      </td>
+                      <td style={{ ...td, textAlign: "right" }}>
+                        <input value={m.tolerancia} disabled={!m.incluir} inputMode="decimal" placeholder="0"
+                          aria-label={`Tolerância de ${m.ticker}`}
+                          title="Tolerância em pontos percentuais: dentro dela o ativo conta como no alvo — e é o que dá espaço ao aporte quando a meta já foi atingida."
+                          onChange={e => atualizar(m.key, { tolerancia: apenasNumero(e.target.value) })}
+                          style={{ ...controlStyle, width: "58px", textAlign: "right", fontSize: "12px", opacity: m.incluir ? 1 : 0.5 }} />
+                      </td>
+                      <td style={{ ...td, textAlign: "right" }}>
+                        <input value={m.limite_maximo} disabled={!m.incluir} inputMode="decimal" placeholder="—"
+                          aria-label={`Limite máximo de ${m.ticker}`}
+                          title="Limite máximo de concentração (%): acima dele o ativo não recebe novos aportes."
+                          onChange={e => atualizar(m.key, { limite_maximo: apenasNumero(e.target.value) })}
+                          style={{ ...controlStyle, width: "58px", textAlign: "right", fontSize: "12px", opacity: m.incluir ? 1 : 0.5 }} />
                       </td>
                       <td style={td}>
                         <select value={m.subclasse_nome} disabled={!m.incluir || subs.length === 0}

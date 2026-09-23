@@ -70,6 +70,14 @@ public final class PerguntaDTO {
 
             Boolean obrigatoria,
 
+            /**
+             * Critério eliminatório: reprovada, o ativo fica em NÃO APORTAR.
+             * A reprovação é nota < `nota_minima` (ou nota zero quando não definida).
+             */
+            Boolean bloqueadora,
+
+            BigDecimal nota_minima,
+
             Integer ordem,
 
             @Valid
@@ -85,6 +93,8 @@ public final class PerguntaDTO {
             BigDecimal nota_maxima,
             Boolean conta_no_score,
             Boolean obrigatoria,
+            Boolean bloqueadora,
+            BigDecimal nota_minima,
             Integer ordem,
             List<RegraResponse> regras,
 

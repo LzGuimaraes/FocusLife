@@ -14,6 +14,8 @@ import dev.LzGuimaraes.FocusLifeHub.User.UserModel;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -58,6 +60,15 @@ public class ChecklistAtivoModel {
     /** Peso deste checklist no Quality Score do ativo (Módulo 5). */
     @Column(nullable = false, precision = 9, scale = 4)
     private BigDecimal peso = BigDecimal.ONE;
+
+    /**
+     * QUALIDADE ou MOMENTO (snapshot do modelo de origem). Os dois eixos são
+     * consolidados separadamente em `resumoPorAtivo`: qualidade → Quality Score;
+     * momento → fator de prioridade de aporte.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private TipoChecklist tipo = TipoChecklist.QUALIDADE;
 
     @Column(nullable = false)
     private Integer ordem = 0;

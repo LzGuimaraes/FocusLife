@@ -50,6 +50,33 @@ public class ScoreConfigModel {
     @Column(name = "peso_prioridade", nullable = false, precision = 9, scale = 4)
     private BigDecimal pesoPrioridade = TermoScore.PRIORIDADE.getPesoPadrao();
 
+    /** Peso do termo MOMENTO na fórmula (0 desliga o termo). */
+    @Column(name = "peso_momento", nullable = false, precision = 9, scale = 4)
+    private BigDecimal pesoMomento = TermoScore.MOMENTO.getPesoPadrao();
+
+    /* ── Faixas da NOTA DE MOMENTO → FATOR de aporte (0 a 1) ──
+       até faixa1 → 0 | até faixa2 → 0,25 | até faixa3 → 0,50 | até faixa4 → 0,75
+       acima da faixa4 → 1,00. Valores configuráveis pelo usuário. */
+
+    @Column(name = "momento_faixa_1", nullable = false, precision = 9, scale = 4)
+    private BigDecimal momentoFaixa1 = new BigDecimal("25");
+
+    @Column(name = "momento_faixa_2", nullable = false, precision = 9, scale = 4)
+    private BigDecimal momentoFaixa2 = new BigDecimal("50");
+
+    @Column(name = "momento_faixa_3", nullable = false, precision = 9, scale = 4)
+    private BigDecimal momentoFaixa3 = new BigDecimal("75");
+
+    @Column(name = "momento_faixa_4", nullable = false, precision = 9, scale = 4)
+    private BigDecimal momentoFaixa4 = new BigDecimal("90");
+
+    /**
+     * true = o valor que não encontrou destino elegível procura outra classe com
+     * déficit; false = fica não alocado (sempre com o motivo explicado na tela).
+     */
+    @Column(nullable = false)
+    private Boolean redistribuir = true;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "estrategia_aporte", nullable = false, length = 30)
     private EstrategiaAporte estrategiaAporte = EstrategiaAporte.padrao();
@@ -73,6 +100,7 @@ public class ScoreConfigModel {
             case DEFICIT -> pesoDeficit;
             case EXCESSO -> pesoExcesso;
             case PRIORIDADE -> pesoPrioridade;
+            case MOMENTO -> pesoMomento;
         };
     }
 
@@ -82,11 +110,12 @@ public class ScoreConfigModel {
             case DEFICIT -> setPesoDeficit(valor);
             case EXCESSO -> setPesoExcesso(valor);
             case PRIORIDADE -> setPesoPrioridade(valor);
+            case MOMENTO -> setPesoMomento(valor);
         }
     }
 
     /** Soma dos pesos — denominador da fórmula. */
     public BigDecimal somaPesos() {
-        return pesoQuality.add(pesoDeficit).add(pesoExcesso).add(pesoPrioridade);
+        return pesoQuality.add(pesoDeficit).add(pesoExcesso).add(pesoPrioridade).add(pesoMomento);
     }
 }

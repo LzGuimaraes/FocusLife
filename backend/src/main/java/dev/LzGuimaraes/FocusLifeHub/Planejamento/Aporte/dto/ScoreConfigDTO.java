@@ -38,6 +38,17 @@ public final class ScoreConfigDTO {
             @DecimalMin(value = "0.0", message = "O peso da prioridade não pode ser negativo")
             BigDecimal peso_prioridade,
 
+            @DecimalMin(value = "0.0", message = "O peso do momento não pode ser negativo")
+            BigDecimal peso_momento,
+
+            /** Faixas da nota de momento → fator (0 / 0,25 / 0,50 / 0,75 / 1,00). */
+            BigDecimal momento_faixa_1,
+            BigDecimal momento_faixa_2,
+            BigDecimal momento_faixa_3,
+            BigDecimal momento_faixa_4,
+
+            Boolean redistribuir,
+
             EstrategiaAporte estrategia_aporte
     ) {}
 
@@ -47,8 +58,14 @@ public final class ScoreConfigDTO {
             BigDecimal peso_deficit,
             BigDecimal peso_excesso,
             BigDecimal peso_prioridade,
+            BigDecimal peso_momento,
             BigDecimal peso_quality_efetivo,
             BigDecimal soma_pesos,
+            BigDecimal momento_faixa_1,
+            BigDecimal momento_faixa_2,
+            BigDecimal momento_faixa_3,
+            BigDecimal momento_faixa_4,
+            Boolean redistribuir,
             EstrategiaAporte estrategia_aporte,
             /** false = o usuário nunca personalizou (os pesos são os padrões). */
             Boolean personalizada,

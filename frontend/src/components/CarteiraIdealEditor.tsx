@@ -19,23 +19,28 @@ export interface SubclasseDraft {
   id?: number | null;
   nome: string;
   percentual_ideal: string;
+  /** Faixa (p.p. da classe) de equilíbrio e teto do aporte. */
+  tolerancia: string;
+  limite_maximo: string;
 }
 
 export interface ClasseDraft {
   key: string;
   classe: CategoriaInvestimento;
   percentual_ideal: string;
+  tolerancia: string;
+  limite_maximo: string;
   subclasses: SubclasseDraft[];
 }
 
 export { novaChave };
 
 export function novaClasseDraft(classe: CategoriaInvestimento): ClasseDraft {
-  return { key: novaChave(), classe, percentual_ideal: "", subclasses: [] };
+  return { key: novaChave(), classe, percentual_ideal: "", tolerancia: "", limite_maximo: "", subclasses: [] };
 }
 
 export function novaSubclasseDraft(): SubclasseDraft {
-  return { key: novaChave(), nome: "", percentual_ideal: "" };
+  return { key: novaChave(), nome: "", percentual_ideal: "", tolerancia: "", limite_maximo: "" };
 }
 
 interface Props {
@@ -190,6 +195,19 @@ export default function CarteiraIdealEditor({ classes, onChange }: Props) {
                     style={{ ...controlStyle, width: "90px", textAlign: "right" }} />
                   <span style={{ fontSize: "13px", color: "#64748b" }}>%</span>
                 </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                  title="Tolerância (p.p.): dentro desta faixa a classe conta como EQUILIBRADA — e é o que dá espaço ao aporte quando a meta já foi atingida. Limite máximo: acima dele a classe não recebe novos aportes.">
+                  <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>±</span>
+                  <input value={c.tolerancia} inputMode="decimal" placeholder="0"
+                    aria-label={`Tolerância de ${info.label} em pontos percentuais`}
+                    onChange={e => atualizarClasse(c.key, { tolerancia: apenasNumero(e.target.value) })}
+                    style={{ ...controlStyle, width: "62px", textAlign: "right", fontSize: "12px" }} />
+                  <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>máx</span>
+                  <input value={c.limite_maximo} inputMode="decimal" placeholder="—"
+                    aria-label={`Limite máximo de ${info.label} em percentual`}
+                    onChange={e => atualizarClasse(c.key, { limite_maximo: apenasNumero(e.target.value) })}
+                    style={{ ...controlStyle, width: "62px", textAlign: "right", fontSize: "12px" }} />
+                </div>
                 <div style={{ display: "flex", gap: "2px", marginLeft: "auto" }}>
                   <button type="button" onClick={() => moverClasse(index, -1)} disabled={index === 0}
                     aria-label={`Mover ${info.label} para cima`} style={iconBtn(index === 0)}>↑</button>
@@ -213,6 +231,32 @@ export default function CarteiraIdealEditor({ classes, onChange }: Props) {
                         onChange={e => atualizarSubclasse(c.key, s.key, { percentual_ideal: apenasNumero(e.target.value) })}
                         style={{ ...controlStyle, width: "90px", textAlign: "right" }} />
                       <span style={{ fontSize: "13px", color: "#64748b" }}>%</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                      title="Tolerância (p.p. da classe) e limite máximo de concentração desta subclasse.">
+                      <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>±</span>
+                      <input value={s.tolerancia} inputMode="decimal" placeholder="0"
+                        aria-label={`Tolerância da subclasse ${s.nome || "sem nome"}`}
+                        onChange={e => atualizarSubclasse(c.key, s.key, { tolerancia: apenasNumero(e.target.value) })}
+                        style={{ ...controlStyle, width: "58px", textAlign: "right", fontSize: "12px" }} />
+                      <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>máx</span>
+                      <input value={s.limite_maximo} inputMode="decimal" placeholder="—"
+                        aria-label={`Limite máximo da subclasse ${s.nome || "sem nome"}`}
+                        onChange={e => atualizarSubclasse(c.key, s.key, { limite_maximo: apenasNumero(e.target.value) })}
+                        style={{ ...controlStyle, width: "58px", textAlign: "right", fontSize: "12px" }} />
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                      title="Tolerância (p.p. da classe) e limite máximo de concentração desta subclasse.">
+                      <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>±</span>
+                      <input value={s.tolerancia} inputMode="decimal" placeholder="0"
+                        aria-label={`Tolerância da subclasse ${s.nome || "sem nome"}`}
+                        onChange={e => atualizarSubclasse(c.key, s.key, { tolerancia: apenasNumero(e.target.value) })}
+                        style={{ ...controlStyle, width: "58px", textAlign: "right", fontSize: "12px" }} />
+                      <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>máx</span>
+                      <input value={s.limite_maximo} inputMode="decimal" placeholder="—"
+                        aria-label={`Limite máximo da subclasse ${s.nome || "sem nome"}`}
+                        onChange={e => atualizarSubclasse(c.key, s.key, { limite_maximo: apenasNumero(e.target.value) })}
+                        style={{ ...controlStyle, width: "58px", textAlign: "right", fontSize: "12px" }} />
                     </div>
                     <button type="button" onClick={() => removerSubclasse(c.key, s.key)}
                       aria-label="Remover subclasse" style={{ ...iconBtn(false), color: "#ef4444", marginLeft: "auto" }}>🗑</button>

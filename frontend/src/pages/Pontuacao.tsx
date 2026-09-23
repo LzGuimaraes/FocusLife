@@ -28,13 +28,16 @@ interface PesosForm {
   DEFICIT: string;
   EXCESSO: string;
   PRIORIDADE: string;
+  MOMENTO: string;
 }
 
 export default function Pontuacao() {
   const navigate = useNavigate();
   const [config, setConfig] = useState<ScoreConfig | null>(null);
-  const [pesos, setPesos] = useState<PesosForm>({ QUALITY: "3", DEFICIT: "4", EXCESSO: "2", PRIORIDADE: "1" });
+  const [pesos, setPesos] = useState<PesosForm>({ QUALITY: "3", DEFICIT: "4", EXCESSO: "2", PRIORIDADE: "1", MOMENTO: "3" });
   const [estrategia, setEstrategia] = useState<ScoreConfig["estrategia_aporte"]>("DEFICIT_PROPORCIONAL");
+  const [faixas, setFaixas] = useState({ f1: "25", f2: "50", f3: "75", f4: "90" });
+  const [redistribuir, setRedistribuir] = useState(true);
   const [carteiras, setCarteiras] = useState<CarteiraResumo[]>([]);
   const [carteiraId, setCarteiraId] = useState<number | null>(null);
   const [valorAporte, setValorAporte] = useState("");
@@ -64,7 +67,15 @@ export default function Pontuacao() {
       DEFICIT: String(cfg.peso_deficit),
       EXCESSO: String(cfg.peso_excesso),
       PRIORIDADE: String(cfg.peso_prioridade),
+      MOMENTO: String(cfg.peso_momento),
     });
+    setFaixas({
+      f1: String(cfg.momento_faixa_1),
+      f2: String(cfg.momento_faixa_2),
+      f3: String(cfg.momento_faixa_3),
+      f4: String(cfg.momento_faixa_4),
+    });
+    setRedistribuir(cfg.redistribuir);
     setEstrategia(cfg.estrategia_aporte);
   };
 
@@ -96,10 +107,23 @@ export default function Pontuacao() {
       peso_deficit: textoParaNum(pesos.DEFICIT),
       peso_excesso: textoParaNum(pesos.EXCESSO),
       peso_prioridade: textoParaNum(pesos.PRIORIDADE),
+      peso_momento: textoParaNum(pesos.MOMENTO),
+      momento_faixa_1: textoParaNum(faixas.f1),
+      momento_faixa_2: textoParaNum(faixas.f2),
+      momento_faixa_3: textoParaNum(faixas.f3),
+      momento_faixa_4: textoParaNum(faixas.f4),
+      redistribuir,
       estrategia_aporte: estrategia,
     };
-    if (payload.peso_quality + payload.peso_deficit + payload.peso_excesso + payload.peso_prioridade <= 0) {
+    if (payload.peso_quality + payload.peso_deficit + payload.peso_excesso
+        + payload.peso_prioridade + payload.peso_momento <= 0) {
       toast.error("Informe ao menos um peso maior que zero.");
+      return;
+    }
+    if (!(payload.momento_faixa_1 < payload.momento_faixa_2
+          && payload.momento_faixa_2 < payload.momento_faixa_3
+          && payload.momento_faixa_3 < payload.momento_faixa_4)) {
+      toast.error("As faixas da nota de momento devem ser crescentes (ex.: 25, 50, 75, 90).");
       return;
     }
     setSalvando(true);
@@ -183,6 +207,41 @@ export default function Pontuacao() {
               {ESTRATEGIAS_APORTE.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
             </Select>
           </div>
+
+          {/* ── Fator de momento: nota 0–100 → fator 0 a 1 (não altera a qualidade) ── */}
+          <div style={{ marginTop: "16px", borderTop: "1px solid #f1f5f9", paddingTop: "14px" }}>
+            <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", margin: "0 0 4px" }}>
+              Fator de momento (checklists de Momento)
+            </h4>
+            <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 10px" }}>
+              A nota de momento vira um fator de <strong>0 a 1</strong> aplicado só à prioridade de aporte.
+              Fator 0 = não aportar; 1 = prioridade cheia. A qualidade do ativo não muda.
+              Sem checklist de momento, o fator fica neutro (1).
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))", gap: "10px" }}>
+              <NumberInput label="Até (fator 0)" value={faixas.f1}
+                onChange={v => setFaixas({ ...faixas, f1: apenasNumero(v) })} placeholder="25" />
+              <NumberInput label="Até (fator 0,25)" value={faixas.f2}
+                onChange={v => setFaixas({ ...faixas, f2: apenasNumero(v) })} placeholder="50" />
+              <NumberInput label="Até (fator 0,50)" value={faixas.f3}
+                onChange={v => setFaixas({ ...faixas, f3: apenasNumero(v) })} placeholder="75" />
+              <NumberInput label="Até (fator 0,75)" value={faixas.f4}
+                onChange={v => setFaixas({ ...faixas, f4: apenasNumero(v) })} placeholder="90" />
+            </div>
+            <p style={{ fontSize: "11px", color: "#94a3b8", margin: "6px 0 0" }}>
+              Acima de {faixas.f4 || "90"} → fator 1,00.
+            </p>
+          </div>
+
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: 600, color: "#374151", marginTop: "14px" }}>
+            <input type="checkbox" checked={redistribuir} onChange={e => setRedistribuir(e.target.checked)}
+              style={{ width: "18px", height: "18px", accentColor: "#6366f1" }} />
+            Redistribuir o valor que não achou destino
+          </label>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: "4px 0 0" }}>
+            Ligado: o que não coube numa classe (todos os ativos no alvo/bloqueados) procura outra classe com déficit.
+            Desligado: fica <strong>não alocado</strong>, sempre com o motivo explicado.
+          </p>
 
           <div style={{ display: "flex", gap: "10px", marginTop: "16px", flexWrap: "wrap" }}>
             <Button onClick={salvar} loading={salvando}>Salvar pesos</Button>

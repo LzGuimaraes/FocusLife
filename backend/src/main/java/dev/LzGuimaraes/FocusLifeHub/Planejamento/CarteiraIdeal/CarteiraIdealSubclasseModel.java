@@ -37,6 +37,14 @@ public class CarteiraIdealSubclasseModel {
     @Column(name = "percentual_ideal", nullable = false, precision = 9, scale = 4)
     private BigDecimal percentualIdeal = BigDecimal.ZERO;
 
+    /** Tolerância (pontos percentuais da CLASSE) de equilíbrio da subclasse. */
+    @Column(nullable = false, precision = 9, scale = 4)
+    private BigDecimal tolerancia = BigDecimal.ZERO;
+
+    /** Teto de concentração (% do patrimônio). Acima dele, sem novos aportes. */
+    @Column(name = "limite_maximo", precision = 9, scale = 4)
+    private BigDecimal limiteMaximo;
+
     @Column(nullable = false)
     private Integer ordem = 0;
 

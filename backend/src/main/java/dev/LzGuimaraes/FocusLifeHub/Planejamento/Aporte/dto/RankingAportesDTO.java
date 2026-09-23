@@ -24,6 +24,43 @@ public final class RankingAportesDTO {
 
     private RankingAportesDTO() {}
 
+    /**
+     * Estado do ativo no motor de decisão (§9 do spec).
+     *
+     * SEM_AVALIACAO NÃO é "ruim": significa que falta avaliação configurada. O
+     * termo de qualidade simplesmente sai da conta (o peso é renormalizado).
+     */
+    public enum EstadoAtivo {
+        APROVADO("Aprovado", "Pode receber aporte normalmente."),
+        RESTRITO("Restrito", "Aporte reduzido pelo momento/valuation."),
+        NAO_APORTAR("Não aportar", "Bloqueado por critério eliminatório ou limite de concentração."),
+        SEM_AVALIACAO("Sem avaliação", "Sem checklist de qualidade/momento respondido.");
+
+        private final String label;
+        private final String descricao;
+
+        EstadoAtivo(String label, String descricao) {
+            this.label = label;
+            this.descricao = descricao;
+        }
+
+        public String getLabel() {
+            return label;
+        }
+
+        public String getDescricao() {
+            return descricao;
+        }
+    }
+
+    /** Status de equilíbrio de um nível (classe/subclasse) frente à tolerância (§18). */
+    public enum StatusNivel {
+        ABAIXO, EQUILIBRADO, ACIMA, SEM_ALVO
+    }
+
+    /** Alerta do motor (§31). O tipo permite filtrar na tela. */
+    public record Alerta(String tipo, String mensagem) {}
+
     public record Item(
             int posicao,
             UUID ativo_cadastro_id,
@@ -40,6 +77,20 @@ public final class RankingAportesDTO {
             boolean qualidade_avaliada,
             BigDecimal peso_quality_aplicado,
 
+            /* ── Momento / valuation (§10, §11, §12) ── */
+            BigDecimal momento_score,
+            boolean momento_avaliado,
+            /** Fator 0 a 1 aplicado à prioridade de aporte (1 = neutro). */
+            BigDecimal fator_momento,
+
+            /* ── Elegibilidade (§8, §9, §19) ── */
+            EstadoAtivo estado,
+            /** Por que está bloqueado/reduzido (vazio quando aprovado). */
+            List<String> bloqueios,
+            BigDecimal limite_maximo,
+            /** true = atingiu o limite de concentração (não recebe mais). */
+            boolean limite_atingido,
+
             /* ── Prioridade de aporte (Módulo 6) ── */
             BigDecimal contribution_score,
 
@@ -50,10 +101,16 @@ public final class RankingAportesDTO {
             BigDecimal valor_ideal,
             BigDecimal deficit,
             BigDecimal excesso,
+            BigDecimal tolerancia,
+            /** Quanto o ativo PODE receber (déficit + tolerância, respeitando o limite). */
+            BigDecimal teto,
             Integer prioridade_manual,
 
-            /** Quanto deste aporte este ativo receberia (quando um valor é informado). */
-            BigDecimal sugestao_aporte
+            /** Quanto deste aporte o ativo recebeu (null quando nenhum valor foi informado). */
+            BigDecimal sugestao_aporte,
+
+            /** Explicação objetiva da decisão (§29). */
+            String motivo
     ) {}
 
     /**
@@ -71,8 +128,13 @@ public final class RankingAportesDTO {
             BigDecimal valor_ideal,
             BigDecimal deficit,
             BigDecimal excesso,
+            BigDecimal tolerancia,
+            BigDecimal limite_maximo,
+            StatusNivel status,
             /** Quanto deste aporte a classe recebe (0 = já está no alvo ou acima). */
             BigDecimal sugerido,
+            /** Por que a classe não recebeu (quando for o caso). */
+            String motivo,
             List<SubclasseAporteDTO> subclasses
     ) {}
 
@@ -85,7 +147,11 @@ public final class RankingAportesDTO {
             BigDecimal valor_ideal,
             BigDecimal deficit,
             BigDecimal excesso,
-            BigDecimal sugerido
+            BigDecimal tolerancia,
+            BigDecimal limite_maximo,
+            StatusNivel status,
+            BigDecimal sugerido,
+            String motivo
     ) {}
 
     public record Response(
@@ -95,9 +161,13 @@ public final class RankingAportesDTO {
             BigDecimal valor_aporte,
             BigDecimal valor_alocado,
             BigDecimal valor_nao_alocado,
+            /** Explicação legível do valor não alocado (§32). */
+            String nao_alocado_explicacao,
+            Boolean redistribuir,
             EstrategiaAporte estrategia_aporte,
             List<ScoreConfigDTO.Termo> termos,
             List<String> avisos,
+            List<Alerta> alertas,
             List<ClasseAporteDTO> classes,
             List<Item> itens
     ) {}

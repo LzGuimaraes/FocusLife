@@ -1,8 +1,9 @@
-import type { RankingAportes } from "../types/aporte";
+import type { RankingAportes, EstadoAtivo, StatusNivel } from "../types/aporte";
 import { ESTRATEGIAS_APORTE } from "../types/aporte";
 import ScoreBadge from "./ScoreBadge";
 import { catInfo, fmtMoeda, fmtPercentual } from "../utils/percentual";
 import { fmtScore, scoreBg, scoreColor } from "../utils/avaliacao";
+import { miniLabel } from "./FormStyles";
 /* ══════════════════════════════════════════════════════════════════════
    Ranking de prioridade de aporte (Módulos 6 e 9).
 
@@ -43,9 +44,25 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
                 <> · não alocado: <strong style={{ color: "#b45309" }}>{fmtMoeda(ranking.valor_nao_alocado, moeda)}</strong></>
               )}
             </div>
+            {ranking.valor_nao_alocado != null && ranking.valor_nao_alocado > 0 && ranking.nao_alocado_explicacao && (
+              <div style={{ fontSize: "11px", color: "#b45309", maxWidth: "420px", marginTop: "4px" }}>
+                {ranking.nao_alocado_explicacao}
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {ranking.alertas.length > 0 && (
+        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "10px 14px", marginBottom: "12px" }}>
+          <p style={{ ...miniLabel, marginBottom: "5px" }}>Alertas do motor de decisão</p>
+          {ranking.alertas.map((a, i) => (
+            <p key={i} style={{ fontSize: "12px", color: alertaCor(a.tipo), margin: i === 0 ? 0 : "3px 0 0" }}>
+              {alertaIcone(a.tipo)} {a.mensagem}
+            </p>
+          ))}
+        </div>
+      )}
 
       {avisos.length > 0 && (
         <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "10px", padding: "10px 14px", marginBottom: "14px" }}>
@@ -65,11 +82,11 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
       ) : (
         <>
           <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: comSugestao ? "1020px" : "900px", fontSize: "13px" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: comSugestao ? "1180px" : "1040px", fontSize: "13px" }}>
             <thead>
               <tr style={{ background: "#f8fafc" }}>
-                {["#", "Ativo", "Classe", "Quality", "Contribution", "Atual", "Ideal", "Déficit", "Excesso", "Prior."]
-                  .map(h => <th key={h} style={{ ...th, textAlign: ["#", "Ativo", "Classe"].includes(h) ? "left" : "right" }}>{h}</th>)}
+                {["#", "Ativo", "Classe", "Quality", "Momento", "Estado", "Contribution", "Atual", "Ideal", "Déficit", "Teto", "Prior."]
+                  .map(h => <th key={h} style={{ ...th, textAlign: ["#", "Ativo", "Classe", "Estado"].includes(h) ? "left" : "right" }}>{h}</th>)}
                 {comSugestao && <th style={{ ...th, textAlign: "right" }}>Sugestão</th>}
               </tr>
             </thead>
@@ -102,6 +119,27 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
                             style={naoAvaliado}>sem avaliação</span>}
                     </td>
                     <td style={{ ...td, textAlign: "right" }}>
+                      {i.momento_avaliado ? (
+                        <span title={`Fator de momento aplicado: ${i.fator_momento}`}
+                          style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-end" }}>
+                          <ScoreBadge score={i.momento_score} size="sm" />
+                          <span style={{ fontSize: "10px", color: i.fator_momento <= 0 ? "#b91c1c" : i.fator_momento < 1 ? "#b45309" : "#047857" }}>
+                            fator {i.fator_momento}
+                          </span>
+                        </span>
+                      ) : (
+                        <span title="Sem checklist de momento/valuation: o fator fica NEUTRO (1) — não é penalidade"
+                          style={naoAvaliado}>sem momento</span>
+                      )}
+                    </td>
+                    <td style={{ ...td }}>
+                      <span title={i.bloqueios.length > 0 ? i.bloqueios.join("; ") : i.motivo ?? ""}
+                        style={{ fontSize: "11px", fontWeight: 700, padding: "2px 9px", borderRadius: "9999px", whiteSpace: "nowrap",
+                          color: estadoCor(i.estado), background: estadoBg(i.estado) }}>
+                        {estadoLabel(i.estado)}
+                      </span>
+                    </td>
+                    <td style={{ ...td, textAlign: "right" }}>
                       <span style={{
                         display: "inline-flex", alignItems: "center", gap: "6px", justifyContent: "flex-end",
                         padding: "2px 10px", borderRadius: "9999px", fontWeight: 700, fontSize: "12px",
@@ -117,15 +155,17 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
                     <td style={{ ...td, textAlign: "right", fontWeight: 600, color: i.deficit > 0 ? "#1d4ed8" : "#cbd5e1" }}>
                       {semMetaPropria ? <span style={{ color: "#cbd5e1" }}>—</span> : fmtMoeda(i.deficit, moeda)}
                     </td>
-                    <td style={{ ...td, textAlign: "right", fontWeight: 600, color: i.excesso > 0 ? "#b45309" : "#cbd5e1" }}>
-                      {semMetaPropria ? <span style={{ color: "#cbd5e1" }}>—</span> : fmtMoeda(i.excesso, moeda)}
+                    <td style={{ ...td, textAlign: "right", color: i.teto > 0 ? "#0f172a" : "#cbd5e1", fontWeight: 600 }}>
+                      {fmtMoeda(i.teto, moeda)}
                     </td>
                     <td style={{ ...td, textAlign: "right", color: i.prioridade_manual > 0 ? "#6366f1" : "#cbd5e1", fontWeight: 700 }}>
                       {i.prioridade_manual}
                     </td>
                     {comSugestao && (
                       <td style={{ ...td, textAlign: "right", fontWeight: 800, color: (i.sugestao_aporte ?? 0) > 0 ? "#047857" : "#cbd5e1" }}>
-                        {fmtMoeda(i.sugestao_aporte ?? 0, moeda)}
+                        <span title={i.motivo ?? ""}>
+                          {fmtMoeda(i.sugestao_aporte ?? 0, moeda)}
+                        </span>
                       </td>
                     )}
                   </tr>
@@ -138,8 +178,9 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
       )}
 
       <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "12px", marginBottom: 0 }}>
-        Contribution Score = prioridade de aporte segundo os SEUS pesos · Quality Score = soma das suas notas nos checklists.
-        {comSugestao && " O teto é o déficit de cada CLASSE: nenhum ativo recebe dinheiro de uma classe que já está no alvo."}
+        Contribution Score = prioridade de aporte segundo os SEUS pesos (qualidade + déficit − excesso + prioridade + momento) ·
+        Quality Score = notas dos checklists de Qualidade · Momento = fator 0–1 dos checklists de Momento (não altera a qualidade).
+        {comSugestao && " O teto de cada ativo é o déficit dele + tolerância: ninguém recebe de uma classe que já está no alvo."}
       </p>
     </div>
   );
@@ -186,6 +227,16 @@ function AportePorClasse({ ranking }: { ranking: RankingAportes }) {
                   <span style={{ fontWeight: 600, color: "#64748b", marginLeft: "8px", fontSize: "11px" }}>
                     {fmtPercentual(c.percentual_atual)} → {fmtPercentual(c.percentual_ideal)}
                   </span>
+                  <span title={`Tolerância: ${c.tolerancia} p.p.${c.limite_maximo ? ` · limite máximo: ${c.limite_maximo}%` : ""}`}
+                    style={{ marginLeft: "8px", fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "9999px",
+                      color: statusCor(c.status), background: statusBg(c.status) }}>
+                    {statusLabel(c.status)}
+                  </span>
+                  {c.limite_maximo != null && (
+                    <span style={{ marginLeft: "6px", fontSize: "10px", color: "#94a3b8" }}>
+                      máx {fmtPercentual(c.limite_maximo)}
+                    </span>
+                  )}
                 </span>
                 <span style={{ fontSize: "12px", display: "flex", gap: "12px", alignItems: "baseline" }}>
                   <span style={{ color: noAlvo ? "#b45309" : "#1d4ed8", fontWeight: 600 }}>
@@ -214,6 +265,11 @@ function AportePorClasse({ ranking }: { ranking: RankingAportes }) {
                         <span style={{ marginLeft: "8px", fontSize: "11px", color: "#94a3b8" }}>
                           {fmtPercentual(s.percentual_atual)} → {fmtPercentual(s.percentual_ideal)}
                         </span>
+                        {s.status !== "ABAIXO" && s.status !== "SEM_ALVO" && (
+                          <span style={{ marginLeft: "8px", fontSize: "10px", fontWeight: 700, color: statusCor(s.status) }}>
+                            {statusLabel(s.status)}
+                          </span>
+                        )}
                       </span>
                       <span style={{ display: "flex", gap: "12px" }}>
                         <span style={{ color: s.deficit > 0 ? "#1d4ed8" : "#cbd5e1" }}>
@@ -229,6 +285,10 @@ function AportePorClasse({ ranking }: { ranking: RankingAportes }) {
                   ))}
                 </div>
               )}
+
+              {c.motivo && c.sugerido <= 0 && (
+                <p style={{ fontSize: "11px", color: "#94a3b8", margin: "6px 0 0" }}>{c.motivo}</p>
+              )}
             </div>
           );
         })}
@@ -236,6 +296,65 @@ function AportePorClasse({ ranking }: { ranking: RankingAportes }) {
     </div>
   );
 }
+
+/* ── Rótulos/cores dos estados e alertas do motor ── */
+
+const estadoLabel = (e: EstadoAtivo): string => ({
+  APROVADO: "aprovado",
+  RESTRITO: "restrito",
+  NAO_APORTAR: "não aportar",
+  SEM_AVALIACAO: "sem avaliação",
+}[e] ?? e);
+
+const estadoCor = (e: EstadoAtivo): string => ({
+  APROVADO: "#047857",
+  RESTRITO: "#b45309",
+  NAO_APORTAR: "#b91c1c",
+  SEM_AVALIACAO: "#64748b",
+}[e] ?? "#64748b");
+
+const estadoBg = (e: EstadoAtivo): string => ({
+  APROVADO: "#ecfdf5",
+  RESTRITO: "#fffbeb",
+  NAO_APORTAR: "#fef2f2",
+  SEM_AVALIACAO: "#f1f5f9",
+}[e] ?? "#f1f5f9");
+
+const statusLabel = (s: StatusNivel): string => ({
+  ABAIXO: "abaixo do alvo",
+  EQUILIBRADO: "equilibrado",
+  ACIMA: "acima do alvo",
+  SEM_ALVO: "sem alvo",
+}[s] ?? s);
+
+const statusCor = (s: StatusNivel): string => ({
+  ABAIXO: "#1d4ed8",
+  EQUILIBRADO: "#047857",
+  ACIMA: "#b45309",
+  SEM_ALVO: "#64748b",
+}[s] ?? "#64748b");
+
+const statusBg = (s: StatusNivel): string => ({
+  ABAIXO: "#eff6ff",
+  EQUILIBRADO: "#ecfdf5",
+  ACIMA: "#fffbeb",
+  SEM_ALVO: "#f1f5f9",
+}[s] ?? "#f1f5f9");
+
+const alertaIcone = (tipo: string): string => {
+  if (tipo === "BLOQUEIO" || tipo === "ATIVO_LIMITE") return "⛔";
+  if (tipo === "NAO_ALOCADO") return "💤";
+  if (tipo === "SEM_AVALIACAO" || tipo === "SEM_SUBCLASSE") return "⚠";
+  if (tipo === "CLASSE_ACIMA" || tipo === "SUBCLASSE_ACIMA") return "📈";
+  return "📉";
+};
+
+const alertaCor = (tipo: string): string => {
+  if (tipo === "BLOQUEIO" || tipo === "ATIVO_LIMITE") return "#b91c1c";
+  if (tipo === "NAO_ALOCADO") return "#b45309";
+  if (tipo === "SEM_AVALIACAO" || tipo === "SEM_SUBCLASSE") return "#92400e";
+  return "#334155";
+};
 
 const th: React.CSSProperties = {
   padding: "9px 10px", fontSize: "11px", fontWeight: 700, color: "#64748b",

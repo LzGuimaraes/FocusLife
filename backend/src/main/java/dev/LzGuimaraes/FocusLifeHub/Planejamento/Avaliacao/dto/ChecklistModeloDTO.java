@@ -3,6 +3,7 @@ package dev.LzGuimaraes.FocusLifeHub.Planejamento.Avaliacao.dto;
 import java.util.List;
 
 import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.TipoAtivoCadastro;
+import dev.LzGuimaraes.FocusLifeHub.Planejamento.Avaliacao.TipoChecklist;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -28,6 +29,9 @@ public final class ChecklistModeloDTO {
 
             TipoAtivoCadastro tipo_alvo,
 
+            /** QUALIDADE (o ativo é bom?) ou MOMENTO (é hora de aportar?). */
+            TipoChecklist tipo,
+
             Boolean ativa,
 
             @Valid
@@ -39,6 +43,7 @@ public final class ChecklistModeloDTO {
             String nome,
             String descricao,
             TipoAtivoCadastro tipo_alvo,
+            TipoChecklist tipo,
             Boolean ativa,
             Long user_id,
             List<PerguntaDTO.PerguntaResponse> perguntas
@@ -50,6 +55,7 @@ public final class ChecklistModeloDTO {
             String nome,
             String descricao,
             TipoAtivoCadastro tipo_alvo,
+            TipoChecklist tipo,
             Boolean ativa,
             long total_perguntas
     ) {}

@@ -110,15 +110,28 @@ public class ChecklistAtivoService {
         for (List<ChecklistAtivoModel> grupo : porAtivo.values()) {
             ChecklistAtivoModel primeiro = grupo.get(0);
 
-            List<BigDecimal> scores = new ArrayList<>();
-            List<BigDecimal> pesos = new ArrayList<>();
+            // Os dois eixos são consolidados SEPARADAMENTE: qualidade (o ativo é
+            // bom?) e momento (é hora de aportar?). Um nunca substitui o outro.
+            List<BigDecimal> scoresQualidade = new ArrayList<>();
+            List<BigDecimal> pesosQualidade = new ArrayList<>();
+            List<BigDecimal> scoresMomento = new ArrayList<>();
+            List<BigDecimal> pesosMomento = new ArrayList<>();
+            List<String> bloqueios = new ArrayList<>();
             int totalPerguntas = 0;
             int totalRespondidas = 0;
 
             for (ChecklistAtivoModel c : grupo) {
                 List<ChecklistAtivoPerguntaModel> perguntas = ordenar(c);
-                scores.add(scoreDe(perguntas));
-                pesos.add((c.getPeso() != null) ? c.getPeso() : BigDecimal.ONE);
+                BigDecimal score = scoreDe(perguntas);
+                boolean momento = c.getTipo() == TipoChecklist.MOMENTO;
+                if (momento) {
+                    scoresMomento.add(score);
+                    pesosMomento.add((c.getPeso() != null) ? c.getPeso() : BigDecimal.ONE);
+                } else {
+                    scoresQualidade.add(score);
+                    pesosQualidade.add((c.getPeso() != null) ? c.getPeso() : BigDecimal.ONE);
+                }
+                bloqueios.addAll(bloqueiosDe(c, perguntas));
                 totalPerguntas += perguntas.size();
                 totalRespondidas += (int) perguntas.stream().filter(this::respondida).count();
             }
@@ -130,7 +143,9 @@ public class ChecklistAtivoService {
                     grupo.size(),
                     totalPerguntas,
                     totalRespondidas,
-                    scoreCalculator.qualityScoreDoAtivo(scores, pesos)));
+                    scoreCalculator.qualityScoreDoAtivo(scoresQualidade, pesosQualidade),
+                    scoreCalculator.qualityScoreDoAtivo(scoresMomento, pesosMomento),
+                    bloqueios));
         }
 
         resumo.sort(Comparator.comparing(ChecklistAtivoDTO.AtivoAvaliado::ticker,
@@ -153,6 +168,7 @@ public class ChecklistAtivoService {
         aplicarAncora(checklist, dto.ativo_cadastro_id(), dto.ativo_id());
         checklist.setPeso((dto.peso() != null) ? dto.peso() : BigDecimal.ONE);
         checklist.setOrdem((dto.ordem() != null) ? dto.ordem() : proximaOrdem(userId, dto));
+        checklist.setTipo((dto.tipo() != null) ? dto.tipo() : TipoChecklist.QUALIDADE);
         checklist.setAtiva(true);
         checklist.setCreatedAt(LocalDateTime.now());
         checklist.setUpdatedAt(LocalDateTime.now());
@@ -164,6 +180,10 @@ public class ChecklistAtivoService {
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Modelo de checklist com ID " + dto.modelo_id() + " não encontrado"));
             checklist.setModeloOrigemId(modelo.getId());
+            // O TIPO vem do modelo (qualidade × momento) quando não foi informado.
+            if (dto.tipo() == null) {
+                checklist.setTipo(modelo.getTipo());
+            }
             checklist.setNome((dto.nome() != null && !dto.nome().isBlank()) ? dto.nome().trim() : modelo.getNome());
             for (ChecklistModeloPerguntaModel pergunta : mapper.ordenar(modelo.getPerguntas())) {
                 ChecklistAtivoPerguntaModel copia = mapper.snapshot(pergunta);
@@ -187,6 +207,9 @@ public class ChecklistAtivoService {
         ChecklistAtivoModel checklist = exigirDoUsuario(id);
         if (dto.nome() != null && !dto.nome().isBlank()) {
             checklist.setNome(dto.nome().trim());
+        }
+        if (dto.tipo() != null) {
+            checklist.setTipo(dto.tipo());
         }
         if (dto.peso() != null) {
             checklist.setPeso(dto.peso());
@@ -219,6 +242,7 @@ public class ChecklistAtivoService {
         ChecklistAtivoModel copia = new ChecklistAtivoModel();
         copia.setUser(origem.getUser());
         copia.setModeloOrigemId(origem.getModeloOrigemId());
+        copia.setTipo(origem.getTipo());
         copia.setPeso(origem.getPeso());
 
         boolean temDestino = destino != null && (destino.ativo_cadastro_id() != null || destino.ativo_id() != null);
@@ -515,6 +539,37 @@ public class ChecklistAtivoService {
         return scoreCalculator.score(calculaveis);
     }
 
+    /**
+     * Critérios eliminatórios REPROVADOS neste checklist.
+     *
+     * Reprovar = pergunta bloqueadora cuja nota ficou abaixo de `notaMinima`
+     * (ou nota zero, quando `notaMinima` não foi definida). Pergunta bloqueadora
+     * ainda NÃO respondida não bloqueia: o ativo só sai da fila com uma
+     * reprovação de verdade, nunca por falta de resposta.
+     */
+    private List<String> bloqueiosDe(ChecklistAtivoModel checklist, List<ChecklistAtivoPerguntaModel> perguntas) {
+        List<String> motivos = new ArrayList<>();
+        for (ChecklistAtivoPerguntaModel p : perguntas) {
+            if (!Boolean.TRUE.equals(p.getBloqueadora())) {
+                continue;
+            }
+            BigDecimal nota = p.getNotaAtribuida();
+            if (nota == null) {
+                continue;   // não respondida: não bloqueia
+            }
+            BigDecimal minima = p.getNotaMinima();
+            BigDecimal exigida = (minima != null) ? minima : BigDecimal.ZERO;
+            if (nota.compareTo(exigida) > 0) {
+                continue;
+            }
+            motivos.add(checklist.getNome() + " · " + p.getTitulo()
+                    + " (nota " + nota.stripTrailingZeros().toPlainString()
+                    + (minima != null ? ", mínimo " + minima.stripTrailingZeros().toPlainString() : "")
+                    + ")");
+        }
+        return motivos;
+    }
+
     private String chaveDoAtivo(ChecklistAtivoModel c) {
         if (c.getAtivoCadastro() != null) {
             return "cat:" + c.getAtivoCadastro().getId();
@@ -554,6 +609,7 @@ public class ChecklistAtivoService {
                 tickerDe(checklist),
                 checklist.getNome(),
                 checklist.getModeloOrigemId(),
+                checklist.getTipo(),
                 checklist.getPeso(),
                 checklist.getOrdem(),
                 checklist.getAtiva(),

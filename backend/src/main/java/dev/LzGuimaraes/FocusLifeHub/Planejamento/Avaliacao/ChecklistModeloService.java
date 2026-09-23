@@ -60,7 +60,7 @@ public class ChecklistModeloService {
         int fim = Math.min(inicio + pageable.getPageSize(), todos.size());
         List<ChecklistModeloDTO.Resumo> pagina = todos.subList(inicio, fim).stream()
                 .map(m -> new ChecklistModeloDTO.Resumo(
-                        m.getId(), m.getNome(), m.getDescricao(), m.getTipoAlvo(), m.getAtiva(),
+                        m.getId(), m.getNome(), m.getDescricao(), m.getTipoAlvo(), m.getTipo(), m.getAtiva(),
                         m.getPerguntas().size()))
                 .toList();
 
@@ -84,6 +84,7 @@ public class ChecklistModeloService {
         modelo.setNome(dto.nome().trim());
         modelo.setDescricao(dto.descricao());
         modelo.setTipoAlvo(dto.tipo_alvo());
+        modelo.setTipo(dto.tipo() != null ? dto.tipo() : dev.LzGuimaraes.FocusLifeHub.Planejamento.Avaliacao.TipoChecklist.QUALIDADE);
         modelo.setAtiva(dto.ativa() == null || dto.ativa());
         modelo.setUser(user);
         modelo.setCreatedAt(LocalDateTime.now());
@@ -106,6 +107,9 @@ public class ChecklistModeloService {
         }
         if (dto.tipo_alvo() != null) {
             modelo.setTipoAlvo(dto.tipo_alvo());
+        }
+        if (dto.tipo() != null) {
+            modelo.setTipo(dto.tipo());
         }
         if (dto.ativa() != null) {
             modelo.setAtiva(dto.ativa());
@@ -133,6 +137,7 @@ public class ChecklistModeloService {
         copia.setNome(base + " (cópia)");
         copia.setDescricao(origem.getDescricao());
         copia.setTipoAlvo(origem.getTipoAlvo());
+        copia.setTipo(origem.getTipo());
         copia.setAtiva(origem.getAtiva());
         copia.setUser(origem.getUser());
         copia.setCreatedAt(LocalDateTime.now());
@@ -203,6 +208,7 @@ public class ChecklistModeloService {
                 modelo.getNome(),
                 modelo.getDescricao(),
                 modelo.getTipoAlvo(),
+                modelo.getTipo(),
                 modelo.getAtiva(),
                 (modelo.getUser() != null) ? modelo.getUser().getId() : null,
                 perguntas);

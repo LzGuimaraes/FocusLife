@@ -39,6 +39,10 @@ public record ComparativoResponseDTO(
             BigDecimal valor_atual,
             BigDecimal deficit,
             BigDecimal excesso,
+            /** Faixa (p.p.) em que a classe conta como EQUILIBRADA. */
+            BigDecimal tolerancia,
+            /** Teto de concentração (%). Ao atingir, a classe não recebe aporte. */
+            BigDecimal limite_maximo,
             List<SubclasseComparativoDTO> subclasses,
             List<AtivoComparativoDTO> ativos
     ) {}
@@ -51,7 +55,9 @@ public record ComparativoResponseDTO(
             BigDecimal valor_ideal,
             BigDecimal valor_atual,
             BigDecimal deficit,
-            BigDecimal excesso
+            BigDecimal excesso,
+            BigDecimal tolerancia,
+            BigDecimal limite_maximo
     ) {}
 
     public record AtivoComparativoDTO(
@@ -65,6 +71,10 @@ public record ComparativoResponseDTO(
             BigDecimal valor_atual,
             BigDecimal deficit,
             BigDecimal excesso,
+            /** Tolerância (p.p. sobre o % ideal) — define o teto do aporte do ativo. */
+            BigDecimal tolerancia,
+            /** Teto de concentração (%) do ativo. */
+            BigDecimal limite_maximo,
             Integer prioridade_manual,
             /**
              * false = o ativo está na carteira do usuário mas ainda NÃO tem meta

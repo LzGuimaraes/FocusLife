@@ -53,6 +53,14 @@ public class ChecklistModeloModel {
     @Column(name = "tipo_alvo", length = 40)
     private TipoAtivoCadastro tipoAlvo;
 
+    /**
+     * QUALIDADE (o ativo é bom?) ou MOMENTO (é hora de aportar?). O checklist
+     * do ativo copia este tipo no snapshot; as duas notas são independentes.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private TipoChecklist tipo = TipoChecklist.QUALIDADE;
+
     @Column(nullable = false)
     private Boolean ativa = true;
 

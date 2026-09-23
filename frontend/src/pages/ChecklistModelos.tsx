@@ -11,7 +11,10 @@ import ChecklistBuilder from "../components/ChecklistBuilder";
 import {
   draftsParaPayloads, perguntaParaDraft, validarPerguntaDraft, type PerguntaDraft,
 } from "../components/PerguntaEditor";
-import type { ModeloChecklist, ModeloChecklistPayload, ModeloChecklistResumo } from "../types/checklist";
+import type {
+  ModeloChecklist, ModeloChecklistPayload, ModeloChecklistResumo, TipoChecklist,
+} from "../types/checklist";
+import { TIPOS_CHECKLIST } from "../types/checklist";
 
 /* ══════════════════════════════════════════════════════════════════════
    Modelos de checklist (Módulo 4): templates reutilizáveis.
@@ -37,10 +40,11 @@ interface FormData {
   nome: string;
   descricao: string;
   tipo_alvo: string;
+  tipo: TipoChecklist;
   ativa: boolean;
 }
 
-const emptyForm: FormData = { nome: "", descricao: "", tipo_alvo: "", ativa: true };
+const emptyForm: FormData = { nome: "", descricao: "", tipo_alvo: "", tipo: "QUALIDADE", ativa: true };
 
 export default function ChecklistModelos() {
   const [modelos, setModelos] = useState<ModeloChecklistResumo[]>([]);
@@ -82,6 +86,7 @@ export default function ChecklistModelos() {
         nome: data.nome,
         descricao: data.descricao ?? "",
         tipo_alvo: data.tipo_alvo ?? "",
+        tipo: data.tipo ?? "QUALIDADE",
         ativa: data.ativa,
       });
       setPerguntas((data.perguntas ?? []).map(perguntaParaDraft));
@@ -109,6 +114,7 @@ export default function ChecklistModelos() {
       nome: form.nome.trim(),
       descricao: form.descricao.trim() === "" ? null : form.descricao.trim(),
       tipo_alvo: form.tipo_alvo === "" ? null : form.tipo_alvo,
+      tipo: form.tipo,
       ativa: form.ativa,
       perguntas: draftsParaPayloads(perguntas),
     };
@@ -200,15 +206,20 @@ export default function ChecklistModelos() {
           placeholder="Para que serve este modelo?" />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
           <Select label="Tipo de ativo sugerido" value={form.tipo_alvo}
-            onChange={e => setForm({ ...form, tipo_alvo: e.target.value })}>
-            {TIPOS_ALVO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            onChange={e => setForm({ ...form, tipo_alvo: e.target.value })}>            {TIPOS_ALVO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </Select>
-          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: 600, color: "#374151", paddingTop: "26px" }}>
-            <input type="checkbox" checked={form.ativa} onChange={e => setForm({ ...form, ativa: e.target.checked })}
-              style={{ width: "18px", height: "18px", accentColor: "#6366f1" }} />
-            Modelo ativo
-          </label>
+          <Select label="Eixo do checklist" value={form.tipo}
+            hint={TIPOS_CHECKLIST.find(t => t.value === form.tipo)?.descricao}
+            onChange={e => setForm({ ...form, tipo: e.target.value as TipoChecklist })}>
+            {TIPOS_CHECKLIST.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </Select>
         </div>
+
+        <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+          <input type="checkbox" checked={form.ativa} onChange={e => setForm({ ...form, ativa: e.target.checked })}
+            style={{ width: "18px", height: "18px", accentColor: "#6366f1" }} />
+          Modelo ativo
+        </label>
 
         <ChecklistBuilder perguntas={perguntas} onChange={setPerguntas}
           titulo="Perguntas do modelo"

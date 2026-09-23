@@ -13,6 +13,18 @@ export type TipoPergunta =
   | "LISTA"
   | "MULTIPLA_ESCOLHA";
 
+/**
+ * Tipo do checklist — dois eixos independentes do motor de decisão:
+ *   QUALIDADE → "o ativo é bom?" (fundamentos, gestão, risco)
+ *   MOMENTO   → "é hora de aportar?" (valuation, preço, taxa)
+ */
+export type TipoChecklist = "QUALIDADE" | "MOMENTO";
+
+export const TIPOS_CHECKLIST: { value: TipoChecklist; label: string; descricao: string }[] = [
+  { value: "QUALIDADE", label: "Qualidade", descricao: "O ativo é bom? (fundamentos, gestão, risco)" },
+  { value: "MOMENTO", label: "Momento / valuation", descricao: "É um bom momento para aportar? (preço, valuation, taxa)" },
+];
+
 /** Regra de pontuação: faixa (valor_min/max → nota) ou opção (texto → nota). */
 export interface Regra {
   id?: number;
@@ -32,6 +44,10 @@ export interface Pergunta {
   nota_maxima: number;
   conta_no_score: boolean;
   obrigatoria?: boolean | null;
+  /** Critério eliminatório: reprovada, o ativo fica em NÃO APORTAR. */
+  bloqueadora?: boolean | null;
+  /** Nota mínima para aprovar (null = qualquer nota > 0). */
+  nota_minima?: number | null;
   ordem: number;
   regras: Regra[];
 
@@ -49,6 +65,7 @@ export interface ModeloChecklist {
   nome: string;
   descricao: string | null;
   tipo_alvo: string | null;
+  tipo: TipoChecklist;
   ativa: boolean;
   user_id: number | null;
   perguntas: Pergunta[];
@@ -59,6 +76,7 @@ export interface ModeloChecklistResumo {
   nome: string;
   descricao: string | null;
   tipo_alvo: string | null;
+  tipo: TipoChecklist;
   ativa: boolean;
   total_perguntas: number;
 }
@@ -71,6 +89,7 @@ export interface Checklist {
   ticker: string | null;
   nome: string;
   modelo_origem_id: number | null;
+  tipo: TipoChecklist;
   peso: number;
   ordem: number;
   ativa: boolean;
@@ -89,6 +108,10 @@ export interface AtivoAvaliado {
   total_perguntas: number;
   total_respondidas: number;
   quality_score: number | null;
+  /** Nota dos checklists de MOMENTO (null = sem avaliação de momento). */
+  momento_score: number | null;
+  /** Critérios eliminatórios reprovados (texto legível). */
+  bloqueios: string[];
 }
 
 /* ── Payloads ── */
@@ -108,6 +131,8 @@ export interface PerguntaPayload {
   nota_maxima: number;
   conta_no_score: boolean;
   obrigatoria?: boolean;
+  bloqueadora?: boolean;
+  nota_minima?: number | null;
   ordem: number;
   regras: RegraPayload[];
 }
@@ -116,6 +141,7 @@ export interface ModeloChecklistPayload {
   nome: string;
   descricao: string | null;
   tipo_alvo: string | null;
+  tipo: TipoChecklist;
   ativa: boolean;
   perguntas: PerguntaPayload[];
 }
@@ -125,6 +151,7 @@ export interface ChecklistCriarPayload {
   ativo_id: number | null;
   nome: string | null;
   modelo_id: number | null;
+  tipo?: TipoChecklist;
   peso: number;
   ordem: number | null;
   perguntas?: PerguntaPayload[];

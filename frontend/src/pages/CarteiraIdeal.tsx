@@ -93,11 +93,15 @@ export default function CarteiraIdealPage() {
         key: novaChave(),
         classe: c.classe,
         percentual_ideal: numParaTexto(c.percentual_ideal),
+        tolerancia: numParaTexto(c.tolerancia),
+        limite_maximo: numParaTexto(c.limite_maximo),
         subclasses: (c.subclasses ?? []).map(s => ({
           key: novaChave(),
           id: s.id,
           nome: s.nome,
           percentual_ideal: numParaTexto(s.percentual_ideal),
+          tolerancia: numParaTexto(s.tolerancia),
+          limite_maximo: numParaTexto(s.limite_maximo),
         })),
       })));
 
@@ -125,6 +129,8 @@ export default function CarteiraIdealPage() {
           sugestao_catalogo_nome: a.sugestao_catalogo_nome,
           subclasse_id: a.subclasse_id ?? null,
           subclasse_nome_posicao: a.subclasse_nome ?? null,
+          tolerancia: numParaTexto(meta?.tolerancia ?? null),
+          limite_maximo: numParaTexto(meta?.limite_maximo ?? null),
           percentual_atual: a.percentual_atual,
           valor_atual: a.valor_atual,
         };
@@ -147,6 +153,8 @@ export default function CarteiraIdealPage() {
           sugestao_catalogo_nome: null,
           subclasse_id: null,
           subclasse_nome_posicao: null,
+          tolerancia: "",
+          limite_maximo: "",
           percentual_atual: null,
           valor_atual: null,
         }));
@@ -213,10 +221,14 @@ export default function CarteiraIdealPage() {
       classes: classes.map((c, i) => ({
         classe: c.classe,
         percentual_ideal: textoParaNum(c.percentual_ideal),
+        tolerancia: textoParaNum(c.tolerancia),
+        limite_maximo: c.limite_maximo.trim() === "" ? null : textoParaNum(c.limite_maximo),
         ordem: i,
         subclasses: c.subclasses.map((s, j) => ({
           nome: s.nome.trim(),
           percentual_ideal: textoParaNum(s.percentual_ideal),
+          tolerancia: textoParaNum(s.tolerancia),
+          limite_maximo: s.limite_maximo.trim() === "" ? null : textoParaNum(s.limite_maximo),
           ordem: j,
         })),
       })),
@@ -225,6 +237,8 @@ export default function CarteiraIdealPage() {
         classe: m.classe,
         subclasse_nome: m.subclasse_nome || null,
         percentual_ideal: textoParaNum(m.percentual_ideal),
+        tolerancia: textoParaNum(m.tolerancia),
+        limite_maximo: m.limite_maximo.trim() === "" ? null : textoParaNum(m.limite_maximo),
         prioridade_manual: parseInt(m.prioridade_manual, 10) || 0,
         ordem: i,
       })),

@@ -95,8 +95,8 @@ public class AporteService {
         MeusAtivosResponseDTO meus = carteiraIdealService.meusAtivos(carteiraId);
         ScoreConfigModel config = scoreConfigService.obterOuPadrao();
 
-        Map<UUID, BigDecimal> qualidadePorAtivo = qualidadePorAtivo();
-        List<Candidato> calculados = candidatos(meus, comparativo.valor_total(), qualidadePorAtivo, config);
+        Avaliacoes avaliacoes = avaliacoes(config);
+        List<Candidato> calculados = candidatos(meus, comparativo, avaliacoes, config);
         calculados.sort(Comparator
                 .comparing(Candidato::contribution, Comparator.reverseOrder())
                 // prioridade pode ser null (posição sem meta) — sem nullsLast, o
@@ -122,6 +122,13 @@ public class AporteService {
                     c.quality(),
                     c.quality() != null,
                     (c.quality() != null) ? config.getPesoQuality() : BigDecimal.ZERO,
+                    c.momento(),
+                    c.momento() != null,
+                    c.fator(),
+                    c.estado(),
+                    c.bloqueios(),
+                    c.limiteMaximo(),
+                    c.limiteAtingido(),
                     c.contribution(),
                     c.percentualAtual(),
                     c.percentualIdeal(),
@@ -129,16 +136,21 @@ public class AporteService {
                     c.valorIdeal(),
                     c.deficit(),
                     c.excesso(),
+                    c.tolerancia(),
+                    c.teto(),
                     c.prioridade(),
-                    sugestao));
+                    sugestao,
+                    motivo(c, sugestao)));
         }
 
         List<RankingAportesDTO.ClasseAporteDTO> classes = classesDto(
-                comparativo, (orcamento != null) ? orcamento.porClasse() : Map.of(),
+                comparativo,
+                (orcamento != null) ? orcamento.porClasse() : Map.of(),
                 (orcamento != null) ? orcamento.porSubclasse() : Map.of());
 
         BigDecimal alocado = (orcamento != null) ? orcamento.alocado() : null;
         BigDecimal naoAlocado = (orcamento != null) ? valorAporte.subtract(alocado) : null;
+        List<RankingAportesDTO.Alerta> alertas = alertas(comparativo, calculados, itens, naoAlocado, config);
 
         return new RankingAportesDTO.Response(
                 carteira.getId(),
@@ -147,14 +159,48 @@ public class AporteService {
                 (valorAporte != null) ? valorAporte : null,
                 alocado,
                 naoAlocado,
+                explicacaoNaoAlocado(naoAlocado, calculados, comparativo),
+                config.getRedistribuir(),
                 config.getEstrategiaAporte(),
                 termosDaConfig(config),
                 avisos(comparativo, itens, meus, naoAlocado),
+                alertas,
                 classes,
                 itens);
     }
 
     /* ── Cálculo ── */
+
+    /**
+     * Avaliação consolidada de um ativo: os DOIS eixos (qualidade e momento),
+     * o fator de momento (0 a 1) e os critérios eliminatórios reprovados.
+     */
+    private record Avaliacao(BigDecimal quality, BigDecimal momento, BigDecimal fator, List<String> bloqueios) {
+        static Avaliacao vazia() {
+            return new Avaliacao(null, null, BigDecimal.ONE, List.of());
+        }
+    }
+
+    /** Índice das avaliações: por ativo do catálogo (UUID) e por posição (id). */
+    private record Avaliacoes(Map<UUID, Avaliacao> porCatalogo, Map<Long, Avaliacao> porPosicao) {
+
+        /** Busca a avaliação do candidato: primeiro pelo ticker, depois pelas posições. */
+        Avaliacao de(UUID catalogoId, List<Long> ativoIds) {
+            if (catalogoId != null) {
+                Avaliacao porTicker = porCatalogo.get(catalogoId);
+                if (porTicker != null) {
+                    return porTicker;
+                }
+            }
+            for (Long ativoId : ativoIds) {
+                Avaliacao porPosicaoId = porPosicao.get(ativoId);
+                if (porPosicaoId != null) {
+                    return porPosicaoId;
+                }
+            }
+            return Avaliacao.vazia();
+        }
+    }
 
     /**
      * Estado intermediário de um candidato a receber aporte.
@@ -167,10 +213,14 @@ public class AporteService {
     private record Candidato(
             UUID ativoCadastroId, Long metaId, String nome, boolean vinculado,
             Long subclasseId, String subclasseNome, CategoriaInvestimento classe,
-            BigDecimal quality, BigDecimal contribution,
+            BigDecimal quality, BigDecimal momento, BigDecimal fator,
+            RankingAportesDTO.EstadoAtivo estado, List<String> bloqueios,
+            BigDecimal limiteMaximo, boolean limiteAtingido,
+            BigDecimal contribution,
             BigDecimal percentualAtual, BigDecimal percentualIdeal,
             BigDecimal valorAtual, BigDecimal valorIdeal,
-            BigDecimal deficit, BigDecimal excesso, Integer prioridade
+            BigDecimal deficit, BigDecimal excesso, BigDecimal tolerancia,
+            BigDecimal teto, Integer prioridade
     ) {}
 
     /** Orçamento do aporte já distribuído (classe → subclasse → candidato). */
@@ -181,11 +231,10 @@ public class AporteService {
             BigDecimal alocado
     ) {}
 
-    /** Monta os candidatos (posições reais) com o Contribution Score de cada um. */
-    private List<Candidato> candidatos(MeusAtivosResponseDTO meus, BigDecimal total,
-                                       Map<UUID, BigDecimal> qualidadePorAtivo,
-                                       ScoreConfigModel config) {
-        double totalValor = nz(total);
+    /** Monta os candidatos (posições reais) com estado, teto e Contribution Score. */
+    private List<Candidato> candidatos(MeusAtivosResponseDTO meus, ComparativoResponseDTO comparativo,
+                                       Avaliacoes avaliacoes, ScoreConfigModel config) {
+        double totalValor = nz(comparativo.valor_total());
         double tol = tolerancia(totalValor);
 
         // 1ª passada: quanto cada candidato tem e quanto DEVERIA ter (déficit/excesso
@@ -215,7 +264,7 @@ public class AporteService {
 
         ScoreCalculator.TermosContribution pesos = new ScoreCalculator.TermosContribution(
                 config.getPesoQuality(), config.getPesoDeficit(),
-                config.getPesoExcesso(), config.getPesoPrioridade());
+                config.getPesoExcesso(), config.getPesoPrioridade(), config.getPesoMomento());
 
         List<Candidato> lista = new ArrayList<>();
         for (MeusAtivosResponseDTO.MeuAtivoDTO a : meus.ativos()) {
@@ -224,26 +273,46 @@ public class AporteService {
             double vIdeal = temMeta ? valorIdealDe(a.percentual_ideal(), totalValor) : 0d;
             double deficit = (temMeta && vIdeal - vAtual > tol) ? vIdeal - vAtual : 0d;
             double excesso = (temMeta && vAtual - vIdeal > tol) ? vAtual - vIdeal : 0d;
-            BigDecimal quality = (a.ativo_cadastro_id() != null)
-                    ? qualidadePorAtivo.get(a.ativo_cadastro_id())
-                    : null;
+
+            Avaliacao avaliacao = avaliacoes.de(a.ativo_cadastro_id(), a.ativo_ids());
+            BigDecimal tolerancia = (a.tolerancia() != null) ? a.tolerancia() : BigDecimal.ZERO;
+
+            // TETO do ativo = déficit + tolerância (o que a meta dele ainda aceita),
+            // limitado pelo teto de concentração quando houver.
+            // Posição SEM meta própria (renda fixa, caixinha) não tem alvo próprio:
+            // herda o teto da SUBCLASSE (ou da classe) a que pertence — é o alvo dela.
+            double teto = temMeta
+                    ? tetoDe(vIdeal, tolerancia, vAtual, totalValor, a.limite_maximo())
+                    : tetoHerdado(a.subclasse_id(), a.classe(), comparativo, totalValor);
+            boolean limiteAtingido = limiteAtingido(vAtual, totalValor, a.limite_maximo());
+
+            List<String> bloqueios = new ArrayList<>(avaliacao.bloqueios());
+            if (limiteAtingido) {
+                bloqueios.add("Limite de concentração atingido (" + formatar(a.limite_maximo())
+                        + "% da carteira)");
+            }
 
             BigDecimal contribution = scoreCalculator.contributionScore(
-                    (quality != null) ? quality.doubleValue() / 100d : null,
+                    (avaliacao.quality() != null) ? avaliacao.quality().doubleValue() / 100d : null,
                     scoreCalculator.normalizar(deficit, maiorDeficit),
                     scoreCalculator.normalizar(excesso, maiorExcesso),
                     scoreCalculator.normalizarPrioridade(a.prioridade_manual()),
+                    (avaliacao.momento() == null) ? null : avaliacao.fator().doubleValue(),
                     pesos);
 
             lista.add(new Candidato(
                     a.ativo_cadastro_id(), a.meta_id(), a.ticker(), a.vinculado(),
                     a.subclasse_id(), a.subclasse_nome(),
                     (a.classe() != null) ? a.classe() : CategoriaInvestimento.OUTROS,
-                    quality, contribution,
+                    avaliacao.quality(), avaliacao.momento(), avaliacao.fator(),
+                    estadoDe(avaliacao, bloqueios, teto),
+                    List.copyOf(bloqueios),
+                    a.limite_maximo(), limiteAtingido,
+                    contribution,
                     a.percentual_atual(), a.percentual_ideal(),
                     moeda(vAtual), moeda(vIdeal),
-                    moeda(deficit), moeda(excesso),
-                    a.prioridade_manual()));
+                    moeda(deficit), moeda(excesso), tolerancia,
+                    moeda(teto), a.prioridade_manual()));
         }
         return lista;
     }
@@ -253,27 +322,194 @@ public class AporteService {
         return (percentualIdeal != null) ? percentualIdeal.doubleValue() / 100d * total : 0d;
     }
 
+    /**
+     * Teto do ativo: (ideal% + tolerância%) × total − atual, sem nunca passar do
+     * limite de concentração (limite% × total − atual) quando ele existir.
+     */
+    private double tetoDe(double valorIdeal, BigDecimal tolerancia, double valorAtual,
+                          double total, BigDecimal limiteMaximo) {
+        double alvoComTolerancia = valorIdeal + nz(tolerancia) / 100d * total;
+        double teto = Math.max(0d, alvoComTolerancia - valorAtual);
+        if (limiteMaximo != null && limiteMaximo.signum() > 0) {
+            double espacoAteLimite = Math.max(0d, limiteMaximo.doubleValue() / 100d * total - valorAtual);
+            teto = Math.min(teto, espacoAteLimite);
+        }
+        return teto;
+    }
+
+    /** true = a posição já chegou ao limite máximo de concentração configurado. */
+    private boolean limiteAtingido(double valorAtual, double total, BigDecimal limiteMaximo) {
+        if (limiteMaximo == null || limiteMaximo.signum() <= 0 || total <= 0d) {
+            return false;
+        }
+        return valorAtual / total * 100d >= limiteMaximo.doubleValue() - tolerancia(total);
+    }
+
+    /**
+     * Teto de uma posição SEM meta própria: o déficit da SUBCLASSE a que ela
+     * pertence (ou da classe, quando não está em nenhuma subclasse com alvo).
+     *
+     * É o que faz a renda fixa/caixinha participar: o alvo não é dela, é da
+     * subclasse — e o teto é quanto ainda falta para a subclasse.
+     */
+    private double tetoHerdado(Long subclasseId, CategoriaInvestimento classe,
+                               ComparativoResponseDTO comparativo, double total) {
+        for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
+            if (subclasseId != null) {
+                for (ComparativoResponseDTO.SubclasseComparativoDTO s : c.subclasses()) {
+                    if (subclasseId.equals(s.id())) {
+                        // O percentual da subclasse é uma fatia da CLASSE, então a
+                        // tolerância dela também é medida sobre o valor da classe.
+                        double alvo = nz(s.valor_ideal()) + nz(s.tolerancia()) / 100d * nz(c.valor_ideal());
+                        return Math.max(0d, alvo - nz(s.valor_atual()));
+                    }
+                }
+            }
+            if (c.classe() == classe) {
+                return deficitComTolerancia(c.percentual_ideal(), c.tolerancia(),
+                        c.percentual_atual(), total).doubleValue();
+            }
+        }
+        return 0d;
+    }
+
+    /** Estado do ativo (§9) — rótulo explicativo; o efeito no dinheiro é do fator/teto. */
+    private RankingAportesDTO.EstadoAtivo estadoDe(Avaliacao avaliacao, List<String> bloqueios, double teto) {
+        if (!bloqueios.isEmpty()) {
+            return RankingAportesDTO.EstadoAtivo.NAO_APORTAR;
+        }
+        boolean semAvaliacao = avaliacao.quality() == null && avaliacao.momento() == null;
+        if (semAvaliacao) {
+            return RankingAportesDTO.EstadoAtivo.SEM_AVALIACAO;
+        }
+        if (teto <= 0d) {
+            return RankingAportesDTO.EstadoAtivo.RESTRITO;   // já no alvo: nada a receber
+        }
+        if (avaliacao.fator().doubleValue() <= 0d) {
+            return RankingAportesDTO.EstadoAtivo.NAO_APORTAR;   // fator 0 = não aportar (§12)
+        }
+        if (avaliacao.fator().doubleValue() < 1d) {
+            return RankingAportesDTO.EstadoAtivo.RESTRITO;      // aporte reduzido pelo momento
+        }
+        return RankingAportesDTO.EstadoAtivo.APROVADO;
+    }
+
+    /** Explicação objetiva da decisão para o item (§29). */
+    private String motivo(Candidato c, BigDecimal sugestao) {
+        if (c.estado() == RankingAportesDTO.EstadoAtivo.NAO_APORTAR) {
+            if (!c.bloqueios().isEmpty()) {
+                return "Não aportar: " + String.join("; ", c.bloqueios())
+                        + ". O déficit continua existindo — o ativo só está fora da fila de novos aportes.";
+            }
+            return "Não aportar: fator de momento 0 (nota de momento " + formatar(c.momento())
+                    + "/100 — é hora de esperar, não de comprar). O déficit continua existindo.";
+        }
+        if (sugestao == null) {
+            return (c.estado() == RankingAportesDTO.EstadoAtivo.SEM_AVALIACAO)
+                    ? "Sem avaliação configurada (a nota de qualidade não entrou na conta)."
+                    : "Informe o valor do aporte para ver quanto caberia a este ativo.";
+        }
+        if (sugestao.signum() <= 0) {
+            if (c.teto().signum() <= 0) {
+                return "Nada: já está no alvo (déficit + tolerância esgotados).";
+            }
+            return "Nada: não sobrou valor elegível para " + c.classe()
+                    + " neste aporte (a classe recebeu o que o déficit dela permitia).";
+        }
+        return "Recebe " + formatar(sugestao) + " de um teto de " + formatar(c.teto())
+                + " (déficit " + formatar(c.deficit()) + " + tolerância " + formatar(c.tolerancia())
+                + "%) — estado " + c.estado().getLabel()
+                + ", fator de momento " + formatar(c.fator()) + ".";
+    }
+
     /** Onde entra o dinheiro: uma linha por classe (e suas subclasses). */
     private List<RankingAportesDTO.ClasseAporteDTO> classesDto(
             ComparativoResponseDTO comparativo,
             Map<CategoriaInvestimento, BigDecimal> sugeridoPorClasse,
             Map<Long, BigDecimal> sugeridoPorSubclasse) {
 
+        double total = nz(comparativo.valor_total());
         List<RankingAportesDTO.ClasseAporteDTO> classes = new ArrayList<>();
         for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
+            BigDecimal sugerido = sugeridoPorClasse.getOrDefault(c.classe(), moeda(0d));
             List<RankingAportesDTO.SubclasseAporteDTO> subs = c.subclasses().stream()
-                    .map(s -> new RankingAportesDTO.SubclasseAporteDTO(
-                            s.id(), s.nome(), s.percentual_atual(), s.percentual_ideal(),
-                            s.valor_atual(), s.valor_ideal(), s.deficit(), s.excesso(),
-                            sugeridoPorSubclasse.getOrDefault(s.id(), moeda(0d))))
+                    .map(s -> {
+                        BigDecimal sugeridoSub = sugeridoPorSubclasse.getOrDefault(s.id(), moeda(0d));
+                        return new RankingAportesDTO.SubclasseAporteDTO(
+                                s.id(), s.nome(), s.percentual_atual(), s.percentual_ideal(),
+                                s.valor_atual(), s.valor_ideal(), s.deficit(), s.excesso(),
+                                s.tolerancia(), s.limite_maximo(),
+                                statusDe(s.percentual_atual(), s.percentual_ideal(), s.tolerancia(), s.limite_maximo()),
+                                sugeridoSub,
+                                (sugeridoSub.signum() <= 0 && sugerido.signum() > 0)
+                                        ? "Neste aporte a verba da classe foi para as subclasses com déficit maior."
+                                        : null);
+                    })
                     .toList();
             classes.add(new RankingAportesDTO.ClasseAporteDTO(
                     c.classe(), c.percentual_atual(), c.percentual_ideal(),
                     c.valor_atual(), c.valor_ideal(), c.deficit(), c.excesso(),
-                    sugeridoPorClasse.getOrDefault(c.classe(), moeda(0d)),
+                    c.tolerancia(), c.limite_maximo(),
+                    statusDe(c.percentual_atual(), c.percentual_ideal(), c.tolerancia(), c.limite_maximo()),
+                    sugerido,
+                    motivoDaClasse(c, sugerido, total),
                     subs));
         }
         return classes;
+    }
+
+    /** Status de equilíbrio de um nível frente à tolerância configurada (§18). */
+    private RankingAportesDTO.StatusNivel statusDe(BigDecimal percentualAtual, BigDecimal percentualIdeal,
+                                                   BigDecimal tolerancia, BigDecimal limiteMaximo) {
+        if (percentualIdeal == null || percentualIdeal.signum() <= 0) {
+            return RankingAportesDTO.StatusNivel.SEM_ALVO;
+        }
+        double atual = (percentualAtual != null) ? percentualAtual.doubleValue() : 0d;
+        double tol = (tolerancia != null) ? tolerancia.doubleValue() : 0d;
+        if (limiteMaximo != null && limiteMaximo.signum() > 0 && atual >= limiteMaximo.doubleValue()) {
+            return RankingAportesDTO.StatusNivel.ACIMA;
+        }
+        if (atual > percentualIdeal.doubleValue() + tol) {
+            return RankingAportesDTO.StatusNivel.ACIMA;
+        }
+        if (atual < percentualIdeal.doubleValue() - tol) {
+            return RankingAportesDTO.StatusNivel.ABAIXO;
+        }
+        return RankingAportesDTO.StatusNivel.EQUILIBRADO;
+    }
+
+    /** Por que a classe recebeu (ou não) parte do aporte. */
+    private String motivoDaClasse(ComparativoResponseDTO.ClasseComparativoDTO c, BigDecimal sugerido, double total) {
+        BigDecimal limite = c.limite_maximo();
+        BigDecimal atual = c.percentual_atual();
+        if (limite != null && limite.signum() > 0 && atual != null
+                && atual.doubleValue() >= limite.doubleValue()) {
+            return "Não recebe: limite de concentração de " + formatar(limite) + "% atingido.";
+        }
+        BigDecimal falta = deficitComTolerancia(c.percentual_ideal(), c.tolerancia(), atual, total);
+        if (falta.signum() <= 0) {
+            return "Não recebe: está no alvo (dentro da tolerância de " + formatar(c.tolerancia()) + "%).";
+        }
+        if (sugerido.signum() <= 0) {
+            return "Tem déficit de " + formatar(falta) + ", mas nenhum ativo da classe ficou elegível neste aporte.";
+        }
+        return "Recebe no máximo o déficit da classe: " + formatar(falta)
+                + " (ideal + tolerância − atual).";
+    }
+
+    /**
+     * Déficit de um nível CONSIDERANDO a tolerância: dentro da faixa o item conta
+     * como EQUILIBRADO e não puxa aporte. Diferente do déficit "cru" do
+     * comparativo (que é sempre ideal − atual, sem faixa).
+     */
+    private BigDecimal deficitComTolerancia(BigDecimal percentualIdeal, BigDecimal tolerancia,
+                                            BigDecimal percentualAtual, double total) {
+        if (percentualIdeal == null || percentualIdeal.signum() <= 0) {
+            return moeda(0d);
+        }
+        double alvo = (percentualIdeal.doubleValue() + nz(tolerancia)) / 100d * total;
+        double atual = ((percentualAtual != null) ? percentualAtual.doubleValue() : 0d) / 100d * total;
+        return moeda(Math.max(0d, alvo - atual));
     }
 
     /**
@@ -300,140 +536,222 @@ public class AporteService {
             return null;
         }
 
+        double total = nz(comparativo.valor_total());
+        double tol = tolerancia(total);
+
+        // Déficit de cada classe JÁ com a tolerância aplicada: dentro da faixa a
+        // classe conta como equilibrada e não puxa aporte.
         Map<CategoriaInvestimento, Double> deficitClasse = new LinkedHashMap<>();
         for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
-            double deficit = nz(c.deficit());
-            if (deficit > 0d) {
+            double deficit = deficitComTolerancia(c.percentual_ideal(), c.tolerancia(), c.percentual_atual(), total)
+                    .doubleValue();
+            if (deficit > tol) {
                 deficitClasse.put(c.classe(), deficit);
             }
         }
-        double totalDeficit = deficitClasse.values().stream().mapToDouble(Double::doubleValue).sum();
-        if (totalDeficit <= 0d) {
-            return null;   // nenhuma classe abaixo do alvo: nada a sugerir
+        if (deficitClasse.isEmpty()) {
+            return null;   // nenhuma classe abaixo do alvo (fora da tolerância)
         }
-        double fator = Math.min(1d, valorAporte.doubleValue() / totalDeficit);
-        double tol = tolerancia(nz(comparativo.valor_total()));
 
         Map<CategoriaInvestimento, List<ComparativoResponseDTO.SubclasseComparativoDTO>> subsPorClasse =
                 new HashMap<>();
+        Map<CategoriaInvestimento, Double> valorIdealClasse = new HashMap<>();
         for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
             subsPorClasse.put(c.classe(), c.subclasses());
+            valorIdealClasse.put(c.classe(), nz(c.valor_ideal()));
         }
 
         Map<CategoriaInvestimento, BigDecimal> porClasse = new LinkedHashMap<>();
         Map<Long, BigDecimal> porSubclasse = new LinkedHashMap<>();
         List<BigDecimal> porCandidato = new ArrayList<>(
                 Collections.nCopies(candidatos.size(), moeda(0d)));
-        double alocado = 0d;
 
-        for (Map.Entry<CategoriaInvestimento, Double> entrada : deficitClasse.entrySet()) {
-            CategoriaInvestimento classe = entrada.getKey();
-            double orcamentoClasse = entrada.getValue() * fator;
-            porClasse.put(classe, moeda(orcamentoClasse));
+        // REDISTRIBUIÇÃO (§21): o valor que não achou destino elegível numa classe
+        // pode procurar outra classe com déficit — quantas rodadas forem precisas
+        // (limitado, para não girar em falso). Desligado, uma única rodada e o que
+        // sobrar fica não alocado, com o motivo explicado.
+        boolean redistribuir = config.getRedistribuir() == null || config.getRedistribuir();
+        int rodadas = redistribuir ? 6 : 1;
+        double restanteTotal = valorAporte.doubleValue();
 
-            List<Integer> daClasse = indicesDaClasse(candidatos, classe);
-            if (daClasse.isEmpty()) {
-                continue;   // classe com alvo e sem nenhum ativo: o valor fica sem destino
+        for (int rodada = 0; rodada < rodadas && restanteTotal > tol; rodada++) {
+            Map<CategoriaInvestimento, Double> capacidade = new LinkedHashMap<>();
+            for (Map.Entry<CategoriaInvestimento, Double> entrada : deficitClasse.entrySet()) {
+                double jaRecebeu = porClasse.getOrDefault(entrada.getKey(), moeda(0d)).doubleValue();
+                double sobra = entrada.getValue() - jaRecebeu;
+                if (sobra > tol) {
+                    capacidade.put(entrada.getKey(), sobra);
+                }
             }
-
-            List<ComparativoResponseDTO.SubclasseComparativoDTO> subs = subsPorClasse
-                    .getOrDefault(classe, List.of()).stream()
-                    .filter(s -> nz(s.percentual_ideal()) > 0d)
-                    .toList();
-
-            // Classe sem subclasse com alvo: ela mesma é o bucket.
-            if (subs.isEmpty()) {
-                alocado += distribuir(candidatos, daClasse, orcamentoClasse, config, tol, porCandidato);
-                continue;
+            double somaCapacidade = capacidade.values().stream().mapToDouble(Double::doubleValue).sum();
+            if (somaCapacidade <= tol) {
+                break;
             }
+            double fator = Math.min(1d, restanteTotal / somaCapacidade);
+            double distribuidoNaRodada = 0d;
 
-            double restante = orcamentoClasse;
-            for (ComparativoResponseDTO.SubclasseComparativoDTO sub : subs) {
-                double orcamentoSub = Math.min(nz(sub.deficit()) * fator, restante);
-                List<Integer> daSub = (orcamentoSub > 0d)
-                        ? indicesDaSubclasse(candidatos, daClasse, sub.id())
-                        : List.of();
-                if (daSub.isEmpty()) {
-                    // Subclasse no alvo, ou planejada e ainda sem posição: não recebe.
-                    porSubclasse.put(sub.id(), moeda(0d));
+            for (Map.Entry<CategoriaInvestimento, Double> entrada : capacidade.entrySet()) {
+                CategoriaInvestimento classe = entrada.getKey();
+                double orcamentoClasse = Math.min(entrada.getValue(), entrada.getValue() * fator);
+                double antes = porClasse.getOrDefault(classe, moeda(0d)).doubleValue();
+
+                List<Integer> daClasse = indicesDaClasse(candidatos, classe);
+                if (daClasse.isEmpty()) {
+                    continue;   // classe com alvo e sem nenhum ativo: valor fica sem destino
+                }
+
+                List<ComparativoResponseDTO.SubclasseComparativoDTO> subs = subsPorClasse
+                        .getOrDefault(classe, List.of()).stream()
+                        .filter(s -> nz(s.percentual_ideal()) > 0d)
+                        .toList();
+
+                // Classe sem subclasse com alvo: ela mesma é o bucket.
+                if (subs.isEmpty()) {
+                    distribuidoNaRodada += distribuir(candidatos, daClasse, orcamentoClasse, config, tol, porCandidato);
                     continue;
                 }
-                double distribuido = distribuir(candidatos, daSub, orcamentoSub, config, tol, porCandidato);
-                porSubclasse.put(sub.id(), moeda(distribuido));
-                restante -= distribuido;
-                alocado += distribuido;
+
+                double restanteClasse = orcamentoClasse;
+                double valorIdealDaClasse = valorIdealClasse.getOrDefault(classe, 0d);
+                for (ComparativoResponseDTO.SubclasseComparativoDTO sub : subs) {
+                    // O percentual da subclasse é uma FATIA DA CLASSE: o teto dela
+                    // só pode ser calculado em R$ (valor_ideal/valor_atual da
+                    // subclasse), nunca tratando o percentual como % da carteira.
+                    double alvoSub = nz(sub.valor_ideal())
+                            + nz(sub.tolerancia()) / 100d * valorIdealDaClasse;
+                    double tetoSub = Math.max(0d, alvoSub - nz(sub.valor_atual()));
+                    double jaNaSub = porSubclasse.getOrDefault(sub.id(), moeda(0d)).doubleValue();
+                    double orcamentoSub = Math.min(Math.max(0d, tetoSub - jaNaSub), restanteClasse);
+                    List<Integer> daSub = (orcamentoSub > tol)
+                            ? indicesDaSubclasse(candidatos, daClasse, sub.id())
+                            : List.of();
+                    if (daSub.isEmpty()) {
+                        continue;
+                    }
+                    double distribuido = distribuir(candidatos, daSub, orcamentoSub, config, tol, porCandidato);
+                    if (distribuido > 0d) {
+                        porSubclasse.merge(sub.id(), moeda(distribuido), BigDecimal::add);
+                        restanteClasse -= distribuido;
+                        distribuidoNaRodada += distribuido;
+                    }
+                }
+
+                // Sobra da classe → candidatos fora de qualquer subclasse com alvo.
+                List<Long> idsComAlvo = subs.stream().map(ComparativoResponseDTO.SubclasseComparativoDTO::id).toList();
+                List<Integer> semSubclasse = daClasse.stream()
+                        .filter(i -> candidatos.get(i).subclasseId() == null
+                                || !idsComAlvo.contains(candidatos.get(i).subclasseId()))
+                        .toList();
+                if (restanteClasse > tol && !semSubclasse.isEmpty()) {
+                    distribuidoNaRodada += distribuir(candidatos, semSubclasse, restanteClasse, config, tol, porCandidato);
+                }
+
+                double depois = 0d;
+                for (int i : daClasse) {
+                    depois += porCandidato.get(i).doubleValue();
+                }
+                // A classe só "gastou" o que efetivamente saiu para os ativos dela.
+                porClasse.put(classe, moeda(depois));
+                if (depois - antes <= tol) {
+                    // nada foi absorvido nesta classe: as demais ainda podem tentar
+                }
             }
 
-            // Sobra da classe → candidatos fora de qualquer subclasse com alvo.
-            List<Long> idsComAlvo = subs.stream().map(ComparativoResponseDTO.SubclasseComparativoDTO::id).toList();
-            List<Integer> semSubclasse = daClasse.stream()
-                    .filter(i -> candidatos.get(i).subclasseId() == null
-                            || !idsComAlvo.contains(candidatos.get(i).subclasseId()))
-                    .toList();
-            if (restante > tol && !semSubclasse.isEmpty()) {
-                alocado += distribuir(candidatos, semSubclasse, restante, config, tol, porCandidato);
+            if (distribuidoNaRodada <= tol) {
+                break;   // ninguém tem espaço: para de tentar (evita laço infinito)
             }
+            restanteTotal -= distribuidoNaRodada;
         }
 
+        double alocado = porCandidato.stream().mapToDouble(BigDecimal::doubleValue).sum();
         return new Orcamento(Map.copyOf(porClasse), Map.copyOf(porSubclasse),
                 List.copyOf(porCandidato), moeda(alocado));
     }
 
-    /** Distribui um orçamento entre os candidatos de um bucket, pelas regras de peso. */
+    /**
+     * Distribui um orçamento dentro de um bucket respeitando o TETO de cada
+     * candidato (§17).
+     *
+     * Teto = déficit do ativo (ideal + tolerância − atual), limitado pelo limite
+     * de concentração quando houver; posições sem meta própria herdam o teto do
+     * bucket (subclasse/classe). Ninguém recebe acima do próprio teto — o que não
+     * couber vira valor não alocado com o motivo explicado (§21).
+     *
+     * Peso = FATOR DE MOMENTO × estratégia configurada, usando o teto como medida
+     * de necessidade estrutural. Fator 0 = não aportar, mesmo com déficit (§12).
+     */
     private double distribuir(List<Candidato> candidatos, List<Integer> indices, double orcamento,
                               ScoreConfigModel config, double tol, List<BigDecimal> porCandidato) {
-        if (orcamento <= 0d || indices.isEmpty()) {
+        if (orcamento <= tol || indices.isEmpty()) {
             return 0d;
         }
-        List<Double> pesos = pesosDoBucket(candidatos, indices, config, tol);
-        double soma = pesos.stream().mapToDouble(Double::doubleValue).sum();
-        if (soma <= 0d) {
-            return 0d;
-        }
-        double distribuido = 0d;
-        for (int k = 0; k < indices.size(); k++) {
-            double valor = orcamento * (pesos.get(k) / soma);
-            porCandidato.set(indices.get(k), moeda(valor));
-            distribuido += valor;
-        }
-        return distribuido;
-    }
 
-    /**
-     * Peso de cada candidato dentro do bucket:
-     *   1º pela estratégia configurada;
-     *   se todos zerarem (metas espelhando a carteira, déficit zero), pela
-     *   participação ATUAL no bucket;
-     *   e, com o bucket ainda vazio (nada comprado), divide igual.
-     */
-    private List<Double> pesosDoBucket(List<Candidato> candidatos, List<Integer> indices,
-                                       ScoreConfigModel config, double tol) {
-        List<Double> pesos = new ArrayList<>(indices.size());
+        List<Integer> elegiveis = new ArrayList<>();
+        List<Double> pesos = new ArrayList<>();
+        List<Double> espacos = new ArrayList<>();
         for (int i : indices) {
             Candidato c = candidatos.get(i);
-            if (nz(c.excesso()) > tol) {
-                pesos.add(0d);   // passou do próprio alvo: não recebe
+            if (!c.bloqueios().isEmpty()) {
+                continue;   // NÃO APORTAR (critério eliminatório ou limite atingido)
+            }
+            double espaco = c.teto().doubleValue() - porCandidato.get(i).doubleValue();
+            if (espaco <= tol) {
+                continue;   // já no teto
+            }
+            double peso = c.fator().doubleValue() * config.getEstrategiaAporte().pesoDoAtivo(
+                    c.contribution(), c.teto().doubleValue(),
+                    (c.prioridade() != null) ? c.prioridade() : 0);
+            if (peso <= 0d) {
                 continue;
             }
-            pesos.add(config.getEstrategiaAporte().pesoDoAtivo(
-                    c.contribution(), nz(c.deficit()),
-                    (c.prioridade() != null) ? c.prioridade() : 0));
+            elegiveis.add(i);
+            pesos.add(peso);
+            espacos.add(espaco);
         }
-        if (soma(pesos) > 0d) {
-            return pesos;
+        if (elegiveis.isEmpty()) {
+            return 0d;
         }
-        List<Double> porParticipacao = new ArrayList<>(indices.size());
-        for (int i : indices) {
-            porParticipacao.add(nz(candidatos.get(i).valorAtual()));
-        }
-        if (soma(porParticipacao) > 0d) {
-            return porParticipacao;
-        }
-        return new ArrayList<>(Collections.nCopies(indices.size(), 1d));
-    }
 
-    private double soma(List<Double> valores) {
-        return valores.stream().mapToDouble(Double::doubleValue).sum();
+        // "Water-filling": divide proporcional ao peso e REPETE com o que sobrou
+        // entre quem ainda tem espaço, senão um ativo no teto travaria o rateio.
+        double restante = orcamento;
+        double distribuido = 0d;
+        List<Double> ja = new ArrayList<>(Collections.nCopies(elegiveis.size(), 0d));
+        for (int rodada = 0; rodada < 12 && restante > tol; rodada++) {
+            double somaPesos = 0d;
+            for (int k = 0; k < elegiveis.size(); k++) {
+                if (espacos.get(k) - ja.get(k) > tol) {
+                    somaPesos += pesos.get(k);
+                }
+            }
+            if (somaPesos <= 0d) {
+                break;
+            }
+            double nestaRodada = 0d;
+            for (int k = 0; k < elegiveis.size(); k++) {
+                double espacoLivre = espacos.get(k) - ja.get(k);
+                if (espacoLivre <= tol) {
+                    continue;
+                }
+                double cota = restante * (pesos.get(k) / somaPesos);
+                double adicionar = Math.min(cota, espacoLivre);
+                ja.set(k, ja.get(k) + adicionar);
+                nestaRodada += adicionar;
+            }
+            if (nestaRodada <= tol) {
+                break;
+            }
+            distribuido += nestaRodada;
+            restante -= nestaRodada;
+        }
+
+        for (int k = 0; k < elegiveis.size(); k++) {
+            if (ja.get(k) > 0d) {
+                int i = elegiveis.get(k);
+                porCandidato.set(i, moeda(porCandidato.get(i).doubleValue() + ja.get(k)));
+            }
+        }
+        return distribuido;
     }
 
     private List<Integer> indicesDaClasse(List<Candidato> candidatos, CategoriaInvestimento classe) {
@@ -452,15 +770,132 @@ public class AporteService {
                 .toList();
     }
 
-    /** Quality Score consolidado por ativo do catálogo (reuso do módulo de avaliação). */
-    private Map<UUID, BigDecimal> qualidadePorAtivo() {
-        Map<UUID, BigDecimal> mapa = new HashMap<>();
+    /** Quality Score e NOTA DE MOMENTO por ativo, com o fator de momento já calculado. */
+    private Avaliacoes avaliacoes(ScoreConfigModel config) {
+        Map<UUID, Avaliacao> porCatalogo = new HashMap<>();
+        Map<Long, Avaliacao> porPosicao = new HashMap<>();
+
         for (ChecklistAtivoDTO.AtivoAvaliado a : checklistAtivoService.resumoPorAtivo()) {
-            if (a.ativo_cadastro_id() != null && a.quality_score() != null) {
-                mapa.putIfAbsent(a.ativo_cadastro_id(), a.quality_score());
+            Avaliacao avaliacao = new Avaliacao(
+                    a.quality_score(),
+                    a.momento_score(),
+                    scoreCalculator.fatorMomento(a.momento_score(),
+                            config.getMomentoFaixa1(), config.getMomentoFaixa2(),
+                            config.getMomentoFaixa3(), config.getMomentoFaixa4()),
+                    (a.bloqueios() != null) ? a.bloqueios() : List.of());
+            if (a.ativo_cadastro_id() != null) {
+                porCatalogo.putIfAbsent(a.ativo_cadastro_id(), avaliacao);
+            } else if (a.ativo_id() != null) {
+                porPosicao.putIfAbsent(a.ativo_id(), avaliacao);
             }
         }
-        return mapa;
+        return new Avaliacoes(porCatalogo, porPosicao);
+    }
+
+    /** Alertas do motor (§31) — o que o usuário precisa saber ANTES de decidir. */
+    private List<RankingAportesDTO.Alerta> alertas(ComparativoResponseDTO comparativo,
+                                                   List<Candidato> candidatos,
+                                                   List<RankingAportesDTO.Item> itens,
+                                                   BigDecimal naoAlocado,
+                                                   ScoreConfigModel config) {
+        List<RankingAportesDTO.Alerta> alertas = new ArrayList<>();
+
+        for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
+            RankingAportesDTO.StatusNivel status = statusDe(c.percentual_atual(), c.percentual_ideal(),
+                    c.tolerancia(), c.limite_maximo());
+            if (status == RankingAportesDTO.StatusNivel.ACIMA) {
+                alertas.add(new RankingAportesDTO.Alerta("CLASSE_ACIMA", "Classe " + c.classe()
+                        + " acima do alvo: " + formatar(c.percentual_atual()) + "% vs "
+                        + formatar(c.percentual_ideal()) + "% ideal."));
+            } else if (status == RankingAportesDTO.StatusNivel.ABAIXO) {
+                alertas.add(new RankingAportesDTO.Alerta("CLASSE_ABAIXO", "Classe " + c.classe()
+                        + " abaixo do alvo: falta " + formatar(c.deficit()) + "."));
+            }
+            for (ComparativoResponseDTO.SubclasseComparativoDTO s : c.subclasses()) {
+                if (statusDe(s.percentual_atual(), s.percentual_ideal(), s.tolerancia(), s.limite_maximo())
+                        == RankingAportesDTO.StatusNivel.ACIMA) {
+                    alertas.add(new RankingAportesDTO.Alerta("SUBCLASSE_ACIMA", "Subclasse " + s.nome()
+                            + " (" + c.classe() + ") acima do alvo: " + formatar(s.percentual_atual())
+                            + "% vs " + formatar(s.percentual_ideal()) + "%."));
+                }
+            }
+        }
+
+        for (Candidato c : candidatos) {
+            if (c.limiteAtingido()) {
+                alertas.add(new RankingAportesDTO.Alerta("ATIVO_LIMITE", c.nome()
+                        + " atingiu o limite de concentração de " + formatar(c.limiteMaximo())
+                        + "% — não recebe novos aportes."));
+            }
+            if (!c.bloqueios().isEmpty()) {
+                alertas.add(new RankingAportesDTO.Alerta("BLOQUEIO", c.nome() + ": "
+                        + String.join("; ", c.bloqueios()) + "."));
+            }
+        }
+
+        long semAvaliacao = candidatos.stream()
+                .filter(c -> c.estado() == RankingAportesDTO.EstadoAtivo.SEM_AVALIACAO)
+                .count();
+        if (semAvaliacao > 0) {
+            alertas.add(new RankingAportesDTO.Alerta("SEM_AVALIACAO", semAvaliacao
+                    + " item(ns) sem avaliação: o termo de qualidade não entrou na conta deles (nada foi zerado). "
+                    + "Para bloquear, marque um critério eliminatório no checklist."));
+        }
+
+        long semTickerSemSubclasse = itens.stream()
+                .filter(i -> !i.vinculado() && i.subclasse_id() == null)
+                .count();
+        if (semTickerSemSubclasse > 0) {
+            alertas.add(new RankingAportesDTO.Alerta("SEM_SUBCLASSE", semTickerSemSubclasse
+                    + " posição(ões) sem ticker fora de qualquer subclasse: classifique-as em Carteira Ideal "
+                    + "para entrarem no alvo da classe."));
+        }
+
+        if (naoAlocado != null && naoAlocado.signum() > 0) {
+            alertas.add(new RankingAportesDTO.Alerta("NAO_ALOCADO", formatar(naoAlocado)
+                    + " sem destino neste aporte"
+                    + (Boolean.FALSE.equals(config.getRedistribuir())
+                            ? " (redistribuição desligada)."
+                            : ": todas as classes elegíveis já estão completas.")));
+        }
+        return alertas;
+    }
+
+    /** Explicação legível do valor não alocado (§32) — nunca apenas "R$ X não alocado". */
+    private String explicacaoNaoAlocado(BigDecimal naoAlocado, List<Candidato> candidatos,
+                                        ComparativoResponseDTO comparativo) {
+        if (naoAlocado == null || naoAlocado.signum() <= 0) {
+            return null;
+        }
+        long noTeto = candidatos.stream().filter(c -> c.teto().signum() <= 0).count();
+        long bloqueados = candidatos.stream().filter(c -> !c.bloqueios().isEmpty()).count();
+        long classesAcima = comparativo.classes().stream()
+                .filter(c -> statusDe(c.percentual_atual(), c.percentual_ideal(), c.tolerancia(), c.limite_maximo())
+                        == RankingAportesDTO.StatusNivel.ACIMA)
+                .count();
+
+        List<String> razoes = new ArrayList<>();
+        if (classesAcima > 0) {
+            razoes.add(classesAcima + " classe(s) já estão acima do alvo");
+        }
+        if (noTeto > 0) {
+            razoes.add(noTeto + " ativo(s) já atingiram o próprio alvo (déficit + tolerância)");
+        }
+        if (bloqueados > 0) {
+            razoes.add(bloqueados + " ativo(s) bloqueados por critério eliminatório ou limite de concentração");
+        }
+        if (razoes.isEmpty()) {
+            razoes.add("nenhuma classe/ativo elegível tinha espaço para receber mais");
+        }
+        return formatar(naoAlocado) + " ficaram não alocados porque " + String.join(", ", razoes)
+                + ". O dinheiro não foi empurrado para quem já está no alvo.";
+    }
+
+    private String formatar(BigDecimal valor) {
+        if (valor == null) {
+            return "0,00";
+        }
+        return valor.setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 
     private List<ScoreConfigDTO.Termo> termosDaConfig(ScoreConfigModel config) {

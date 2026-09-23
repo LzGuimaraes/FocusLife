@@ -28,12 +28,16 @@ export interface SubclasseIdeal {
   id: number;
   nome: string;
   percentual_ideal: number;
+  tolerancia: number;
+  limite_maximo: number | null;
   ordem: number;
 }
 export interface ClasseIdeal {
   id: number;
   classe: CategoriaInvestimento;
   percentual_ideal: number;
+  tolerancia: number;
+  limite_maximo: number | null;
   ordem: number;
   subclasses: SubclasseIdeal[];
 }
@@ -46,6 +50,8 @@ export interface MetaIdeal {
   subclasse_id: number | null;
   subclasse_nome: string | null;
   percentual_ideal: number;
+  tolerancia: number;
+  limite_maximo: number | null;
   prioridade_manual: number;
   ordem: number;
 }
@@ -65,12 +71,16 @@ export interface CarteiraIdeal {
 export interface SubclasseIdealPayload {
   nome: string;
   percentual_ideal: number;
+  tolerancia?: number;
+  limite_maximo?: number | null;
   ordem: number;
 }
 
 export interface ClasseIdealPayload {
   classe: CategoriaInvestimento;
   percentual_ideal: number;
+  tolerancia?: number;
+  limite_maximo?: number | null;
   ordem: number;
   subclasses: SubclasseIdealPayload[];
 }
@@ -80,6 +90,8 @@ export interface MetaIdealPayload {
   classe: CategoriaInvestimento;
   subclasse_nome: string | null;
   percentual_ideal: number;
+  tolerancia?: number;
+  limite_maximo?: number | null;
   prioridade_manual: number;
   ordem: number;
 }
@@ -183,6 +195,8 @@ export interface MeuAtivo {
   percentual_atual: number;
   meta_id: number | null;
   percentual_ideal: number | null;
+  tolerancia: number | null;
+  limite_maximo: number | null;
   prioridade_manual: number | null;
   subclasse_id: number | null;
   subclasse_nome: string | null;

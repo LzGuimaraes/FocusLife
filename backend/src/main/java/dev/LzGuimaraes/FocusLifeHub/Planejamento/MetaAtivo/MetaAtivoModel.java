@@ -43,6 +43,17 @@ public class MetaAtivoModel {
     @Column(name = "percentual_ideal", nullable = false, precision = 9, scale = 4)
     private BigDecimal percentualIdeal = BigDecimal.ZERO;
 
+    /**
+     * Tolerância (pontos percentuais SOBRE o % ideal) que ainda conta como "no
+     * alvo" e que define o TETO do aporte deste ativo.
+     */
+    @Column(nullable = false, precision = 9, scale = 4)
+    private BigDecimal tolerancia = BigDecimal.ZERO;
+
+    /** Teto de concentração (% do patrimônio). Acima dele, sem novos aportes. */
+    @Column(name = "limite_maximo", precision = 9, scale = 4)
+    private BigDecimal limiteMaximo;
+
     /** Prioridade manual de aporte definida pelo usuário (0 a 10). */
     @Column(name = "prioridade_manual", nullable = false)
     private Integer prioridadeManual = 0;
