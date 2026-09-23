@@ -14,6 +14,52 @@ export type EstadoAtivo = "APROVADO" | "RESTRITO" | "NAO_APORTAR" | "SEM_AVALIAC
 /** Status de equilíbrio de classe/subclasse frente à tolerância (§18). */
 export type StatusNivel = "ABAIXO" | "EQUILIBRADO" | "ACIMA" | "SEM_ALVO";
 
+/**
+ * Ação recomendada (§23). MANTER ≠ APORTAR: um ativo pode ser excelente e
+ * continuar na carteira sem receber dinheiro agora.
+ */
+export type AcaoAtivo = "APORTAR" | "MANTER" | "NAO_APORTAR" | "AVALIAR";
+
+/** Como o teto do ativo é calculado (§17). */
+export type TetoAtivoModo = "TETO_ESTRITO" | "TETO_ATE_A_CLASSE";
+
+/** Travas do motor, na ordem em que o usuário quer que elas sejam explicadas (§36). */
+export const TRACAS_MOTOR = [
+  "BLOQUEIO",
+  "LIMITE",
+  "CLASSE",
+  "SUBCLASSE",
+  "SETOR",
+  "TETO_ATIVO",
+  "MOMENTO",
+  "SCORE",
+] as const;
+
+export type TracaMotor = (typeof TRACAS_MOTOR)[number];
+
+export const TRACA_LABEL: Record<TracaMotor, string> = {
+  BLOQUEIO: "Critério eliminatório (bloqueia)",
+  LIMITE: "Limite máximo de concentração (bloqueia)",
+  CLASSE: "Déficit da CLASSE (define quanto entra no nível)",
+  SUBCLASSE: "Déficit da SUBCLASSE (dentro da classe)",
+  SETOR: "Déficit do SETOR (dentro da subclasse)",
+  TETO_ATIVO: "Teto do ATIVO (déficit + tolerância, no modo configurado)",
+  MOMENTO: "Fator de momento (0 a 1)",
+  SCORE: "Contribution Score e estratégia (divide dentro do nível)",
+};
+
+/** Sugestão de redução (§19/§21/§37): o que passou do alvo + tolerância. */
+export interface Rebalanceamento {
+  nivel: "ATIVO" | "SUBCLASSE" | "SETOR" | "CLASSE";
+  nome: string;
+  classe: CategoriaInvestimento;
+  percentual_atual: number;
+  percentual_ideal: number;
+  excesso: number;
+  sugerido_vender: number;
+  motivo: string;
+}
+
 /** Alerta do motor (§31). */
 export interface Alerta {
   tipo: string;
@@ -49,6 +95,12 @@ export interface ScoreConfig {
   momento_faixa_4: number;
   /** true = valor sem destino elegível procura outra classe com déficit. */
   redistribuir: boolean;
+  /** true = o motor sugere VENDER o que passou do alvo para financiar os déficits. */
+  rebalancear: boolean;
+  /** TETO_ESTRITO = déficit próprio; TETO_ATE_A_CLASSE = deixar o ativo absorver o déficit da classe (§17). */
+  teto_ativo_modo: TetoAtivoModo;
+  /** Ordem configurada das travas do motor (§36). */
+  precedencia: string;
   estrategia_aporte: EstrategiaAporte;
   /** false = o usuário nunca personalizou (os pesos são os padrões do sistema). */
   personalizada: boolean;
@@ -66,6 +118,9 @@ export interface ScoreConfigPayload {
   momento_faixa_3: number;
   momento_faixa_4: number;
   redistribuir: boolean;
+  rebalancear: boolean;
+  teto_ativo_modo: TetoAtivoModo;
+  precedencia: string;
   estrategia_aporte: EstrategiaAporte;
 }
 
@@ -127,6 +182,9 @@ export interface ItemRanking {
 
   /** Cálculo aberto do Contribution Score (§34) — a conta exata, passo a passo. */
   formula: string | null;
+
+  /** Ação recomendada (§23): aportar, manter, não aportar ou avaliar. */
+  acao: AcaoAtivo;
 }
 
 /** Comparação de cenários (§33): mesmos dados, pesos de decisão diferentes. */
@@ -202,6 +260,13 @@ export interface RankingAportes {
   valor_aporte: number | null;
   valor_alocado: number | null;
   valor_nao_alocado: number | null;
+  /** Valor sugerido de VENDA (rebalanceamento) — 0 quando desligado. */
+  valor_vendas: number | null;
+  /** Orçamento usado no plano = aporte + (vendas, quando ligado). */
+  valor_orcamento: number | null;
+  rebalancear: boolean;
+  /** TETO_ESTRITO | TETO_ATE_A_CLASSE. */
+  teto_ativo_modo: TetoAtivoModo;
   /** Explicação legível do valor não alocado (§32). */
   nao_alocado_explicacao: string | null;
   redistribuir: boolean;
@@ -213,6 +278,8 @@ export interface RankingAportes {
   precedencia: string[];
   /** Cenários comparativos (§33) — vazio quando nenhum valor foi informado. */
   cenarios: Cenario[];
+  /** Sugestões de redução (§19/§21) — vazio quando o rebalanceamento está desligado. */
+  rebalanceamento: Rebalanceamento[];
   classes: ClasseAporte[];
   itens: ItemRanking[];
 }

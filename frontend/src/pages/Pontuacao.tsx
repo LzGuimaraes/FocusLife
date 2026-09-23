@@ -9,8 +9,8 @@ import { NumberInput, Select } from "../components/Form";
 import RankingAportesTable from "../components/RankingAportesTable";
 import PlanejamentoNav from "../components/PlanejamentoNav";
 import type { CarteiraResumo } from "../types/planejamento";
-import type { RankingAportes, ScoreConfig, ScoreConfigPayload } from "../types/aporte";
-import { ESTRATEGIAS_APORTE } from "../types/aporte";
+import type { RankingAportes, ScoreConfig, ScoreConfigPayload, TetoAtivoModo, TracaMotor } from "../types/aporte";
+import { ESTRATEGIAS_APORTE, TRACAS_MOTOR, TRACA_LABEL } from "../types/aporte";
 import { boxStyle, miniLabel, controlStyle } from "../components/FormStyles";
 import { apenasNumero, textoParaNum } from "../utils/numeros";
 
@@ -38,6 +38,9 @@ export default function Pontuacao() {
   const [estrategia, setEstrategia] = useState<ScoreConfig["estrategia_aporte"]>("DEFICIT_PROPORCIONAL");
   const [faixas, setFaixas] = useState({ f1: "25", f2: "50", f3: "75", f4: "90" });
   const [redistribuir, setRedistribuir] = useState(true);
+  const [rebalancear, setRebalancear] = useState(false);
+  const [tetoModo, setTetoModo] = useState<TetoAtivoModo>("TETO_ESTRITO");
+  const [precedencia, setPrecedencia] = useState<TracaMotor[]>([...TRACAS_MOTOR]);
   const [carteiras, setCarteiras] = useState<CarteiraResumo[]>([]);
   const [carteiraId, setCarteiraId] = useState<number | null>(null);
   const [valorAporte, setValorAporte] = useState("");
@@ -76,7 +79,32 @@ export default function Pontuacao() {
       f4: String(cfg.momento_faixa_4),
     });
     setRedistribuir(cfg.redistribuir);
+    setRebalancear(cfg.rebalancear);
+    setTetoModo(cfg.teto_ativo_modo);
+    setPrecedencia(ordemDaConfig(cfg.precedencia));
     setEstrategia(cfg.estrategia_aporte);
+  };
+
+  /**
+   * Converte a ordem salva ("BLOQUEIO,LIMITE,...") numa lista de travas.
+   * IDs desconhecidos são ignorados e o que faltar entra no fim — a ordem na
+   * tela nunca pode virar uma lista vazia ou com trava desligada.
+   */
+  const ordemDaConfig = (bruta: string | null): TracaMotor[] => {
+    const validas = (bruta ?? "").split(",")
+      .map(id => id.trim().toUpperCase())
+      .filter((id): id is TracaMotor => (TRACAS_MOTOR as readonly string[]).includes(id));
+    const semRepetir = validas.filter((id, i) => validas.indexOf(id) === i);
+    return [...semRepetir, ...TRACAS_MOTOR.filter(id => !semRepetir.includes(id))];
+  };
+
+  /** Move uma trava para cima/baixo na ordem de precedência (§36). */
+  const moverTraca = (indice: number, delta: number) => {
+    const destino = indice + delta;
+    if (destino < 0 || destino >= precedencia.length) return;
+    const copia = [...precedencia];
+    [copia[indice], copia[destino]] = [copia[destino], copia[indice]];
+    setPrecedencia(copia);
   };
 
   /* ── Ranking (carteira, valor e pesos salvos) ── */
@@ -113,6 +141,9 @@ export default function Pontuacao() {
       momento_faixa_3: textoParaNum(faixas.f3),
       momento_faixa_4: textoParaNum(faixas.f4),
       redistribuir,
+      rebalancear,
+      teto_ativo_modo: tetoModo,
+      precedencia: precedencia.join(","),
       estrategia_aporte: estrategia,
     };
     if (payload.peso_quality + payload.peso_deficit + payload.peso_excesso
@@ -242,6 +273,56 @@ export default function Pontuacao() {
             Ligado: o que não coube numa classe (todos os ativos no alvo/bloqueados) procura outra classe com déficit.
             Desligado: fica <strong>não alocado</strong>, sempre com o motivo explicado.
           </p>
+
+          {/* ── Modo do teto do ativo (§17) ── */}
+          <div style={{ marginTop: "16px", borderTop: "1px solid #f1f5f9", paddingTop: "14px" }}>
+            <Select label="Teto do ativo" value={tetoModo}
+              hint={tetoModo === "TETO_ESTRITO"
+                ? "O ativo só recebe até o próprio alvo (déficit + tolerância dele)."
+                : "O ativo também absorve o déficit da classe/subclasse dele (o orçamento da classe continua sendo o limite)."}
+              onChange={e => setTetoModo(e.target.value as TetoAtivoModo)}>
+              <option value="TETO_ESTRITO">Estrito — só o déficit do próprio ativo</option>
+              <option value="TETO_ATE_A_CLASSE">Até a classe — pode absorver o déficit da classe/subclasse</option>
+            </Select>
+          </div>
+
+          {/* ── Rebalanceamento (§19/§37) ── */}
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: 600, color: "#374151", marginTop: "16px" }}>
+            <input type="checkbox" checked={rebalancear} onChange={e => setRebalancear(e.target.checked)}
+              style={{ width: "18px", height: "18px", accentColor: "#6366f1" }} />
+            Rebalanceamento (sugerir vendas do que passou do alvo)
+          </label>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: "4px 0 0" }}>
+            Ligado: o motor mostra o quanto está <strong>acima do alvo + tolerância</strong> em cada nível e usa essa
+            venda sugerida como orçamento extra para os déficits — nunca vende nada sozinho, é só sugestão.
+            Desligado: o plano usa apenas o valor do aporte.
+          </p>
+
+          {/* ── Ordem das travas (§36) ── */}
+          <div style={{ marginTop: "16px", borderTop: "1px solid #f1f5f9", paddingTop: "14px" }}>
+            <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", margin: "0 0 4px" }}>
+              Ordem das travas do motor
+            </h4>
+            <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 10px" }}>
+              As travas são <strong>sempre</strong> aplicadas — a ordem só define como o motivo é explicado na tela.
+              Nenhuma regra é escondida nem desligada por esta ordem.
+            </p>
+            {precedencia.map((id, i) => (
+              <div key={id} style={{
+                display: "flex", alignItems: "center", gap: "8px", padding: "6px 8px",
+                background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "6px",
+              }}>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", minWidth: "16px" }}>{i + 1}.</span>
+                <span style={{ fontSize: "12px", color: "#334155", flex: 1 }}>{TRACA_LABEL[id]}</span>
+                <button type="button" title="Subir" aria-label={`Subir ${TRACA_LABEL[id]}`}
+                  onClick={() => moverTraca(i, -1)} disabled={i === 0}
+                  style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: "6px", width: "24px", height: "24px", cursor: i === 0 ? "not-allowed" : "pointer", color: i === 0 ? "#cbd5e1" : "#475569" }}>↑</button>
+                <button type="button" title="Descer" aria-label={`Descer ${TRACA_LABEL[id]}`}
+                  onClick={() => moverTraca(i, 1)} disabled={i === precedencia.length - 1}
+                  style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: "6px", width: "24px", height: "24px", cursor: i === precedencia.length - 1 ? "not-allowed" : "pointer", color: i === precedencia.length - 1 ? "#cbd5e1" : "#475569" }}>↓</button>
+              </div>
+            ))}
+          </div>
 
           <div style={{ display: "flex", gap: "10px", marginTop: "16px", flexWrap: "wrap" }}>
             <Button onClick={salvar} loading={salvando}>Salvar pesos</Button>

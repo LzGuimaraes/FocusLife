@@ -103,6 +103,20 @@ public class ScoreConfigService {
         if (dto.redistribuir() != null) {
             config.setRedistribuir(dto.redistribuir());
         }
+        if (dto.rebalancear() != null) {
+            config.setRebalancear(dto.rebalancear());
+        }
+        if (dto.teto_ativo_modo() != null) {
+            String modo = dto.teto_ativo_modo().trim().toUpperCase();
+            if (!modo.equals("TETO_ESTRITO") && !modo.equals("TETO_ATE_A_CLASSE")) {
+                throw new BusinessRuleException(
+                        "O modo do teto do ativo precisa ser TETO_ESTRITO ou TETO_ATE_A_CLASSE.");
+            }
+            config.setTetoAtivoModo(modo);
+        }
+        if (dto.precedencia() != null && !dto.precedencia().isBlank()) {
+            config.setPrecedencia(normalizarPrecedencia(dto.precedencia()));
+        }
         if (dto.estrategia_aporte() != null) {
             config.setEstrategiaAporte(dto.estrategia_aporte());
         }
@@ -151,9 +165,35 @@ public class ScoreConfigService {
                 config.getMomentoFaixa3(),
                 config.getMomentoFaixa4(),
                 config.getRedistribuir(),
+                config.getRebalancear(),
+                config.getTetoAtivoModo(),
+                config.getPrecedencia(),
                 config.getEstrategiaAporte(),
                 personalizada,
                 catalogo(config));
+    }
+
+    /**
+     * Normaliza a ordem das travas: aceita somente identificadores conhecidos,
+     * sem repetição, e completa o que faltar na ordem padrão — assim uma string
+     * inválida nunca desliga uma trava.
+     */
+    private String normalizarPrecedencia(String bruta) {
+        List<String> conhecidas = List.of("BLOQUEIO", "LIMITE", "CLASSE", "SUBCLASSE",
+                "SETOR", "TETO_ATIVO", "MOMENTO", "SCORE");
+        List<String> ordem = new ArrayList<>();
+        for (String parte : bruta.split(",")) {
+            String id = parte.trim().toUpperCase();
+            if (conhecidas.contains(id) && !ordem.contains(id)) {
+                ordem.add(id);
+            }
+        }
+        for (String id : conhecidas) {
+            if (!ordem.contains(id)) {
+                ordem.add(id);
+            }
+        }
+        return String.join(",", ordem);
     }
 
     private List<ScoreConfigDTO.Termo> catalogo(ScoreConfigModel config) {

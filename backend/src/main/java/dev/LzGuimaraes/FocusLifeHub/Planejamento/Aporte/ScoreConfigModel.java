@@ -77,6 +77,32 @@ public class ScoreConfigModel {
     @Column(nullable = false)
     private Boolean redistribuir = true;
 
+    /**
+     * true = o motor também sugere REDUZIR o que passou do alvo (dentro da faixa
+     * de tolerância) e soma esse valor ao orçamento do aporte. Sugestão — nada
+     * é vendido automaticamente.
+     */
+    @Column(nullable = false)
+    private Boolean rebalancear = false;
+
+    /**
+     * Como o TETO do ativo é calculado:
+     *   TETO_ESTRITO      → déficit do ativo + tolerância (padrão)
+     *   TETO_ATE_A_CLASSE → o teto do ativo passa a ser o déficit da
+     *                       classe/subclasse a que ele pertence
+     * O limite máximo de concentração continua valendo nos dois modos.
+     */
+    @Column(name = "teto_ativo_modo", nullable = false, length = 30)
+    private String tetoAtivoModo = "TETO_ESTRITO";
+
+    /**
+     * Ordem das travas (CSV): BLOQUEIO,LIMITE,CLASSE,SUBCLASSE,SETOR,TETO_ATIVO,
+     * MOMENTO,SCORE. Define como o motivo é explicado e a lista de precedência
+     * mostrada na tela.
+     */
+    @Column(nullable = false, length = 300)
+    private String precedencia = "BLOQUEIO,LIMITE,CLASSE,SUBCLASSE,SETOR,TETO_ATIVO,MOMENTO,SCORE";
+
     @Enumerated(EnumType.STRING)
     @Column(name = "estrategia_aporte", nullable = false, length = 30)
     private EstrategiaAporte estrategiaAporte = EstrategiaAporte.padrao();

@@ -49,6 +49,15 @@ public final class ScoreConfigDTO {
 
             Boolean redistribuir,
 
+            /** true = sugerir redução do que está acima do alvo (com faixa de tolerância). */
+            Boolean rebalancear,
+
+            /** TETO_ESTRITO | TETO_ATE_A_CLASSE. */
+            String teto_ativo_modo,
+
+            /** Ordem das travas: BLOQUEIO,LIMITE,CLASSE,SUBCLASSE,SETOR,TETO_ATIVO,MOMENTO,SCORE. */
+            String precedencia,
+
             EstrategiaAporte estrategia_aporte
     ) {}
 
@@ -66,6 +75,9 @@ public final class ScoreConfigDTO {
             BigDecimal momento_faixa_3,
             BigDecimal momento_faixa_4,
             Boolean redistribuir,
+            Boolean rebalancear,
+            String teto_ativo_modo,
+            String precedencia,
             EstrategiaAporte estrategia_aporte,
             /** false = o usuário nunca personalizou (os pesos são os padrões). */
             Boolean personalizada,

@@ -1,4 +1,4 @@
-import type { RankingAportes, EstadoAtivo, StatusNivel } from "../types/aporte";
+import type { RankingAportes, EstadoAtivo, StatusNivel, AcaoAtivo } from "../types/aporte";
 import { ESTRATEGIAS_APORTE } from "../types/aporte";
 import ScoreBadge from "./ScoreBadge";
 import { catInfo, fmtMoeda, fmtPercentual } from "../utils/percentual";
@@ -37,6 +37,10 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
           <div style={{ textAlign: "right", fontSize: "12px", color: "#64748b" }}>
             <div>
               Aporte de <strong>{fmtMoeda(ranking.valor_aporte, moeda)}</strong>
+              {ranking.valor_orcamento != null && ranking.valor_vendas != null && ranking.valor_vendas > 0 && (
+                <> + vendas sugeridas <strong style={{ color: "#b45309" }}>{fmtMoeda(ranking.valor_vendas, moeda)}</strong>
+                  {' '}= orçamento <strong>{fmtMoeda(ranking.valor_orcamento, moeda)}</strong></>
+              )}
             </div>
             <div>
               Alocado: <strong style={{ color: "#047857" }}>{fmtMoeda(ranking.valor_alocado, moeda)}</strong>
@@ -49,6 +53,12 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
                 {ranking.nao_alocado_explicacao}
               </div>
             )}
+            <button type="button" onClick={() => exportarPlano(ranking)}
+              title="Baixar o plano de aporte em CSV (o que aportar, o que reduzir e por quê)"
+              style={{ marginTop: "8px", border: "1px solid #e2e8f0", background: "#fff", color: "#475569",
+                fontSize: "11px", fontWeight: 700, padding: "4px 10px", borderRadius: "8px", cursor: "pointer" }}>
+              ⬇ Exportar plano (CSV)
+            </button>
           </div>
         )}
       </div>
@@ -75,6 +85,9 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
       {/* Onde o dinheiro entra: a decisão é da classe/subclasse, antes de olhar ticker. */}
       <AportePorClasse ranking={ranking} />
 
+      {/* Rebalanceamento (§19/§37): o que passou do alvo e poderia financiar os déficits. */}
+      <RebalanceamentoAporte ranking={ranking} />
+
       {/* Cenários (§33) e precedência das travas (§36) — transparência, nada escondido. */}
       <CenariosAporte ranking={ranking} />
 
@@ -85,11 +98,11 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
       ) : (
         <>
           <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: comSugestao ? "1180px" : "1040px", fontSize: "13px" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: comSugestao ? "1290px" : "1040px", fontSize: "13px" }}>
             <thead>
               <tr style={{ background: "#f8fafc" }}>
-                {["#", "Ativo", "Classe", "Quality", "Momento", "Estado", "Contribution", "Atual", "Ideal", "Déficit", "Teto", "Prior."]
-                  .map(h => <th key={h} style={{ ...th, textAlign: ["#", "Ativo", "Classe", "Estado"].includes(h) ? "left" : "right" }}>{h}</th>)}
+                {["#", "Ativo", "Classe", "Quality", "Momento", "Estado", "Ação", "Contribution", "Atual", "Ideal", "Déficit", "Teto", "Prior."]
+                  .map(h => <th key={h} style={{ ...th, textAlign: ["#", "Ativo", "Classe", "Estado", "Ação"].includes(h) ? "left" : "right" }}>{h}</th>)}
                 {comSugestao && <th style={{ ...th, textAlign: "right" }}>Sugestão</th>}
               </tr>
             </thead>
@@ -152,6 +165,13 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
                         {fmtScore(i.contribution_score)}
                       </span>
                     </td>
+                    <td style={{ ...td }}>
+                      <span title={i.motivo ?? ""}
+                        style={{ fontSize: "11px", fontWeight: 700, padding: "2px 9px", borderRadius: "9999px", whiteSpace: "nowrap",
+                          color: acaoCor(i.acao), background: acaoBg(i.acao) }}>
+                        {acaoLabel(i.acao)}
+                      </span>
+                    </td>
                     <td style={{ ...td, textAlign: "right", color: "#475569" }}>{fmtPercentual(i.percentual_atual)}</td>
                     <td style={{ ...td, textAlign: "right", color: "#475569" }}>
                       {semMetaPropria ? <span style={{ color: "#cbd5e1" }}>subclasse</span> : fmtPercentual(i.percentual_ideal)}
@@ -195,7 +215,8 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
    Não altera nada da carteira: é comparação, para o usuário escolher.
    ══════════════════════════════════════════════════════════════════════ */
 function CenariosAporte({ ranking }: { ranking: RankingAportes }) {
-  const { cenarios, precedencia, moeda } = ranking;
+  const { cenarios, moeda } = ranking;
+  const precedencia = ranking.precedencia ?? [];
   if (cenarios.length === 0 && precedencia.length === 0) return null;
 
   return (
@@ -243,6 +264,70 @@ function CenariosAporte({ ranking }: { ranking: RankingAportes }) {
             configura são os pesos, as tolerâncias, os limites e as metas do círculo.
           </p>
         </details>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   REBALANCEAMENTO (§19/§21/§37) — o que passou do alvo + tolerância.
+
+   O motor NUNCA vende nada: ele mostra quanto de cada nível está acima do
+   alvo e quanto isso financiaria os déficits. Só o nível mais específico
+   que explica o excesso aparece (o filho abate o pai), para o mesmo dinheiro
+   não ser contado duas vezes.
+   ══════════════════════════════════════════════════════════════════════ */
+function RebalanceamentoAporte({ ranking }: { ranking: RankingAportes }) {
+  const { moeda } = ranking;
+  const rebalanceamento = ranking.rebalanceamento ?? [];
+  if (!ranking.rebalancear) return null;
+
+  return (
+    <div style={{ marginBottom: "16px" }}>
+      <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", margin: "0 0 6px" }}>
+        Rebalanceamento — o que passou do alvo
+      </h4>
+      {rebalanceamento.length === 0 ? (
+        <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
+          Nada acima do alvo + tolerância: a carteira está dentro da faixa em todos os níveis. Nenhuma
+          redução sugerida — o plano usa apenas o valor do aporte.
+        </p>
+      ) : (
+        <>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "620px" }}>
+              <thead>
+                <tr style={{ background: "#fff7ed" }}>
+                  <th style={{ ...th, textAlign: "left" }}>Nível</th>
+                  <th style={{ ...th, textAlign: "left" }}>Quem</th>
+                  <th style={{ ...th, textAlign: "right" }}>Atual</th>
+                  <th style={{ ...th, textAlign: "right" }}>Ideal</th>
+                  <th style={{ ...th, textAlign: "right" }}>Reduzir</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rebalanceamento.map((r, i) => (
+                  <tr key={`${r.nivel}-${r.nome}-${i}`} style={{ borderTop: "1px solid #fed7aa" }}>
+                    <td style={{ ...td, color: "#b45309", fontWeight: 700 }}>{r.nivel.toLowerCase()}</td>
+                    <td style={{ ...td, fontWeight: 600, color: "#0f172a" }}>
+                      {r.nome}
+                      <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 400 }}>{r.motivo}</div>
+                    </td>
+                    <td style={{ ...td, textAlign: "right", color: "#475569" }}>{fmtPercentual(r.percentual_atual)}</td>
+                    <td style={{ ...td, textAlign: "right", color: "#475569" }}>{fmtPercentual(r.percentual_ideal)}</td>
+                    <td style={{ ...td, textAlign: "right", fontWeight: 800, color: "#b45309" }}>
+                      {fmtMoeda(r.sugerido_vender, moeda)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p style={{ fontSize: "11px", color: "#b45309", margin: "8px 0 0" }}>
+            Total sugerido de venda: <strong>{fmtMoeda(ranking.valor_vendas, moeda)}</strong> — usado como orçamento
+            extra do plano. É sugestão: nada é vendido automaticamente, e a decisão continua sua.
+          </p>
+        </>
       )}
     </div>
   );
@@ -410,6 +495,28 @@ const estadoBg = (e: EstadoAtivo): string => ({
   SEM_AVALIACAO: "#f1f5f9",
 }[e] ?? "#f1f5f9");
 
+/* Ação recomendada (§23): MANTER ≠ APORTAR — o ativo continua na carteira sem dinheiro novo. */
+const acaoLabel = (a: AcaoAtivo): string => ({
+  APORTAR: "aportar",
+  MANTER: "manter",
+  NAO_APORTAR: "não aportar",
+  AVALIAR: "avaliar",
+}[a] ?? a);
+
+const acaoCor = (a: AcaoAtivo): string => ({
+  APORTAR: "#047857",
+  MANTER: "#475569",
+  NAO_APORTAR: "#b91c1c",
+  AVALIAR: "#1d4ed8",
+}[a] ?? "#64748b");
+
+const acaoBg = (a: AcaoAtivo): string => ({
+  APORTAR: "#ecfdf5",
+  MANTER: "#f1f5f9",
+  NAO_APORTAR: "#fef2f2",
+  AVALIAR: "#eff6ff",
+}[a] ?? "#f1f5f9");
+
 const statusLabel = (s: StatusNivel): string => ({
   ABAIXO: "abaixo do alvo",
   EQUILIBRADO: "equilibrado",
@@ -445,6 +552,80 @@ const alertaCor = (tipo: string): string => {
   if (tipo === "SEM_AVALIACAO" || tipo === "SEM_SUBCLASSE") return "#92400e";
   return "#334155";
 };
+
+/* ══════════════════════════════════════════════════════════════════════
+   EXPORTAÇÃO DO PLANO (§30) — CSV com o que aportar, o que reduzir e por quê.
+
+   Exporta exatamente o que está na tela (mesmos números, mesma explicação):
+   não recalcula nada no navegador, para o arquivo nunca divergir do motor.
+   É só o plano — nenhuma ordem é executada, nada é comprado ou vendido.
+   ══════════════════════════════════════════════════════════════════════ */
+function exportarPlano(ranking: RankingAportes) {
+  const { moeda } = ranking;
+  const num = (v: number | null | undefined) =>
+    (v == null ? "" : v.toFixed(2).replace(".", ","));
+  const celula = (v: string | null | undefined) => `"${(v ?? "").replace(/"/g, "'")}"`;
+
+  const linhas: string[] = [];
+
+  linhas.push([
+    celula("TIPO"), celula("NIVEL"), celula("ATIVO"), celula("CLASSE"),
+    celula("PERCENTUAL_ATUAL"), celula("PERCENTUAL_IDEAL"), celula("DEFICIT"),
+    celula("EXCESSO"), celula("TETO"), celula(`VALOR (${moeda})`), celula("MOTIVO"),
+  ].join(";"));
+
+  for (const i of ranking.itens) {
+    const valor = (i.acao === "APORTAR" && (i.sugestao_aporte ?? 0) > 0) ? i.sugestao_aporte : null;
+    linhas.push([
+      celula(i.acao),
+      celula("ATIVO"),
+      celula(i.ticker ?? "(sem ticker)"),
+      celula(i.classe),
+      celula(String(i.percentual_atual)),
+      celula(String(i.percentual_ideal)),
+      celula(num(i.deficit)),
+      celula(num(i.excesso)),
+      celula(num(i.teto)),
+      celula(num(valor)),
+      celula(i.motivo),
+    ].join(";"));
+  }
+
+  for (const r of ranking.rebalanceamento ?? []) {
+    linhas.push([
+      celula("REDUZIR"),
+      celula(r.nivel),
+      celula(r.nome),
+      celula(r.classe),
+      celula(String(r.percentual_atual)),
+      celula(String(r.percentual_ideal)),
+      celula(""),
+      celula(num(r.excesso)),
+      celula(""),
+      celula(num(r.sugerido_vender)),
+      celula(r.motivo),
+    ].join(";"));
+  }
+
+  linhas.push([
+    celula("RESUMO"), celula("-"), celula("-"), celula("-"),
+    celula("-"), celula("-"), celula("-"), celula("-"), celula("-"),
+    celula(num(ranking.valor_alocado)),
+    celula(`aporte ${num(ranking.valor_aporte)} + vendas sugeridas ${num(ranking.valor_vendas)} = orçamento ${num(ranking.valor_orcamento)}; não alocado ${num(ranking.valor_nao_alocado)}`),
+  ].join(";"));
+
+  // BOM para o Excel abrir os acentos corretamente.
+  const blob = new Blob(["\uFEFF" + linhas.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const hoje = new Date().toISOString().slice(0, 10);
+  link.href = url;
+  link.download = `plano-aporte-${ranking.carteira_id}-${hoje}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 const th: React.CSSProperties = {
   padding: "9px 10px", fontSize: "11px", fontWeight: 700, color: "#64748b",

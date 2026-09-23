@@ -61,6 +61,49 @@ public final class RankingAportesDTO {
     /** Alerta do motor (§31). O tipo permite filtrar na tela. */
     public record Alerta(String tipo, String mensagem) {}
 
+    /**
+     * Ação recomendada para o ativo (§23). MANTER ≠ APORTAR: um ativo pode ser
+     * excelente e continuar na carteira sem receber dinheiro agora (já está no
+     * alvo, ou o limite de concentração foi atingido).
+     */
+    public enum AcaoAtivo {
+        APORTAR("Aportar", "Recebe parte deste aporte."),
+        MANTER("Manter", "Continue com o ativo, mas não aporte agora."),
+        NAO_APORTAR("Não aportar", "Bloqueado por critério/limite: o déficit continua existindo."),
+        AVALIAR("Avaliar", "Tem espaço estrutural: informe/calcule o aporte para ver quanto caberia.");
+
+        private final String label;
+        private final String descricao;
+
+        AcaoAtivo(String label, String descricao) {
+            this.label = label;
+            this.descricao = descricao;
+        }
+
+        public String getLabel() {
+            return label;
+        }
+
+        public String getDescricao() {
+            return descricao;
+        }
+    }
+
+    /**
+     * Sugestão de REDUÇÃO (§19, §21, §37): quanto está acima do alvo + tolerância
+     * e poderia financiar os déficits. O nível diz de quem é o corte.
+     */
+    public record RebalanceamentoDTO(
+            String nivel,
+            String nome,
+            CategoriaInvestimento classe,
+            BigDecimal percentual_atual,
+            BigDecimal percentual_ideal,
+            BigDecimal excesso,
+            BigDecimal sugerido_vender,
+            String motivo
+    ) {}
+
     public record Item(
             int posicao,
             UUID ativo_cadastro_id,
@@ -123,7 +166,10 @@ public final class RankingAportesDTO {
              * Cálculo aberto do Contribution Score (§34): a conta exata, com os
              * valores normalizados e os pesos aplicados, para o usuário reproduzir.
              */
-            String formula
+            String formula,
+
+            /** Ação (§23): aportar, manter, não aportar ou avaliar. */
+            AcaoAtivo acao
     ) {}
 
     /** Uma comparação de cenário (§33): mesmos dados, pesos de decisão diferentes. */
@@ -207,6 +253,13 @@ public final class RankingAportesDTO {
             BigDecimal valor_aporte,
             BigDecimal valor_alocado,
             BigDecimal valor_nao_alocado,
+            /** Valor sugerido de VENDA (rebalanceamento) — 0 quando desligado. */
+            BigDecimal valor_vendas,
+            /** Orçamento usado no plano = aporte + (vendas, quando ligado). */
+            BigDecimal valor_orcamento,
+            Boolean rebalancear,
+            /** TETO_ESTRITO | TETO_ATE_A_CLASSE (configuração vigente). */
+            String teto_ativo_modo,
             /** Explicação legível do valor não alocado (§32). */
             String nao_alocado_explicacao,
             Boolean redistribuir,
@@ -221,6 +274,8 @@ public final class RankingAportesDTO {
             List<String> precedencia,
             /** Cenários comparativos (§33) — só quando um valor de aporte foi informado. */
             List<CenarioDTO> cenarios,
+            /** Sugestões de redução (§19/§21) — vazio quando o rebalanceamento está desligado. */
+            List<RebalanceamentoDTO> rebalanceamento,
             List<ClasseAporteDTO> classes,
             List<Item> itens
     ) {}

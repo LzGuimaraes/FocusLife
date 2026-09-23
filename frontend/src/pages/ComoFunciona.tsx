@@ -83,6 +83,12 @@ const features = [
       "Classe no alvo (ou acima) não recebe aporte; dentro da classe em déficit, o ticker entra pelo Contribution Score",
       "Sem déficit por ticker (metas que espelham a carteira atual), a divisão dentro da classe mantém a proporção que você já tem",
       "O que não cabe em nenhuma classe fica como valor não alocado, em vez de ser empurrado para quem não precisa",
+      "Cada item recebe uma AÇÃO explícita: aportar, manter (segue na carteira, sem dinheiro novo), não aportar ou avaliar",
+      "REBALANCEAMENTO (opcional): mostra o que está acima do alvo + tolerância, sugere quanto reduzir e usa isso como orçamento extra — nada é vendido automaticamente",
+      "Teto do ativo configurável: ESTRITO (só o déficit do próprio ativo) ou ATÉ A CLASSE (o ativo absorve o déficit da classe/subclasse)",
+      "Ordem das travas visível e configurável (bloqueio, limite, classe, subclasse, setor, teto do ativo, momento, score): nenhuma regra escondida decide o aporte",
+      "Alertas antes de decidir: classe acima do alvo, limite de concentração atingido, aporte repetido nos últimos 30 dias e item sem avaliação",
+      "Exportação do plano em CSV (o que aportar, o que reduzir e o motivo de cada linha) para registrar ou conferir fora do sistema",
     ],
   },
   {
