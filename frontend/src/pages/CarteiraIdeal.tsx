@@ -8,11 +8,12 @@ import { Button } from "../components/Shared";
 import CarteiraIdealEditor, { type ClasseDraft } from "../components/CarteiraIdealEditor";
 import MetasEditor, { type MetaDraft } from "../components/MetasEditor";
 import ComparativoTable from "../components/ComparativoTable";
+import { BarrasAtualIdeal, DistribuicaoAtualIdeal } from "../components/GraficosCarteiraIdeal";
 import { boxStyle, controlStyle, miniLabel } from "../components/FormStyles";
 import { novaChave } from "../utils/chaves";
 import { numParaTexto, textoParaNum } from "../utils/numeros";
 import type {
-  CarteiraIdeal, CarteiraIdealPayload, CarteiraResumo, Comparativo, Estrategia,
+  CarteiraIdeal, CarteiraIdealPayload, CarteiraResumo, Comparativo, Estrategia, MeusAtivos,
 } from "../types/planejamento";
 import { somaFechada } from "../utils/percentual";
 
@@ -46,6 +47,7 @@ export default function CarteiraIdealPage() {
   const [estrategiaId, setEstrategiaId] = useState<string>("");
 
   const [comparativo, setComparativo] = useState<Comparativo | null>(null);
+  const [meusAtivos, setMeusAtivos] = useState<MeusAtivos | null>(null);
   const [avisos, setAvisos] = useState<string[]>([]);
 
   /* ── Carrega a lista de carteiras + estratégias uma vez ── */
@@ -64,11 +66,13 @@ export default function CarteiraIdealPage() {
   const carregar = useCallback(async (id: number) => {
     setCarregando(true);
     try {
-      const [idealRes, compRes] = await Promise.all([
+      const [idealRes, compRes, meusRes] = await Promise.all([
         api.get<CarteiraIdeal>(`/carteiras-investimento/${id}/ideal`),
         api.get<Comparativo>(`/carteiras-investimento/${id}/ideal/comparativo`),
+        api.get<MeusAtivos>(`/carteiras-investimento/${id}/ideal/meus-ativos`),
       ]);
       const ideal = idealRes.data;
+      const meus = meusRes.data;
       setClasses(ideal.classes.map(c => ({
         key: novaChave(),
         classe: c.classe,
@@ -79,15 +83,45 @@ export default function CarteiraIdealPage() {
           percentual_ideal: numParaTexto(s.percentual_ideal),
         })),
       })));
-      setMetas(ideal.metas.map(m => ({
-        key: novaChave(),
-        ativo_cadastro_id: m.ativo_cadastro_id ?? "",
-        ticker: m.ticker ?? "",
-        classe: m.classe,
-        subclasse_nome: m.subclasse_nome ?? "",
-        percentual_ideal: numParaTexto(m.percentual_ideal),
-        prioridade_manual: String(m.prioridade_manual ?? 0),
-      })));
+
+      // As metas partem dos ATIVOS DA CARTEIRA: cada ativo que o usuário já tem
+      // vira uma linha (já marcada quando existe meta) — e os ativos que só
+      // existem no planejamento (ainda não comprados) entram como "planejado".
+      const metasExistentes = ideal.metas ?? [];
+      const daCarteira: MetaDraft[] = (meus.ativos ?? []).map(a => {
+        const meta = metasExistentes.find(m => m.ativo_cadastro_id === a.ativo_cadastro_id);
+        return {
+          key: novaChave(),
+          ativo_cadastro_id: a.ativo_cadastro_id,
+          ticker: a.ticker,
+          classe: a.classe,
+          subclasse_nome: meta?.subclasse_nome ?? "",
+          percentual_ideal: meta ? numParaTexto(meta.percentual_ideal) : "",
+          prioridade_manual: String(meta?.prioridade_manual ?? 0),
+          incluir: meta != null,
+          origem: "carteira",
+          percentual_atual: a.percentual_atual,
+          valor_atual: a.valor_atual,
+        };
+      });
+      const semPosicao = metasExistentes
+        .filter(m => m.ativo_cadastro_id && !(meus.ativos ?? []).some(a => a.ativo_cadastro_id === m.ativo_cadastro_id))
+        .map(m => ({
+          key: novaChave(),
+          ativo_cadastro_id: m.ativo_cadastro_id as string,
+          ticker: m.ticker ?? "",
+          classe: m.classe,
+          subclasse_nome: m.subclasse_nome ?? "",
+          percentual_ideal: numParaTexto(m.percentual_ideal),
+          prioridade_manual: String(m.prioridade_manual ?? 0),
+          incluir: true,
+          origem: "planejado" as const,
+          percentual_atual: null,
+          valor_atual: null,
+        }));
+
+      setMetas([...daCarteira, ...semPosicao]);
+      setMeusAtivos(meus);
       setEstrategiaId(ideal.estrategia_id != null ? String(ideal.estrategia_id) : "");
       setAvisos(ideal.avisos ?? []);
       setComparativo(compRes.data);
@@ -114,9 +148,9 @@ export default function CarteiraIdealPage() {
     }
     const soma = classes.reduce((s, c) => s + textoParaNum(c.percentual_ideal), 0);
     if (!somaFechada(soma)) return "A soma das classes deve ser 100%.";
-    for (const m of metas) {
-      if (!m.ativo_cadastro_id) return "Selecione o ativo (ticker) de todas as metas.";
-      if (m.percentual_ideal.trim() === "") return `Informe o percentual ideal da meta de ${m.ticker}.`;
+    for (const m of metas.filter(x => x.incluir)) {
+      if (!m.ativo_cadastro_id) return "Escolha o ativo de cada linha planejada (ou remova a linha).";
+      if (m.percentual_ideal.trim() === "") return `Informe o % ideal de ${m.ticker || "cada ativo com meta"}.`;
       const prioridade = parseInt(m.prioridade_manual, 10);
       if (Number.isNaN(prioridade) || prioridade < 0 || prioridade > 10) {
         return `A prioridade de ${m.ticker} deve ficar entre 0 e 10.`;
@@ -146,7 +180,7 @@ export default function CarteiraIdealPage() {
           ordem: j,
         })),
       })),
-      metas: metas.map((m, i) => ({
+      metas: metas.filter(m => m.incluir).map((m, i) => ({
         ativo_cadastro_id: m.ativo_cadastro_id,
         classe: m.classe,
         subclasse_nome: m.subclasse_nome || null,
@@ -253,10 +287,19 @@ export default function CarteiraIdealPage() {
       {carregando ? <Spinner text="Carregando carteira..." /> : aba === "config" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <CarteiraIdealEditor classes={classes} onChange={setClasses} />
-          <MetasEditor metas={metas} classes={classes} onChange={setMetas} />
+          <MetasEditor metas={metas} classes={classes} onChange={setMetas}
+            moeda={meusAtivos?.moeda ?? "BRL"}
+            valorTotal={meusAtivos?.valor_total ?? 0}
+            posicoesSemCatalogo={meusAtivos?.posicoes_sem_catalogo ?? 0} />
         </div>
       ) : comparativo ? (
-        <ComparativoTable comparativo={comparativo} />
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))", gap: "16px" }}>
+            <DistribuicaoAtualIdeal comparativo={comparativo} />
+            <BarrasAtualIdeal comparativo={comparativo} />
+          </div>
+          <ComparativoTable comparativo={comparativo} />
+        </div>
       ) : (
         <EmptyState icon="📊" title="Sem comparativo" text="Salve a Carteira Ideal para ver a comparação com a carteira atual." />
       )}

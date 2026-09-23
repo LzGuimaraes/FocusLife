@@ -38,6 +38,35 @@ const features = [
     ],
   },
   {
+    icon: "📐", title: "Planejamento de Carteira",
+    color: "#6366f1", bg: "#eef2ff",
+    desc: "Defina a carteira que você quer ter e compare com a que você tem — sem recadastrar nada e sem metodologia imposta.",
+    steps: [
+      "Classes com percentual alvo (Ações, FIIs, Renda Fixa...): o sistema valida que a soma dá 100%",
+      "Subclasses para detalhar dentro da classe (ex.: Ações → Bancos 10%, Energia 8%)",
+      "Metas por ativo partem dos ATIVOS QUE VOCÊ JÁ TEM: cada linha já mostra o valor e o % atuais",
+      "Atalho 'usar minha distribuição atual como alvo' preenche tudo de uma vez — depois você ajusta só o que discordar",
+      "Gráficos de distribuição atual × ideal e de barras por classe, além do comparativo em tabela",
+      "O comparativo inclui os ativos que ainda NÃO têm meta (marcados como 'sem meta'), para a leitura ser da carteira inteira",
+      "Prioridade manual de 0 a 10 por ativo, usada para desempatar a ordem dos aportes",
+    ],
+  },
+  {
+    icon: "✅", title: "Avaliação de Ativos",
+    color: "#8b5cf6", bg: "#f5f3ff",
+    desc: "Monte a SUA avaliação: os critérios, as perguntas e os pesos são seus — o sistema só armazena, calcula e compara.",
+    steps: [
+      "Perguntas ilimitadas com tipos: Sim/Não, Nota, Percentual, Número, Múltipla escolha, Texto e Lista",
+      "Perguntas de valor (ex.: ROE) usam FAIXAS de pontuação: você define o que vale cada faixa",
+      "Modelos de checklist reutilizáveis: aplicar em um ativo COPIA as perguntas (editar o modelo depois não altera o que já existe)",
+      "Quantos checklists quiser por ativo — Fundamentos, Dividendos, Gestão, Riscos, Valuation...",
+      "Quality Score = soma ponderada DAS SUAS notas, com peso por pergunta e por checklist (sem nada respondido o score fica vazio, não zero)",
+      "Contribution Score = prioridade de aporte, com os pesos que você define para qualidade, déficit, excesso e prioridade manual",
+      "Histórico com gráfico de evolução (por ativo e por carteira) e registro idempotente: registrar duas vezes no mesmo dia atualiza o dia",
+      "Próximos Aportes: ordena a fila e rateia o valor que você pretende investir, sem passar do déficit de cada ativo",
+    ],
+  },
+  {
     icon: "✓", title: "Tarefas",
     color: "#06b6d4", bg: "#ecfeff",
     desc: "Organize seu dia a dia com um sistema completo de gerenciamento de tarefas com validações.",
@@ -106,7 +135,7 @@ export default function ComoFunciona() {
           <span style={{ fontSize: "clamp(32px, 6vw, 48px)", display: "block", marginBottom: "8px" }}>⚡</span>
           <h1 style={{ fontSize: "clamp(22px, 4vw, 32px)", fontWeight: 800, marginBottom: "8px", letterSpacing: "-1px" }}>Como o FocusLife Funciona</h1>
           <p style={{ fontSize: "clamp(13px, 1.8vw, 16px)", opacity: 0.85, maxWidth: "650px", margin: "0 auto", lineHeight: 1.7 }}>
-            Hub completo de produtividade pessoal: tarefas, estudos, metas e finanças com carteiras de investimento e despesas.
+            Hub completo de produtividade pessoal: tarefas, estudos, metas e finanças com carteiras de investimento, planejamento de carteira e avaliação de ativos.
           </p>
         </div>
 
@@ -138,7 +167,7 @@ export default function ComoFunciona() {
           <p style={{ fontSize: "clamp(15px, 2vw, 18px)", fontWeight: 600, color: "#0f172a", marginBottom: "4px" }}>Pronto para começar?</p>
           <p style={{ fontSize: "clamp(12px, 1.5vw, 14px)", color: "#64748b", marginBottom: "clamp(14px, 2vw, 20px)" }}>Navegue pelo menu lateral e explore cada funcionalidade.</p>
           <div style={{ display: "flex", justifyContent: "center", gap: "clamp(6px, 1.5vw, 12px)", flexWrap: "wrap" }}>
-            {[{ label: "Tarefas", path: "/tarefas", bg: "#06b6d4" },{ label: "Metas", path: "/metas", bg: "#f59e0b" },{ label: "Carteiras", path: "/financas", bg: "#10b981" }].map((btn, i) => (
+            {[{ label: "Tarefas", path: "/tarefas", bg: "#06b6d4" },{ label: "Metas", path: "/metas", bg: "#f59e0b" },{ label: "Carteiras", path: "/financas", bg: "#10b981" },{ label: "Planejamento", path: "/planejamento", bg: "#6366f1" }].map((btn, i) => (
               <a key={i} href={btn.path} style={{ padding: "clamp(8px, 1.5vw, 11px) clamp(16px, 3vw, 24px)", background: btn.bg, color: "white", borderRadius: "8px", textDecoration: "none", fontSize: "clamp(13px, 1.5vw, 14px)", fontWeight: 600, transition: "all 0.15s ease", display: "inline-block" }}
                 onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)"; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>{btn.label}</a>

@@ -143,7 +143,6 @@ public class AporteService {
                                      ScoreConfigModel config) {
 
         List<AtivoComClasse> ativos = ativosComMeta(comparativo);
-
         double maiorDeficit = ativos.stream()
                 .mapToDouble(a -> nz(a.ativo().deficit())).max().orElse(0d);
         double maiorExcesso = ativos.stream()
@@ -211,9 +210,17 @@ public class AporteService {
     }
 
     /** Ativos (com meta) achatados com a classe a que pertencem, para o ranking. */
+    /**
+     * Ativos (com meta) achatados com a classe a que pertencem, para o ranking.
+     * O comparativo também traz os ativos SEM meta (para o usuário enxergar a
+     * carteira inteira); aqui eles ficam de fora, porque sem alvo não existe
+     * déficit — e sem déficit não há prioridade de aporte.
+     */
     private List<AtivoComClasse> ativosComMeta(ComparativoResponseDTO comparativo) {
         return comparativo.classes().stream()
-                .flatMap(c -> c.ativos().stream().map(a -> new AtivoComClasse(a, c.classe())))
+                .flatMap(c -> c.ativos().stream()
+                        .filter(ComparativoResponseDTO.AtivoComparativoDTO::possui_meta)
+                        .map(a -> new AtivoComClasse(a, c.classe())))
                 .toList();
     }
 

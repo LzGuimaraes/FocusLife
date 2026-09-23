@@ -13,6 +13,9 @@ import dev.LzGuimaraes.FocusLifeHub.Ativo.CategoriaInvestimento;
  *   • percentual_atual é sempre sobre o VALOR TOTAL da carteira;
  *   • deficit = max(0, valor_ideal − valor_atual);
  *   • excesso = max(0, valor_atual − valor_ideal);
+ *   • a lista de ativos de cada classe traz TAMBÉM os ativos que o usuário tem
+ *     mas ainda não têm meta (possui_meta = false): o comparativo é da carteira
+ *     real, não de um espaço paralelo;
  *   • na subclasse, o "atual" é a soma das posições dos ativos que possuem
  *     meta naquela subclasse (posições não são classificadas por subclasse);
  *   • classes presentes apenas nas posições aparecem com ideal = 0 (excesso);
@@ -61,6 +64,13 @@ public record ComparativoResponseDTO(
             BigDecimal valor_atual,
             BigDecimal deficit,
             BigDecimal excesso,
-            Integer prioridade_manual
+            Integer prioridade_manual,
+            /**
+             * false = o ativo está na carteira do usuário mas ainda NÃO tem meta
+             * individual. Nesse caso percentual_ideal é 0 e o valor entra como
+             * excesso da classe — o comparativo mostra a carteira inteira, e não
+             * apenas os ativos que já foram planejados.
+             */
+            boolean possui_meta
     ) {}
 }

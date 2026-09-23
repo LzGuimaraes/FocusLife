@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.dto.CarteiraIdealRequestDTO;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.dto.CarteiraIdealResponseDTO;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.dto.ComparativoResponseDTO;
+import dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.dto.MeusAtivosResponseDTO;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.dto.ResumoIdealDTO;
 import jakarta.validation.Valid;
 
@@ -47,6 +48,16 @@ public class CarteiraIdealController {
     @GetMapping("/{carteiraId}/ideal/comparativo")
     public ResponseEntity<ComparativoResponseDTO> comparativo(@PathVariable Long carteiraId) {
         return ResponseEntity.ok(carteiraIdealService.comparativo(carteiraId));
+    }
+
+    /**
+     * Ativos que o usuário JÁ TEM nesta carteira (com o percentual atual e a
+     * meta, se houver). É a base da tela de metas: o planejamento parte da
+     * carteira real, sem o usuário recadastrar os ativos.
+     */
+    @GetMapping("/{carteiraId}/ideal/meus-ativos")
+    public ResponseEntity<MeusAtivosResponseDTO> meusAtivos(@PathVariable Long carteiraId) {
+        return ResponseEntity.ok(carteiraIdealService.meusAtivos(carteiraId));
     }
 
     /** Resumo por classe para o widget do Dashboard. */

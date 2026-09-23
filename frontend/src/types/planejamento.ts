@@ -104,7 +104,7 @@ export interface SubclasseComparativo {
 }
 
 export interface AtivoComparativo {
-  meta_id: number;
+  meta_id: number | null;
   ativo_cadastro_id: string;
   ticker: string;
   subclasse_id: number | null;
@@ -115,6 +115,11 @@ export interface AtivoComparativo {
   deficit: number;
   excesso: number;
   prioridade_manual: number;
+  /**
+   * false = o ativo está na carteira mas ainda não tem meta individual.
+   * O comparativo mostra a carteira real, não só o que já foi planejado.
+   */
+  possui_meta: boolean;
 }
 
 export interface ClasseComparativo {
@@ -158,6 +163,31 @@ export interface ResumoIdeal {
   total_ativos_com_meta: number;
   classes: ClasseResumo[];
   avisos: string[];
+}
+
+/* ── Ativos que o usuário já tem (base da tela de metas) ── */
+export interface MeuAtivo {
+  ativo_cadastro_id: string;
+  ticker: string;
+  classe: CategoriaInvestimento;
+  quantidade: number | null;
+  preco_atual: number | null;
+  valor_atual: number;
+  percentual_atual: number;
+  meta_id: number | null;
+  percentual_ideal: number | null;
+  prioridade_manual: number | null;
+  subclasse_id: number | null;
+  subclasse_nome: string | null;
+}
+
+export interface MeusAtivos {
+  carteira_id: number;
+  moeda: string;
+  valor_total: number;
+  /** Posições sem vínculo com o catálogo (ex.: renda fixa) — não têm meta por ticker. */
+  posicoes_sem_catalogo: number;
+  ativos: MeuAtivo[];
 }
 
 /* ── Carteira (reuso do CRUD existente) ── */

@@ -119,9 +119,10 @@ function FragmentoClasse({ c, nome, negrito, cor, diferenca, moeda, infoLabel }:
       })}
 
       {c.ativos.map(a => {
+        const semMeta = !a.possui_meta;
         const dif = a.percentual_atual - a.percentual_ideal;
         return (
-          <tr key={`ativo-${a.meta_id}`}>
+          <tr key={`ativo-${a.ativo_cadastro_id}`}>
             <td style={{ ...tdStyle, paddingLeft: "30px", color: "#475569" }}>
               {a.ticker}
               {a.prioridade_manual > 0 && (
@@ -129,12 +130,20 @@ function FragmentoClasse({ c, nome, negrito, cor, diferenca, moeda, infoLabel }:
                   P{a.prioridade_manual}
                 </span>
               )}
+              {semMeta && (
+                <span title="Você tem este ativo, mas ainda não definiu meta — ele conta como excesso da classe"
+                  style={{ marginLeft: "6px", fontSize: "10px", fontWeight: 700, color: "#b45309", background: "#fef3c7", padding: "1px 6px", borderRadius: "9999px" }}>
+                  sem meta
+                </span>
+              )}
             </td>
             <td style={tdStyleRightMuted}>{fmtPercentual(a.percentual_atual)}</td>
-            <td style={tdStyleRightMuted}>{fmtPercentual(a.percentual_ideal)}</td>
-            <td style={{ ...tdStyleRightMuted, ...corDiferenca(dif) }}>{fmtPontosPercentuais(dif)}</td>
+            <td style={tdStyleRightMuted}>{semMeta ? "—" : fmtPercentual(a.percentual_ideal)}</td>
+            <td style={{ ...tdStyleRightMuted, ...(semMeta ? { color: "#cbd5e1" } : corDiferenca(dif)) }}>
+              {semMeta ? "—" : fmtPontosPercentuais(dif)}
+            </td>
             <td style={tdStyleRightMuted}>{fmtMoeda(a.valor_atual, moeda)}</td>
-            <td style={tdStyleRightMuted}>{fmtMoeda(a.valor_ideal, moeda)}</td>
+            <td style={tdStyleRightMuted}>{semMeta ? "—" : fmtMoeda(a.valor_ideal, moeda)}</td>
             <td style={{ ...tdStyleRightMuted, color: a.deficit > 0 ? "#1d4ed8" : "#cbd5e1" }}>{fmtMoeda(a.deficit, moeda)}</td>
             <td style={{ ...tdStyleRightMuted, color: a.excesso > 0 ? "#b45309" : "#cbd5e1" }}>{fmtMoeda(a.excesso, moeda)}</td>
           </tr>

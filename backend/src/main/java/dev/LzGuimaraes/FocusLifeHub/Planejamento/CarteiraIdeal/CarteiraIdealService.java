@@ -17,6 +17,8 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import dev.LzGuimaraes.FocusLifeHub.Ativo.AtivoModel;
+import dev.LzGuimaraes.FocusLifeHub.Ativo.AtivoRepository;
 import dev.LzGuimaraes.FocusLifeHub.Ativo.CategoriaInvestimento;
 import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.AtivoCadastroModel;
 import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.AtivoCadastroRepository;
@@ -27,6 +29,7 @@ import dev.LzGuimaraes.FocusLifeHub.Planejamento.Calculo.PercentualCalculator;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.dto.CarteiraIdealRequestDTO;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.dto.CarteiraIdealResponseDTO;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.dto.ComparativoResponseDTO;
+import dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.dto.MeusAtivosResponseDTO;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.dto.ResumoIdealDTO;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.Estrategia.EstrategiaService;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.MetaAtivo.MetaAtivoModel;
@@ -49,6 +52,7 @@ public class CarteiraIdealService {
     private final CarteiraIdealSubclasseRepository subclasseRepository;
     private final MetaAtivoRepository metaAtivoRepository;
     private final AtivoCadastroRepository ativoCadastroRepository;
+    private final AtivoRepository ativoRepository;
     private final EstrategiaService estrategiaService;
     private final CarteiraLookup carteiraLookup;
     private final PercentualCalculator calculator;
@@ -57,6 +61,7 @@ public class CarteiraIdealService {
                                 CarteiraIdealSubclasseRepository subclasseRepository,
                                 MetaAtivoRepository metaAtivoRepository,
                                 AtivoCadastroRepository ativoCadastroRepository,
+                                AtivoRepository ativoRepository,
                                 EstrategiaService estrategiaService,
                                 CarteiraLookup carteiraLookup,
                                 PercentualCalculator calculator) {
@@ -64,6 +69,7 @@ public class CarteiraIdealService {
         this.subclasseRepository = subclasseRepository;
         this.metaAtivoRepository = metaAtivoRepository;
         this.ativoCadastroRepository = ativoCadastroRepository;
+        this.ativoRepository = ativoRepository;
         this.estrategiaService = estrategiaService;
         this.carteiraLookup = carteiraLookup;
         this.calculator = calculator;
@@ -91,7 +97,7 @@ public class CarteiraIdealService {
                 soma,
                 montarClassesResposta(classes, subclasses),
                 montarMetasResposta(metas),
-                montarAvisos(classes, subclasses, metas, soma));
+                montarAvisos(classes, subclasses, metas, soma, 0));
     }
 
     /* ══════════════════════════════════════════════════════════════════
@@ -202,6 +208,8 @@ public class CarteiraIdealService {
         Map<CategoriaInvestimento, Double> valorPorClasse = calculator.valorPorClasse(posicoes);
         Map<UUID, Double> valorPorTicker = calculator.valorPorAtivoCadastro(posicoes);
         Map<UUID, String> nomePorTicker = calculator.nomePorAtivoCadastro(posicoes);
+        Map<UUID, CategoriaInvestimento> classePorTicker = classePorTicker(posicoes);
+        int ativosSemMeta = 0;
 
         Map<Long, List<CarteiraIdealSubclasseModel>> subclassesPorClasse = subclasses.stream()
                 .collect(Collectors.groupingBy(s -> s.getClasse().getId()));
@@ -253,11 +261,13 @@ public class CarteiraIdealService {
             }
 
             List<ComparativoResponseDTO.AtivoComparativoDTO> ativosDtos = new ArrayList<>();
+            Set<UUID> tickersComMeta = new LinkedHashSet<>();
             for (MetaAtivoModel meta : metasDaClasse) {
                 if (meta.getAtivoCadastro() == null) {
                     continue;
                 }
                 UUID cadastroId = meta.getAtivoCadastro().getId();
+                tickersComMeta.add(cadastroId);
                 double vAtivoAtual = valorPorTicker.getOrDefault(cadastroId, 0d);
                 double vAtivoIdeal = valorIdeal(meta.getPercentualIdeal(), total);
                 ativosDtos.add(new ComparativoResponseDTO.AtivoComparativoDTO(
@@ -271,8 +281,32 @@ public class CarteiraIdealService {
                         calculator.moeda(vAtivoAtual),
                         calculator.moeda(Math.max(0d, vAtivoIdeal - vAtivoAtual)),
                         calculator.moeda(Math.max(0d, vAtivoAtual - vAtivoIdeal)),
-                        meta.getPrioridadeManual()));
+                        meta.getPrioridadeManual(),
+                        true));
             }
+
+            // Ativos que o usuário TEM nesta classe mas ainda não têm meta: o
+            // comparativo é da carteira real, não só do que já foi planejado.
+            for (UUID cadastroId : valorPorTicker.keySet()) {
+                if (classePorTicker.get(cadastroId) != classeEnum || tickersComMeta.contains(cadastroId)) {
+                    continue;
+                }
+                double vAtivoAtual = valorPorTicker.get(cadastroId);
+                ativosDtos.add(new ComparativoResponseDTO.AtivoComparativoDTO(
+                        null,
+                        cadastroId,
+                        nomePorTicker.get(cadastroId),
+                        null,
+                        BigDecimal.ZERO.setScale(PercentualCalculator.ESCALA_PERCENTUAL),
+                        calculator.percentual(vAtivoAtual, total),
+                        calculator.moeda(0d),
+                        calculator.moeda(vAtivoAtual),
+                        calculator.moeda(0d),
+                        calculator.moeda(vAtivoAtual),
+                        0,
+                        false));
+            }
+            ativosSemMeta += (int) ativosDtos.stream().filter(a -> !a.possui_meta()).count();
 
             classesDto.add(new ComparativoResponseDTO.ClasseComparativoDTO(
                     classeEnum,
@@ -292,7 +326,96 @@ public class CarteiraIdealService {
                 calculator.moeda(total),
                 soma,
                 classesDto,
-                montarAvisos(classes, subclasses, metas, soma));
+                montarAvisos(classes, subclasses, metas, soma, ativosSemMeta));
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       Ativos que o usuário JÁ TEM — base da tela de metas
+       ══════════════════════════════════════════════════════════════════ */
+
+    /**
+     * Ativos que o usuário já tem nesta carteira, agregados por ticker, com o
+     * percentual atual e a meta (quando já existe).
+     *
+     * É o que permite montar as metas a partir do que EXISTE: o usuário não
+     * precisa recadastrar os ativos, e a tela deixa de ser um espaço paralelo
+     * ao da carteira. Só entram posições vinculadas ao catálogo (a meta
+     * individual é por ticker); posições sem vínculo são contadas em
+     * `posicoes_sem_catalogo` para a interface avisar — elas continuam
+     * participando do cálculo por CLASSE normalmente.
+     */
+    @Transactional(readOnly = true)
+    public MeusAtivosResponseDTO meusAtivos(Long carteiraId) {
+        CarteiraInvestimentoModel carteira = carteiraLookup.exigirCarteiraDoUsuario(carteiraId);
+
+        List<AtivoModel> posicoes = ativoRepository.findByCarteiraInvestimentoId(carteiraId);
+        double total = posicoes.stream().mapToDouble(calculator::valorPosicao).sum();
+
+        Map<UUID, Acumulado> porTicker = new LinkedHashMap<>();
+        int semCatalogo = 0;
+        for (AtivoModel posicao : posicoes) {
+            if (posicao.getAtivoCadastro() == null || posicao.getAtivoCadastro().getId() == null) {
+                semCatalogo++;
+                continue;
+            }
+            UUID cadastroId = posicao.getAtivoCadastro().getId();
+            Acumulado acumulado = porTicker.computeIfAbsent(cadastroId, k -> new Acumulado(
+                    posicao.getAtivoCadastro().getNome(),
+                    (posicao.getCategoriaInvestimento() != null)
+                            ? posicao.getCategoriaInvestimento()
+                            : CategoriaInvestimento.OUTROS,
+                    calculator.precoAtual(posicao)));
+            acumulado.quantidade += (posicao.getQuantidade() != null) ? posicao.getQuantidade() : 0f;
+            acumulado.valor += calculator.valorPosicao(posicao);
+        }
+
+        Map<UUID, MetaAtivoModel> metasPorTicker = new LinkedHashMap<>();
+        for (MetaAtivoModel meta : metaAtivoRepository
+                .findByCarteiraInvestimentoIdOrderByOrdemAscIdAsc(carteiraId)) {
+            if (meta.getAtivoCadastro() != null && meta.getAtivoCadastro().getId() != null) {
+                metasPorTicker.putIfAbsent(meta.getAtivoCadastro().getId(), meta);
+            }
+        }
+
+        List<MeusAtivosResponseDTO.MeuAtivoDTO> ativos = porTicker.entrySet().stream()
+                .map(entrada -> {
+                    Acumulado acumulado = entrada.getValue();
+                    MetaAtivoModel meta = metasPorTicker.get(entrada.getKey());
+                    return new MeusAtivosResponseDTO.MeuAtivoDTO(
+                            entrada.getKey(),
+                            acumulado.ticker,
+                            acumulado.classe,
+                            BigDecimal.valueOf(acumulado.quantidade).setScale(8, RoundingMode.HALF_UP)
+                                    .stripTrailingZeros(),
+                            (acumulado.precoAtual != null) ? BigDecimal.valueOf(acumulado.precoAtual) : null,
+                            calculator.moeda(acumulado.valor),
+                            calculator.percentual(acumulado.valor, total),
+                            (meta != null) ? meta.getId() : null,
+                            (meta != null) ? meta.getPercentualIdeal() : null,
+                            (meta != null) ? meta.getPrioridadeManual() : null,
+                            (meta != null && meta.getSubclasse() != null) ? meta.getSubclasse().getId() : null,
+                            (meta != null && meta.getSubclasse() != null) ? meta.getSubclasse().getNome() : null);
+                })
+                .sorted(Comparator.comparing(MeusAtivosResponseDTO.MeuAtivoDTO::valor_atual).reversed())
+                .toList();
+
+        return new MeusAtivosResponseDTO(carteira.getId(), carteira.getMoeda(),
+                calculator.moeda(total), semCatalogo, ativos);
+    }
+
+    /** Acumulador por ticker (o usuário pode ter mais de uma posição do mesmo ativo). */
+    private static final class Acumulado {
+        private final String ticker;
+        private final CategoriaInvestimento classe;
+        private final Float precoAtual;
+        private float quantidade;
+        private double valor;
+
+        private Acumulado(String ticker, CategoriaInvestimento classe, Float precoAtual) {
+            this.ticker = ticker;
+            this.classe = classe;
+            this.precoAtual = precoAtual;
+        }
     }
 
     /** Resumo enxuto por classe, para o widget do Dashboard (Módulo 10). */
@@ -463,7 +586,8 @@ public class CarteiraIdealService {
     private List<String> montarAvisos(List<CarteiraIdealClasseModel> classes,
                                       List<CarteiraIdealSubclasseModel> subclasses,
                                       List<MetaAtivoModel> metas,
-                                      BigDecimal somaClasses) {
+                                      BigDecimal somaClasses,
+                                      int ativosSemMeta) {
 
         List<String> avisos = new ArrayList<>();
 
@@ -506,6 +630,27 @@ public class CarteiraIdealService {
             }
         }
 
+        if (ativosSemMeta > 0) {
+            avisos.add(ativosSemMeta + " ativo(s) da sua carteira ainda não têm meta individual: "
+                    + "eles entram como excesso da classe até você definir um alvo.");
+        }
+
         return avisos;
+    }
+
+    /** Classe (categoria) de cada ticker, conforme as posições atuais. */
+    private Map<UUID, CategoriaInvestimento> classePorTicker(
+            List<PercentualCalculator.PosicaoSnapshot> posicoes) {
+        Map<UUID, CategoriaInvestimento> mapa = new HashMap<>();
+        for (PercentualCalculator.PosicaoSnapshot posicao : posicoes) {
+            if (posicao.ativoCadastroId() == null) {
+                continue;
+            }
+            CategoriaInvestimento classe = (posicao.classe() != null)
+                    ? posicao.classe()
+                    : CategoriaInvestimento.OUTROS;
+            mapa.putIfAbsent(posicao.ativoCadastroId(), classe);
+        }
+        return mapa;
     }
 }
