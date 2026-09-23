@@ -131,6 +131,30 @@ public class CarteiraIdealService {
         validarClasses(classesReq);
         Map<UUID, AtivoCadastroModel> catalogo = carregarCatalogo(metasReq);
 
+        // ── Classificacao das POSICOES (V26/V28) ──
+        // Subclasses e setores sao RECRIADOS a cada save, e ativo.subclasse_id /
+        // ativo.setor_id apontam para eles: sem soltar essas FKs o delete estoura
+        // ("registros vinculados que impedem a exclusao") — era o que impedia
+        // salvar a Carteira Ideal depois de classificar uma renda fixa.
+        // A classificacao e guardada POR NOME, liberada antes do delete e
+        // religada depois de recriar: o replace-all nao pode apagar o trabalho
+        // que o usuario fez na tela.
+        List<ClassificacaoPosicao> classificacoes = new ArrayList<>();
+        for (AtivoModel posicao : ativoRepository.findByCarteiraInvestimentoId(carteiraId)) {
+            if (posicao.getSubclasse() == null && posicao.getSetor() == null) {
+                continue;
+            }
+            classificacoes.add(new ClassificacaoPosicao(
+                    posicao.getId(),
+                    (posicao.getSubclasse() != null) ? posicao.getSubclasse().getNome() : null,
+                    (posicao.getSetor() != null) ? posicao.getSetor().getNome() : null));
+            posicao.setSubclasse(null);
+            posicao.setSetor(null);
+        }
+        if (!classificacoes.isEmpty()) {
+            ativoRepository.flush();
+        }
+
         // ── Apaga a configuração anterior ──
         // Ordem importa: os SETORES apontam para as subclasses (e a posição/meta
         // aponta para o setor), então os filhos saem antes dos pais.
@@ -238,6 +262,28 @@ public class CarteiraIdealService {
             meta.setOrdem(m.ordem() == null ? ordemMeta : m.ordem());
             metaAtivoRepository.save(meta);
             ordemMeta++;
+        }
+
+        // ── Religadura das POSICOES: mesma subclasse/setor, pelos NOMES salvos ──
+        // Se a subclasse (ou o setor) saiu da configuracao, a posicao fica sem
+        // classificacao — ela continua contando no alvo da CLASSE normalmente.
+        for (ClassificacaoPosicao posicao : classificacoes) {
+            AtivoModel ativo = ativoRepository.findById(posicao.ativoId()).orElse(null);
+            if (ativo == null || posicao.subclasse() == null) {
+                continue;
+            }
+            CategoriaInvestimento classeDaPosicao = ativo.getCategoriaInvestimento();
+            if (classeDaPosicao == null) {
+                continue;
+            }
+            ativo.setSubclasse(subclassePorChave.get(chaveSubclasse(classeDaPosicao, posicao.subclasse())));
+            if (posicao.setor() != null) {
+                ativo.setSetor(setorPorChave.get(
+                        chaveSetor(classeDaPosicao, posicao.subclasse(), posicao.setor())));
+            }
+        }
+        if (!classificacoes.isEmpty()) {
+            ativoRepository.flush();
         }
 
         // ── Estratégia (authoritative: null/ausente desvincula) ──
@@ -753,6 +799,9 @@ public class CarteiraIdealService {
         }
         return calculator.percentualNormalizado(tolerancia);
     }
+
+    /** Classificação de uma posição (por NOME) — sobrevive ao replace-all do save. */
+    private record ClassificacaoPosicao(Long ativoId, String subclasse, String setor) {}
 
     private String chaveSubclasse(CategoriaInvestimento classe, String nome) {
         return classe.name() + "|" + nome.trim().toLowerCase();

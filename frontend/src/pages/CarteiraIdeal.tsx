@@ -55,6 +55,8 @@ export default function CarteiraIdealPage() {
   const [avisos, setAvisos] = useState<string[]>([]);
   /** Pendências aparecem logo abaixo do cabeçalho (e podem ser recolhidas). */
   const [alertasAbertos, setAlertasAbertos] = useState(true);
+  /** Payload gravado no servidor: base para saber se há alteração não salva. */
+  const [assinaturaSalva, setAssinaturaSalva] = useState<string>("");
 
   /* ── Carrega a lista de carteiras + estratégias uma vez ── */
   useEffect(() => {
@@ -93,7 +95,7 @@ export default function CarteiraIdealPage() {
       ]);
       const ideal = idealRes.data;
       const meus = meusRes.data;
-      setClasses(ideal.classes.map(c => ({
+      const classesCarregadas: ClasseDraft[] = ideal.classes.map(c => ({
         key: novaChave(),
         classe: c.classe,
         percentual_ideal: numParaTexto(c.percentual_ideal),
@@ -115,7 +117,7 @@ export default function CarteiraIdealPage() {
             limite_maximo: numParaTexto(st.limite_maximo),
           })),
         })),
-      })));
+      }));
 
       // As metas partem dos ATIVOS DA CARTEIRA: cada ativo que o usuário já tem
       // vira uma linha (já marcada quando existe meta) — e os ativos que só
@@ -177,11 +179,17 @@ export default function CarteiraIdealPage() {
           valor_atual: null,
         }));
 
-      setMetas([...daCarteira, ...semPosicao]);
+      const metasCarregadas: MetaDraft[] = [...daCarteira, ...semPosicao];
+      setClasses(classesCarregadas);
+      setMetas(metasCarregadas);
       setMeusAtivos(meus);
       setEstrategiaId(ideal.estrategia_id != null ? String(ideal.estrategia_id) : "");
       setAvisos(ideal.avisos ?? []);
       setComparativo(compRes.data);
+      // Fotografia do que está GRAVADO: qualquer diferença a partir daqui é
+      // alteração não salva (o botão flutuante de salvar aparece sozinho).
+      setAssinaturaSalva(JSON.stringify(montarPayload(
+        classesCarregadas, metasCarregadas, ideal.estrategia_id != null ? String(ideal.estrategia_id) : "")));
     } catch {
       // Nunca deixar dados de OUTRA carteira na tela (e não usar o comparativo
       // antigo): se a requisição falhar, a tela fica em estado neutro.
@@ -234,41 +242,7 @@ export default function CarteiraIdealPage() {
       return;
     }
 
-    const payload: CarteiraIdealPayload = {
-      estrategia_id: estrategiaId ? Number(estrategiaId) : null,
-      classes: classes.map((c, i) => ({
-        classe: c.classe,
-        percentual_ideal: textoParaNum(c.percentual_ideal),
-        tolerancia: textoParaNum(c.tolerancia),
-        limite_maximo: c.limite_maximo.trim() === "" ? null : textoParaNum(c.limite_maximo),
-        ordem: i,
-        subclasses: c.subclasses.map((s, j) => ({
-          nome: s.nome.trim(),
-          percentual_ideal: textoParaNum(s.percentual_ideal),
-          tolerancia: textoParaNum(s.tolerancia),
-          limite_maximo: s.limite_maximo.trim() === "" ? null : textoParaNum(s.limite_maximo),
-          ordem: j,
-          setores: s.setores.map((st, k) => ({
-            nome: st.nome.trim(),
-            percentual_ideal: textoParaNum(st.percentual_ideal),
-            tolerancia: textoParaNum(st.tolerancia),
-            limite_maximo: st.limite_maximo.trim() === "" ? null : textoParaNum(st.limite_maximo),
-            ordem: k,
-          })),
-        })),
-      })),
-      metas: metas.filter(m => m.incluir).map((m, i) => ({
-        ativo_cadastro_id: m.ativo_cadastro_id,
-        classe: m.classe,
-        subclasse_nome: m.subclasse_nome || null,
-        setor_nome: m.setor_nome || null,
-        percentual_ideal: textoParaNum(m.percentual_ideal),
-        tolerancia: textoParaNum(m.tolerancia),
-        limite_maximo: m.limite_maximo.trim() === "" ? null : textoParaNum(m.limite_maximo),
-        prioridade_manual: parseInt(m.prioridade_manual, 10) || 0,
-        ordem: i,
-      })),
-    };
+    const payload = montarPayload(classes, metas, estrategiaId);
 
     setSalvando(true);
     try {
@@ -276,6 +250,9 @@ export default function CarteiraIdealPage() {
       setAvisos(data.avisos ?? []);
       const comp = await api.get<Comparativo>(`/carteiras-investimento/${selecionada}/ideal/comparativo`);
       setComparativo(comp.data);
+      // O que está na tela é o que acabou de ser gravado: some o aviso de
+      // "alterações não salvas" (mesma normalização do payload).
+      setAssinaturaSalva(JSON.stringify(payload));
       toast.success("Carteira Ideal salva!");
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Erro ao salvar a Carteira Ideal");
@@ -372,6 +349,26 @@ export default function CarteiraIdealPage() {
   const atualPorClasse = Object.fromEntries(
     (comparativo?.classes ?? []).map(c => [c.classe, c.percentual_atual]),
   );
+
+  /**
+   * ALTERAÇÕES NÃO SALVAS: compara o payload que seria enviado agora com o que
+   * está gravado no servidor (mesma função `montarPayload`). É o que faz o
+   * botão flutuante de salvar aparecer só quando há algo para salvar.
+   */
+  const sujo = assinaturaSalva !== ""
+    && JSON.stringify(montarPayload(classes, metas, estrategiaId)) !== assinaturaSalva;
+
+  /** Descartar volta para o que está no servidor (com confirmação — é perda de edição). */
+  const descartarAlteracoes = () => {
+    toast("Descartar as alterações não salvas?", {
+      description: "A configuração volta para o que está gravado no servidor.",
+      action: {
+        label: "Sim, descartar",
+        onClick: () => { if (selecionada != null) carregar(selecionada); },
+      },
+      cancel: { label: "Cancelar", onClick: () => {} },
+    });
+  };
 
   /**
    * PENDÊNCIAS em cards (§1 das diretrizes): o que antes era texto solto na
@@ -590,6 +587,27 @@ export default function CarteiraIdealPage() {
           Posições sem ticker (renda fixa, caixinhas) contam no total da classe e podem ser classificadas numa subclasse.
         </p>
       )}
+
+      {/* ── Salvar flutuante ──
+          Só aparece com alteração pendente, no canto — não ocupa a tela como a
+          barra fixa ocupava. */}
+      {sujo && !carregando && (
+        <div style={pilulaSalvar}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "7px", fontSize: "12.5px", fontWeight: 700, color: "#4338ca" }}>
+            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#f59e0b" }} />
+            Alterações não salvas
+          </span>
+          <button type="button" onClick={descartarAlteracoes} title="Descartar alterações"
+            aria-label="Descartar alterações não salvas"
+            style={{ ...secondaryBtn, padding: "7px 11px", fontSize: "13px", borderRadius: "9999px" }}>
+            ↺
+          </button>
+          <button type="button" onClick={handleSalvar} disabled={salvando}
+            style={{ ...primaryBtn, borderRadius: "9999px", padding: "9px 16px" }}>
+            {salvando ? "Salvando…" : "💾 Salvar"}
+          </button>
+        </div>
+      )}
     </Layout>
   );
 }
@@ -609,3 +627,56 @@ const barraAcoes: React.CSSProperties = {
  */
 const humanizarClasse = (texto: string): string =>
   CATEGORIAS.reduce((t, c) => t.split(c.key).join(c.label), texto);
+
+/* Botão flutuante de salvar: aparece só quando existe alteração não salva, no
+   canto inferior direito — discreto e sem cobrir o conteúdo (a barra do topo
+   não é fixa de propósito). */
+const pilulaSalvar: React.CSSProperties = {
+  position: "fixed", right: "22px", bottom: "22px", zIndex: 60,
+  display: "flex", alignItems: "center", gap: "12px",
+  background: "white", border: "1px solid #e0e7ff", borderRadius: "9999px",
+  padding: "8px 10px 8px 16px", boxShadow: "0 12px 28px -10px rgba(15,23,42,0.35)",
+};
+
+/**
+ * PAYLOAD da Carteira Ideal — a MESMA normalização usada para salvar e para
+ * saber se há alteração não salva (comparação por JSON). Fica em um só lugar
+ * justamente para o aviso de "não salvo" nunca divergir do que é enviado.
+ */
+function montarPayload(classes: ClasseDraft[], metas: MetaDraft[], estrategiaId: string): CarteiraIdealPayload {
+  return {
+    estrategia_id: estrategiaId ? Number(estrategiaId) : null,
+    classes: classes.map((c, i) => ({
+      classe: c.classe,
+      percentual_ideal: textoParaNum(c.percentual_ideal),
+      tolerancia: textoParaNum(c.tolerancia),
+      limite_maximo: c.limite_maximo.trim() === "" ? null : textoParaNum(c.limite_maximo),
+      ordem: i,
+      subclasses: c.subclasses.map((s, j) => ({
+        nome: s.nome.trim(),
+        percentual_ideal: textoParaNum(s.percentual_ideal),
+        tolerancia: textoParaNum(s.tolerancia),
+        limite_maximo: s.limite_maximo.trim() === "" ? null : textoParaNum(s.limite_maximo),
+        ordem: j,
+        setores: s.setores.map((st, k) => ({
+          nome: st.nome.trim(),
+          percentual_ideal: textoParaNum(st.percentual_ideal),
+          tolerancia: textoParaNum(st.tolerancia),
+          limite_maximo: st.limite_maximo.trim() === "" ? null : textoParaNum(st.limite_maximo),
+          ordem: k,
+        })),
+      })),
+    })),
+    metas: metas.filter(m => m.incluir).map((m, i) => ({
+      ativo_cadastro_id: m.ativo_cadastro_id,
+      classe: m.classe,
+      subclasse_nome: m.subclasse_nome || null,
+      setor_nome: m.setor_nome || null,
+      percentual_ideal: textoParaNum(m.percentual_ideal),
+      tolerancia: textoParaNum(m.tolerancia),
+      limite_maximo: m.limite_maximo.trim() === "" ? null : textoParaNum(m.limite_maximo),
+      prioridade_manual: parseInt(m.prioridade_manual, 10) || 0,
+      ordem: i,
+    })),
+  };
+}
