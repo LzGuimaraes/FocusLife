@@ -113,6 +113,23 @@ export default function MetasEditor({
   const subclassesDaClasse = (classe: CategoriaInvestimento) =>
     classes.find(c => c.classe === classe)?.subclasses ?? [];
 
+  /**
+   * Sugere a subclasse pelo NOME da posição ("Reserva de emergência" →
+   * "Reserva"). Renda fixa não tem ticker para bater com o catálogo, mas o
+   * nome da posição costuma ser o nome do produto — então o match é por texto
+   * normalizado (sem acento, minúsculo e sem o ruído de banco/app).
+   */
+  const sugestaoSubclasse = (nomePosicao: string, subs: { id?: number | null; nome: string }[]) => {
+    const norm = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+    const alvo = norm(nomePosicao);
+    if (alvo.length < 3) return null;
+    return subs.find(s => s.id != null && norm(s.nome) === alvo)
+      ?? subs.find(s => s.id != null && norm(s.nome).length >= 3
+          && (alvo.includes(norm(s.nome)) || norm(s.nome).includes(alvo)))
+      ?? null;
+  };
+
   /** Setores de uma subclasse específica (nível opcional dentro dela). */
   const setoresDaSubclasse = (classe: CategoriaInvestimento, subclasseNome: string) =>
     subclassesDaClasse(classe).find(s => s.nome === subclasseNome)?.setores ?? [];
@@ -291,14 +308,21 @@ export default function MetasEditor({
             Na carteira, mas sem ticker do catálogo ({semVinculo.length})
           </p>
           <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 8px" }}>
-            Renda fixa, Tesouro e caixinhas não têm ticker — então não existe meta por ativo. Classifique a posição
-            em uma <strong>subclasse</strong>: ela passa a contar no alvo da classe e entra na prioridade de aporte.
-            Se for ação/FII que ficou sem vínculo, vincule ao catálogo.
+            <strong>Estas posições já entram no total da carteira e no alvo da CLASSE.</strong> Renda fixa,
+            Tesouro e caixinhas não têm ticker — então não existe meta por ativo: o detalhamento é a{" "}
+            <strong>subclasse</strong> (ex.: Reserva, CDI). Classificar serve para o motor saber qual FATIA da
+            classe cada posição representa — sem isso, a subclasse aparece como vazia e o teto do aporte fica
+            impreciso. Se for ação/FII que ficou sem vínculo, vincule ao catálogo.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {semVinculo.map(m => {
               const info = catInfo(m.classe);
               const subs = subclassesDaClasse(m.classe);
+              const sugere = m.subclasse_id == null ? sugestaoSubclasse(m.ticker, subs) : null;
+              // Outras posições sem ticker da MESMA classe: classificar uma a uma
+              // é o caminho longo quando a carteira tem várias caixinhas.
+              const outras = semVinculo.filter(o => o.key !== m.key && o.classe === m.classe
+                && o.subclasse_id == null).flatMap(o => o.ativo_ids);
               return (
                 <div key={m.key} style={{ display: "flex", gap: "10px", alignItems: "flex-end", flexWrap: "wrap", border: "1px solid #fde68a", background: "#fffbeb", borderRadius: "10px", padding: "8px 12px" }}>
                   <div>
@@ -309,8 +333,9 @@ export default function MetasEditor({
                   </div>
 
                   {subs.length === 0 ? (
-                    <span style={{ fontSize: "11px", color: "#b45309", maxWidth: "260px" }}>
-                      Crie e salve subclasses em {info.label} para poder classificar esta posição.
+                    <span style={{ fontSize: "11px", color: "#92400e", maxWidth: "320px" }}>
+                      Nada a fazer: {info.label} não tem subclasses, então esta posição já conta integralmente no
+                      alvo da classe. Se quiser detalhar (ex.: Reserva × CDI), crie as subclasses no editor acima.
                     </span>
                   ) : (                    <div>
                       <label style={miniLabel}>Subclasse de {info.label}</label>
@@ -327,6 +352,24 @@ export default function MetasEditor({
                         ))}
                       </select>
                     </div>
+                  )}
+
+                  {sugere && (
+                    <button type="button" title="O nome da posição combina com esta subclasse"
+                      onClick={() => onAtribuirSubclasse(m.ativo_ids, sugere.id as number)}
+                      style={{ ...linkBtnStyle, borderStyle: "solid", borderColor: "#bbf7d0", color: "#047857", background: "white" }}>
+                      🔗 usar {sugere.nome}
+                    </button>
+                  )}
+
+                  {m.subclasse_id != null && outras.length > 0 && (
+                    <button type="button"
+                      onClick={() => onAtribuirSubclasse(outras, m.subclasse_id)}
+                      style={{ ...linkBtnStyle, color: "#4338ca", borderColor: "#c7d2fe" }}>
+                      {outras.length === 1
+                        ? `aplicar ${m.subclasse_nome_posicao ?? "esta subclasse"} à outra posição de ${info.label}`
+                        : `aplicar ${m.subclasse_nome_posicao ?? "esta subclasse"} às outras ${outras.length} posições de ${info.label}`}
+                    </button>
                   )}
 
                   {setoresDaClasse(m.classe).length > 0 && (

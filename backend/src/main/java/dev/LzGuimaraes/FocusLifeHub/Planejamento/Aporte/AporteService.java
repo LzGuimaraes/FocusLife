@@ -1033,13 +1033,18 @@ public class AporteService {
                     + "Para bloquear, marque um critério eliminatório no checklist."));
         }
 
-        long semTickerSemSubclasse = itens.stream()
-                .filter(i -> !i.vinculado() && i.subclasse_id() == null)
-                .count();
-        if (semTickerSemSubclasse > 0) {
-            alertas.add(new RankingAportesDTO.Alerta("SEM_SUBCLASSE", semTickerSemSubclasse
-                    + " posição(ões) sem ticker fora de qualquer subclasse: classifique-as em Carteira Ideal "
-                    + "para entrarem no alvo da classe."));
+        // Só avisa quando existe SUBDIVISÃO a respeitar: se a classe não tem
+        // subclasse com alvo, a posição sem ticker já conta integralmente no alvo
+        // dela — avisar ali seria alarme falso.
+        List<RankingAportesDTO.Item> semSubclasse = itens.stream()
+                .filter(i -> !i.vinculado() && i.subclasse_id() == null
+                        && classeTemSubclasseComAlvo(comparativo, i.classe()))
+                .toList();
+        if (!semSubclasse.isEmpty()) {
+            alertas.add(new RankingAportesDTO.Alerta("SEM_SUBCLASSE", semSubclasse.size()
+                    + " posição(ões) sem ticker fora de qualquer subclasse: em Carteira Ideal, escolha a subclasse "
+                    + "delas. Sem isso o motor não sabe qual FATIA da classe elas representam (o valor já conta no "
+                    + "total e no alvo da classe)."));
         }
 
         // §24: concentração RECENTE — quantas vezes o dinheiro já foi para o mesmo item.
@@ -1059,6 +1064,16 @@ public class AporteService {
                             : ": todas as classes elegíveis já estão completas.")));
         }
         return alertas;
+    }
+
+    /** true = a classe tem alguma subclasse com alvo > 0 (existe subdivisão a respeitar). */
+    private boolean classeTemSubclasseComAlvo(ComparativoResponseDTO comparativo, CategoriaInvestimento classe) {
+        for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
+            if (c.classe() == classe) {
+                return c.subclasses().stream().anyMatch(s -> nz(s.percentual_ideal()) > 0d);
+            }
+        }
+        return false;
     }
 
     /**
@@ -1374,7 +1389,11 @@ public class AporteService {
 
         if (!temClasse) {
             avisos.add("Defina a Carteira Ideal desta carteira (classes e subclasses) para o sistema dizer onde aportar.");
-        } else if (!temDeficitDeClasse) {
+        } else if (!temDeficitDeClasse
+                && itens.stream().noneMatch(i -> i.sugestao_aporte() != null && i.sugestao_aporte().signum() > 0)) {
+            // A classe pode estar dentro da tolerância (conta como equilibrada) e
+            // mesmo assim a SUBCLASSE ter déficit — nesse caso o dinheiro ainda tem
+            // destino, então avisar "não há para onde direcionar" seria falso.
             avisos.add("Nenhuma classe está abaixo do alvo — não há para onde direcionar o aporte agora.");
         }
         if (itens.isEmpty()) {
@@ -1388,12 +1407,14 @@ public class AporteService {
         }
 
         long semTickerSemSubclasse = meus.ativos().stream()
-                .filter(a -> !a.vinculado() && a.subclasse_id() == null)
+                .filter(a -> !a.vinculado() && a.subclasse_id() == null
+                        && classeTemSubclasseComAlvo(comparativo, (a.classe() != null) ? a.classe() : CategoriaInvestimento.OUTROS))
                 .count();
         if (semTickerSemSubclasse > 0) {
             avisos.add(semTickerSemSubclasse + " posição(ões) sem ticker (renda fixa, Tesouro, caixinha) não estão em "
-                    + "nenhuma subclasse: em Carteira Ideal, escolha a subclasse delas para que passem a contar no "
-                    + "alvo da classe.");
+                    + "nenhuma das subclasses da classe: o valor JÁ conta no total e no alvo da CLASSE, mas sem a "
+                    + "subclasse o motor não sabe qual fatia da classe elas representam. Em Carteira Ideal, escolha a "
+                    + "subclasse delas.");
         }
 
         if (naoAlocado != null && naoAlocado.signum() > 0) {
