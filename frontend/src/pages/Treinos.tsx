@@ -183,8 +183,7 @@ export default function Treinos() {
     const { start } = getWeekRange(0);
     const diffDays = Math.round((target.getTime() - start.getTime()) / 86400000);
     setWeekOffset(Math.round(diffDays / 7));
-    // Quem rola é o <main> (shell de altura fixa), não a janela.
-    document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const range = getWeekRange(weekOffset);

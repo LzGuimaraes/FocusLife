@@ -426,11 +426,9 @@ export default function CarteiraIdealPage() {
       <DiagnosticoFinanceiroBanner mostrarSemPosicoes carteiraId={selecionada}
         onReparado={() => { if (selecionada != null) carregar(selecionada); }} />
 
-      {/* ── CABEÇALHO FIXO ──
-          Fica grudado no topo da área de conteúdo: o progresso da soma das
-          classes e as duas ações que fecham o fluxo (Ajustar para 100% e
-          Salvar) nunca saem da tela, por mais que a lista role. */}
-      <div style={barraFixa}>
+      {/* ── BARRA DE AÇÕES ──
+          Progresso da soma das classes e as duas ações que fecham o fluxo. */}
+      <div style={barraAcoes}>
         <div style={{ display: "flex", gap: "16px", alignItems: "flex-end", flexWrap: "wrap" }}>
           <div>
             <label style={miniLabel}>Carteira</label>
@@ -596,13 +594,12 @@ export default function CarteiraIdealPage() {
   );
 }
 
-/* Cabeçalho FIXO: gruda no topo da área de conteúdo (o shell do Layout tem
-   altura fixa e é o <main> que rola), então o progresso da soma e as ações do
-   fluxo — Ajustar para 100% e Salvar — nunca saem da tela. */
-const barraFixa: React.CSSProperties = {
-  position: "sticky", top: 0, zIndex: 30,
+/* Barra de ações do topo: progresso da soma das classes + ações do fluxo.
+   Fica no fluxo normal da página (NÃO é fixa): cabeçalho grudado roubava
+   altura de tela e atrapalhava a leitura da configuração. */
+const barraAcoes: React.CSSProperties = {
   background: "white", borderRadius: "16px", padding: "16px 20px",
-  border: "1px solid #eef2f7", boxShadow: "0 6px 16px -8px rgba(15,23,42,0.18)",
+  border: "1px solid #eef2f7", boxShadow: "0 1px 3px rgba(15,23,42,0.05)",
   marginBottom: "18px",
 };
 
