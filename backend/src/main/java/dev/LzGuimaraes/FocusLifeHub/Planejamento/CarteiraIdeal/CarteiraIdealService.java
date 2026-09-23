@@ -853,9 +853,13 @@ public class CarteiraIdealService {
                     .map(CarteiraIdealSubclasseModel::getPercentualIdeal)
                     .filter(java.util.Objects::nonNull)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            if (somaSub.compareTo(classe.getPercentualIdeal()) > 0) {
+            // O percentual da SUBCLASSE é uma fatia da CLASSE (a soma fecha em
+            // 100% da classe, não em 100% da carteira). Comparar com o percentual
+            // da classe acusava erro em TODA classe com alvo menor que 100%.
+            if (!subsPorClasse.getOrDefault(classe.getId(), List.of()).isEmpty()
+                    && somaSub.subtract(CEM).abs().compareTo(TOLERANCIA) > 0) {
                 avisos.add("As subclasses de " + classe.getClasse() + " somam " + formatar(somaSub)
-                        + "%, acima dos " + formatar(classe.getPercentualIdeal()) + "% da classe.");
+                        + "% da classe (o esperado é 100% dela).");
             }
         }
 

@@ -1,16 +1,27 @@
+import { useState } from "react";
 import { toast } from "sonner";
 import type { CategoriaInvestimento } from "../types/planejamento";
 import { CATEGORIAS, catInfo, fmtPercentual, somaFechada } from "../utils/percentual";
 import { novaChave } from "../utils/chaves";
 import { textoParaNum } from "../utils/numeros";
 import { MODELOS_PLANEJAMENTO, type ModeloPlanejamento } from "../utils/modelosPlanejamento";
-import { boxStyle, controlStyle, iconBtn, linkBtnStyle } from "./FormStyles";
+import {
+  chip, controlStyle, iconBtn, linkBtnStyle, miniLabel, numGrande, numInput, numMedio,
+  overline, sectionCard, sectionSubtitle, sectionTitle, stepperBtn,
+} from "./FormStyles";
 
 /* ══════════════════════════════════════════════════════════════════════
    Editor de classes e subclasses da Carteira Ideal (Módulo 1).
 
+   VERSÃO EM CARDS: cada classe é um card com identidade visual própria
+   (ícone + cor), o par ATUAL × ALVO lado a lado, o seletor numérico com
+   +/- e uma sanfona de subclasses. A tela pode ser lida "de longe": o alvo
+   é o número grande, o atual é o número médio, e a barra usa a MESMA escala
+   (100%) em todos os cards, então eles são comparáveis entre si.
+
    Trabalha com "drafts" (percentuais como string) para que a digitação
    seja livre; a conversão para número acontece no save da página.
+   Nenhuma regra de negócio mora aqui: as funções só editam o rascunho.
    ══════════════════════════════════════════════════════════════════════ */
 
 export interface SetorDraft {
@@ -59,17 +70,58 @@ export function novoSetorDraft(): SetorDraft {
   return { key: novaChave(), nome: "", percentual_ideal: "", tolerancia: "", limite_maximo: "" };
 }
 
+/**
+ * Leva a soma das classes para exatamente 100% sem o usuário fazer conta.
+ *
+ * MESMA REGRA de antes (agora chamada pelo cabeçalho fixo da página):
+ *   • passou de 100% → reduz tudo proporcionalmente;
+ *   • faltou          → completa em "Outros" (ou cria a classe, se não existir).
+ * Devolve as classes novas, ou `null` quando não há nada a ajustar.
+ */
+export function ajustarClassesPara100(classes: ClasseDraft[]): ClasseDraft[] | null {
+  if (classes.length === 0) return null;
+  const soma = classes.reduce((s, c) => s + textoParaNum(c.percentual_ideal), 0);
+  if (somaFechada(soma)) return null;
+
+  if (soma > 100) {
+    const fator = 100 / soma;
+    return classes.map(c => ({
+      ...c,
+      percentual_ideal: (textoParaNum(c.percentual_ideal) * fator).toFixed(2).replace(".", ","),
+    }));
+  }
+  const falta = 100 - soma;
+  const indiceOutros = classes.findIndex(c => c.classe === "OUTROS");
+  if (indiceOutros >= 0) {
+    return classes.map((c, i) => (i === indiceOutros
+      ? { ...c, percentual_ideal: (textoParaNum(c.percentual_ideal) + falta).toFixed(2).replace(".", ",") }
+      : c));
+  }
+  return [...classes, {
+    ...novaClasseDraft("OUTROS"),
+    percentual_ideal: falta.toFixed(2).replace(".", ","),
+  }];
+}
+
 interface Props {
   classes: ClasseDraft[];
   onChange: (classes: ClasseDraft[]) => void;
+  /** % atual de cada classe na carteira (vem do comparativo) — só leitura. */
+  atualPorClasse?: Partial<Record<CategoriaInvestimento, number>>;
 }
 
-export default function CarteiraIdealEditor({ classes, onChange }: Props) {
+export default function CarteiraIdealEditor({ classes, onChange, atualPorClasse = {} }: Props) {
+  /** Quais sanfonas de subclasse estão abertas (por key da classe). */
+  const [abertas, setAbertas] = useState<Record<string, boolean>>({});
+
   // ATENÇÃO: usar `textoParaNum` (e não parseFloat) porque o usuário digita com
   // vírgula — `parseFloat("12,5")` devolveria 12 e a soma sairia errada.
   const soma = classes.reduce((s, c) => s + textoParaNum(c.percentual_ideal), 0);
   const usadas = classes.map(c => c.classe);
   const disponiveis = CATEGORIAS.filter(c => !usadas.includes(c.key));
+
+  const alternarSanfona = (key: string) =>
+    setAbertas(prev => ({ ...prev, [key]: !prev[key] }));
 
   /** Aplica um modelo pronto como ponto de partida (substitui as classes atuais). */
   const aplicarModelo = (modelo: ModeloPlanejamento) => {
@@ -80,42 +132,14 @@ export default function CarteiraIdealEditor({ classes, onChange }: Props) {
     toast.success(`Modelo "${modelo.nome}" aplicado — revise os percentuais e ajuste o que quiser.`);
   };
 
-  /** Leva a soma para exatamente 100% sem o usuário fazer conta. */
-  const ajustarPara100 = () => {
-    if (classes.length === 0) {
-      toast.info("Adicione ou aplique um modelo antes de ajustar.");
-      return;
-    }
-    if (somaFechada(soma)) {
-      toast.info("A soma das classes já está em 100%.");
-      return;
-    }
-    if (soma > 100) {
-      const fator = 100 / soma;
-      onChange(classes.map(c => ({
-        ...c,
-        percentual_ideal: (textoParaNum(c.percentual_ideal) * fator).toFixed(2).replace(".", ","),
-      })));
-      toast.success("Percentuais reduzidos proporcionalmente para somar 100%.");
-      return;
-    }
-    const falta = 100 - soma;
-    const indiceOutros = classes.findIndex(c => c.classe === "OUTROS");
-    if (indiceOutros >= 0) {
-      onChange(classes.map((c, i) => (i === indiceOutros
-        ? { ...c, percentual_ideal: (textoParaNum(c.percentual_ideal) + falta).toFixed(2).replace(".", ",") }
-        : c)));
-    } else {
-      onChange([...classes, {
-        ...novaClasseDraft("OUTROS"),
-        percentual_ideal: falta.toFixed(2).replace(".", ","),
-      }]);
-    }
-    toast.success(`Completei os ${falta.toFixed(2).replace(".", ",")}% que faltavam com "Outros".`);
-  };
-
   const atualizarClasse = (key: string, patch: Partial<ClasseDraft>) =>
     onChange(classes.map(c => (c.key === key ? { ...c, ...patch } : c)));
+
+  /** +/- do seletor numérico do alvo da classe (passo de 1 p.p., entre 0 e 100). */
+  const passoClasse = (c: ClasseDraft, delta: number) => {
+    const novo = Math.min(100, Math.max(0, textoParaNum(c.percentual_ideal) + delta));
+    atualizarClasse(c.key, { percentual_ideal: novo.toFixed(2).replace(".", ",") });
+  };
 
   const moverClasse = (index: number, delta: number) => {
     const destino = index + delta;
@@ -158,32 +182,26 @@ export default function CarteiraIdealEditor({ classes, onChange }: Props) {
       : c));
 
   return (
-    <div style={boxStyle}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "14px" }}>
-        <div>
-          <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", margin: 0 }}>Classes e subclasses</h3>
-          <p style={{ fontSize: "12px", color: "#64748b", margin: "2px 0 0" }}>
-            As classes precisam somar 100%. As subclasses são um detalhamento dentro da classe.
+    <section style={sectionCard}>
+      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
+        <div style={{ maxWidth: "560px" }}>
+          <h3 style={sectionTitle}>Classes e subclasses</h3>
+          <p style={sectionSubtitle}>
+            As classes precisam somar 100%. As subclasses são um detalhamento dentro da classe —
+            e é nelas que ficam a tolerância e o limite de concentração.
           </p>
         </div>
-        <span style={{
-          fontSize: "13px", fontWeight: 700, padding: "5px 12px", borderRadius: "9999px",
-          background: somaFechada(soma) ? "#d1fae5" : "#fee2e2",
-          color: somaFechada(soma) ? "#047857" : "#b91c1c",
-        }}>
-          Soma: {fmtPercentual(soma)}
-        </span>
-      </div>
+        {classes.length > 0 && (
+          <span style={chip(somaFechada(soma) ? "#047857" : "#b91c1c",
+            somaFechada(soma) ? "#ecfdf5" : "#fef2f2")}>
+            {somaFechada(soma) ? "✓" : "⚠"} Soma {fmtPercentual(soma)} / 100%
+          </span>
+        )}
+      </header>
 
       {classes.length === 0 && (
-        <p style={{ fontSize: "13px", color: "#94a3b8", margin: "0 0 12px" }}>
-          Nenhuma classe definida ainda. Adicione as classes da sua carteira ideal.
-        </p>
-      )}
-
-      {classes.length === 0 && (
-        <div style={{ background: "#f8fafc", border: "1px dashed #e2e8f0", borderRadius: "10px", padding: "12px 14px", marginBottom: "12px" }}>
-          <p style={{ fontSize: "12px", fontWeight: 700, color: "#475569", margin: "0 0 8px" }}>
+        <div style={{ marginTop: "18px", background: "#f8fafc", border: "1px dashed #e2e8f0", borderRadius: "12px", padding: "16px 18px" }}>
+          <p style={{ fontSize: "13px", fontWeight: 700, color: "#475569", margin: "0 0 10px" }}>
             Comece por um modelo pronto (você edita tudo depois) ou monte do zero:
           </p>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -198,51 +216,41 @@ export default function CarteiraIdealEditor({ classes, onChange }: Props) {
         </div>
       )}
 
-      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginBottom: "12px" }}>
-        <button type="button" onClick={ajustarPara100} style={linkBtnStyle}>
-          ⚖️ Ajustar para 100%
-        </button>
-        <span style={{ fontSize: "11px", color: "#94a3b8" }}>
-          se faltar, completa com "Outros"; se passar, reduz proporcionalmente.
-        </span>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      {/* ── Grid de cards: uma classe por card ── */}
+      <div style={{
+        display: "grid", gap: "16px", marginTop: classes.length > 0 ? "19px" : "16px",
+        gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 320px), 1fr))",
+      }}>
         {classes.map((c, index) => {
           const info = catInfo(c.classe);
+          const alvo = textoParaNum(c.percentual_ideal);
+          const atual = atualPorClasse[c.classe];
           const somaSub = c.subclasses.reduce((s, x) => s + textoParaNum(x.percentual_ideal), 0);
-          const subExcede = somaSub > textoParaNum(c.percentual_ideal) + 0.01;
+          // O percentual da subclasse é uma FATIA DA CLASSE: a soma dela fecha em
+          // 100% da CLASSE (nunca em 100% da carteira). Comparar com o alvo da
+          // classe aqui dava alarme falso em toda classe com menos de 100%.
+          const subExcede = c.subclasses.length > 0 && somaSub > 100.01;
+          const aberta = abertas[c.key] ?? false;
+          const desvio = atual != null ? atual - alvo : null;
+
           return (
-            <div key={c.key} style={{ border: "1px solid #e2e8f0", borderRadius: "10px", padding: "10px 12px", background: "#fcfdff" }}>
-              <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                <span style={{ fontSize: "15px", width: "20px", textAlign: "center" }}>{info.icon}</span>
-                <select value={c.classe} aria-label="Classe"
+            <article key={c.key} style={{
+              border: "1px solid #e9eef5", borderRadius: "14px", background: "white",
+              display: "flex", flexDirection: "column", overflow: "hidden",
+            }}>
+              {/* Cabeçalho do card: identidade da classe */}
+              <div style={{
+                display: "flex", alignItems: "center", gap: "9px",
+                padding: "12px 14px", background: info.bg, borderBottom: "1px solid rgba(15,23,42,0.05)",
+              }}>
+                <span style={{ fontSize: "17px", lineHeight: 1 }}>{info.icon}</span>
+                <select value={c.classe} aria-label={`Classe ${info.label}`}
                   onChange={e => atualizarClasse(c.key, { classe: e.target.value as CategoriaInvestimento })}
-                  style={{ ...controlStyle, minWidth: "150px" }}>
+                  style={{ ...controlStyle, border: "none", background: "transparent", padding: "2px 4px", fontWeight: 800, fontSize: "13.5px", color: info.color, flex: 1, minWidth: 0 }}>
                   {CATEGORIAS.filter(op => op.key === c.classe || !usadas.includes(op.key))
                     .map(op => <option key={op.key} value={op.key}>{op.label}</option>)}
                 </select>
-                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                  <input value={c.percentual_ideal} inputMode="decimal" placeholder="0,00"
-                    aria-label={`Percentual ideal de ${info.label}`}
-                    onChange={e => atualizarClasse(c.key, { percentual_ideal: apenasNumero(e.target.value) })}
-                    style={{ ...controlStyle, width: "90px", textAlign: "right" }} />
-                  <span style={{ fontSize: "13px", color: "#64748b" }}>%</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}
-                  title="Tolerância (p.p.): dentro desta faixa a classe conta como EQUILIBRADA — e é o que dá espaço ao aporte quando a meta já foi atingida. Limite máximo: acima dele a classe não recebe novos aportes.">
-                  <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>±</span>
-                  <input value={c.tolerancia} inputMode="decimal" placeholder="0"
-                    aria-label={`Tolerância de ${info.label} em pontos percentuais`}
-                    onChange={e => atualizarClasse(c.key, { tolerancia: apenasNumero(e.target.value) })}
-                    style={{ ...controlStyle, width: "62px", textAlign: "right", fontSize: "12px" }} />
-                  <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>máx</span>
-                  <input value={c.limite_maximo} inputMode="decimal" placeholder="—"
-                    aria-label={`Limite máximo de ${info.label} em percentual`}
-                    onChange={e => atualizarClasse(c.key, { limite_maximo: apenasNumero(e.target.value) })}
-                    style={{ ...controlStyle, width: "62px", textAlign: "right", fontSize: "12px" }} />
-                </div>
-                <div style={{ display: "flex", gap: "2px", marginLeft: "auto" }}>
+                <div style={{ display: "flex", gap: "3px" }}>
                   <button type="button" onClick={() => moverClasse(index, -1)} disabled={index === 0}
                     aria-label={`Mover ${info.label} para cima`} style={iconBtn(index === 0)}>↑</button>
                   <button type="button" onClick={() => moverClasse(index, 1)} disabled={index === classes.length - 1}
@@ -252,107 +260,219 @@ export default function CarteiraIdealEditor({ classes, onChange }: Props) {
                 </div>
               </div>
 
-              <div style={{ marginLeft: "28px", marginTop: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
-                {c.subclasses.map(s => (
-                  <div key={s.key} style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: "12px", color: "#94a3b8" }}>↳</span>
-                    <input value={s.nome} placeholder="Subclasse (ex: Bancos)" aria-label="Nome da subclasse"
-                      onChange={e => atualizarSubclasse(c.key, s.key, { nome: e.target.value })}
-                      style={{ ...controlStyle, minWidth: "150px" }} />
-                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                      <input value={s.percentual_ideal} inputMode="decimal" placeholder="0,00"
-                        aria-label={`Percentual ideal da subclasse ${s.nome || "sem nome"}`}
-                        onChange={e => atualizarSubclasse(c.key, s.key, { percentual_ideal: apenasNumero(e.target.value) })}
-                        style={{ ...controlStyle, width: "90px", textAlign: "right" }} />
-                      <span style={{ fontSize: "13px", color: "#64748b" }}>%</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}
-                      title="Tolerância (p.p. da classe) e limite máximo de concentração desta subclasse.">
-                      <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>±</span>
-                      <input value={s.tolerancia} inputMode="decimal" placeholder="0"
-                        aria-label={`Tolerância da subclasse ${s.nome || "sem nome"}`}
-                        onChange={e => atualizarSubclasse(c.key, s.key, { tolerancia: apenasNumero(e.target.value) })}
-                        style={{ ...controlStyle, width: "58px", textAlign: "right", fontSize: "12px" }} />
-                      <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>máx</span>
-                      <input value={s.limite_maximo} inputMode="decimal" placeholder="—"
-                        aria-label={`Limite máximo da subclasse ${s.nome || "sem nome"}`}
-                        onChange={e => atualizarSubclasse(c.key, s.key, { limite_maximo: apenasNumero(e.target.value) })}
-                        style={{ ...controlStyle, width: "58px", textAlign: "right", fontSize: "12px" }} />
-                    </div>
-                    <button type="button" onClick={() => removerSubclasse(c.key, s.key)}
-                      aria-label="Remover subclasse" style={{ ...iconBtn(false), color: "#ef4444", marginLeft: "auto" }}>🗑</button>
+              <div style={{ padding: "16px 16px 14px", display: "flex", flexDirection: "column", gap: "14px", flex: 1 }}>
+                {/* Comparação Atual × Alvo */}
+                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: "12px" }}>
+                  <div>
+                    <span style={overline}>Hoje</span>
+                    <p style={{ ...numMedio, color: "#64748b", margin: "3px 0 0" }}>
+                      {atual != null ? fmtPercentual(atual) : "—"}
+                    </p>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <span style={overline}>Alvo</span>
+                    <p style={{ ...numGrande, margin: "3px 0 0" }}>{fmtPercentual(alvo)}</p>
+                  </div>
+                </div>
 
-                    {/* ── SETOR: nível opcional dentro da subclasse (o % é fatia dela) ── */}
-                    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "5px", marginLeft: "24px" }}>
-                      {s.setores.map(st => (
-                        <div key={st.key} style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
-                          <span style={{ fontSize: "11px", color: "#94a3b8" }}>➥</span>
-                          <input value={st.nome} placeholder="Setor (ex: Bancos)"
-                            aria-label={`Nome do setor ${st.nome || "sem nome"}`}
-                            onChange={e => atualizarSetor(c.key, s.key, st.key, { nome: e.target.value })}
-                            style={{ ...controlStyle, minWidth: "140px", fontSize: "12px" }} />
-                          <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                            <input value={st.percentual_ideal} inputMode="decimal" placeholder="0,00"
-                              aria-label={`Percentual ideal do setor ${st.nome || "sem nome"}`}
-                              title="Percentual do setor DENTRO da subclasse"
-                              onChange={e => atualizarSetor(c.key, s.key, st.key, { percentual_ideal: apenasNumero(e.target.value) })}
-                              style={{ ...controlStyle, width: "78px", textAlign: "right", fontSize: "12px" }} />
-                            <span style={{ fontSize: "12px", color: "#64748b" }}>%</span>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "3px" }}
-                            title="Tolerância (p.p. da subclasse) e limite máximo de concentração do setor.">
-                            <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>±</span>
-                            <input value={st.tolerancia} inputMode="decimal" placeholder="0"
-                              aria-label={`Tolerância do setor ${st.nome || "sem nome"}`}
-                              onChange={e => atualizarSetor(c.key, s.key, st.key, { tolerancia: apenasNumero(e.target.value) })}
-                              style={{ ...controlStyle, width: "54px", textAlign: "right", fontSize: "12px" }} />
-                            <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>máx</span>
-                            <input value={st.limite_maximo} inputMode="decimal" placeholder="—"
-                              aria-label={`Limite máximo do setor ${st.nome || "sem nome"}`}
-                              onChange={e => atualizarSetor(c.key, s.key, st.key, { limite_maximo: apenasNumero(e.target.value) })}
-                              style={{ ...controlStyle, width: "54px", textAlign: "right", fontSize: "12px" }} />
-                          </div>
-                          <button type="button" onClick={() => removerSetor(c.key, s.key, st.key)}
-                            aria-label="Remover setor" style={{ ...iconBtn(false), color: "#ef4444", marginLeft: "auto" }}>🗑</button>
-                        </div>
-                      ))}
-                      <button type="button" onClick={() => adicionarSetor(c.key, s.key)}
-                        style={{ ...linkBtnStyle, fontSize: "11px", padding: "3px 9px", alignSelf: "flex-start" }}>
-                        + Setor
-                      </button>
+                {/* Barra na mesma escala (100%) — os cards ficam comparáveis */}
+                <div>
+                  <div style={{ position: "relative", height: "10px", background: "#f1f5f9", borderRadius: "6px" }}>
+                    <div style={{
+                      width: `${Math.min(100, atual ?? 0)}%`, height: "100%", borderRadius: "6px",
+                      background: info.color, opacity: 0.9, transition: "width 0.35s ease",
+                    }} />
+                    <div title={`Alvo: ${fmtPercentual(alvo)}`} style={{
+                      position: "absolute", left: `calc(${Math.min(100, alvo)}% - 2px)`, top: "-4px",
+                      width: "4px", height: "18px", borderRadius: "3px", background: "#0f172a",
+                    }} />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "5px" }}>
+                    <span style={{ ...overline, letterSpacing: "0.3px" }}>0%</span>
+                    {desvio != null && (
+                      <span style={chip(
+                        Math.abs(desvio) < 0.005 ? "#047857" : desvio > 0 ? "#b45309" : "#1d4ed8",
+                        Math.abs(desvio) < 0.005 ? "#ecfdf5" : desvio > 0 ? "#fffbeb" : "#eff6ff")}>
+                        {Math.abs(desvio) < 0.005
+                          ? "na meta"
+                          : `${desvio > 0 ? "+" : "−"}${Math.abs(desvio).toFixed(2).replace(".", ",")} p.p.`}
+                      </span>
+                    )}
+                    <span style={{ ...overline, letterSpacing: "0.3px" }}>100%</span>
+                  </div>
+                </div>
+
+                {/* Seletor numérico com +/- */}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <button type="button" onClick={() => passoClasse(c, -1)} disabled={alvo <= 0}
+                    aria-label={`Diminuir o alvo de ${info.label}`} style={stepperBtn(alvo <= 0)}>−</button>
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <input value={c.percentual_ideal} inputMode="decimal" placeholder="0,00"
+                      aria-label={`Percentual ideal de ${info.label}`}
+                      onChange={e => atualizarClasse(c.key, { percentual_ideal: apenasNumero(e.target.value) })}
+                      style={numInput} />
+                    <span style={{ fontSize: "14px", fontWeight: 700, color: "#94a3b8" }}>%</span>
+                  </div>
+                  <button type="button" onClick={() => passoClasse(c, 1)} disabled={alvo >= 100}
+                    aria-label={`Aumentar o alvo de ${info.label}`} style={stepperBtn(alvo >= 100)}>+</button>
+                </div>
+
+                {/* Tolerância e limite de concentração */}
+                <div style={{ display: "flex", gap: "14px", alignItems: "flex-end" }}
+                  title="Tolerância (p.p.): dentro desta faixa a classe conta como EQUILIBRADA — e é o que dá espaço ao aporte quando a meta já foi atingida. Limite máximo: acima dele a classe não recebe novos aportes.">
+                  <div>
+                    <label style={miniLabel}>Tolerância ±</label>
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <input value={c.tolerancia} inputMode="decimal" placeholder="0"
+                        aria-label={`Tolerância de ${info.label} em pontos percentuais`}
+                        onChange={e => atualizarClasse(c.key, { tolerancia: apenasNumero(e.target.value) })}
+                        style={{ ...controlStyle, width: "68px", textAlign: "right", fontSize: "12.5px" }} />
+                      <span style={{ fontSize: "11px", color: "#94a3b8" }}>p.p.</span>
                     </div>
                   </div>
-                ))}
+                  <div>
+                    <label style={miniLabel}>Limite máximo</label>
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <input value={c.limite_maximo} inputMode="decimal" placeholder="—"
+                        aria-label={`Limite máximo de ${info.label} em percentual`}
+                        onChange={e => atualizarClasse(c.key, { limite_maximo: apenasNumero(e.target.value) })}
+                        style={{ ...controlStyle, width: "68px", textAlign: "right", fontSize: "12.5px" }} />
+                      <span style={{ fontSize: "11px", color: "#94a3b8" }}>%</span>
+                    </div>
+                  </div>
+                </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <button type="button" onClick={() => adicionarSubclasse(c.key)} style={linkBtnStyle}>
-                    + Subclasse
-                  </button>
-                  {subExcede && (
-                    <span style={{ fontSize: "11px", color: "#b45309" }}>
-                      ⚠ subclasses somam {fmtPercentual(somaSub)} (acima da classe)
+                {/* Sanfona de subclasses */}
+                <div style={{ marginTop: "auto", borderTop: "1px solid #f1f5f9", paddingTop: "12px" }}>
+                  <button type="button" onClick={() => alternarSanfona(c.key)}
+                    aria-expanded={aberta}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "8px", width: "100%",
+                      background: "transparent", border: "none", cursor: "pointer", padding: 0, textAlign: "left",
+                    }}>
+                    <span style={{ fontSize: "11px", color: "#94a3b8", transition: "transform 0.2s ease", transform: aberta ? "rotate(90deg)" : "none" }}>▶</span>
+                    <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#475569" }}>
+                      Subclasses {c.subclasses.length > 0 && `(${c.subclasses.length})`}
                     </span>
+                    {c.subclasses.length > 0 && (
+                      <span style={{ ...overline, marginLeft: "auto" }}>{fmtPercentual(somaSub)} da classe</span>
+                    )}
+                  </button>
+
+                  {subExcede && (
+                    <p style={{ fontSize: "11.5px", color: "#b45309", margin: "8px 0 0" }}>
+                      ⚠ As subclasses somam {fmtPercentual(somaSub)} da classe — precisam fechar em 100%.
+                    </p>
+                  )}
+
+                  {aberta && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "12px" }}>
+                      {c.subclasses.length === 0 && (
+                        <p style={{ fontSize: "12px", color: "#94a3b8", margin: 0 }}>
+                          Sem subclasses: a classe é tratada como um bloco único.
+                        </p>
+                      )}
+
+                      {c.subclasses.map(s => (
+                        <div key={s.key} style={{ border: "1px solid #eef2f7", borderRadius: "10px", padding: "11px 12px", background: "#fcfdff" }}>
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                            <input value={s.nome} placeholder="Subclasse (ex: Bancos)" aria-label="Nome da subclasse"
+                              onChange={e => atualizarSubclasse(c.key, s.key, { nome: e.target.value })}
+                              style={{ ...controlStyle, flex: 1, minWidth: 0, fontWeight: 600 }} />
+                            <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                              <input value={s.percentual_ideal} inputMode="decimal" placeholder="0,00"
+                                aria-label={`Percentual ideal da subclasse ${s.nome || "sem nome"}`}
+                                onChange={e => atualizarSubclasse(c.key, s.key, { percentual_ideal: apenasNumero(e.target.value) })}
+                                style={{ ...controlStyle, width: "74px", textAlign: "right", fontWeight: 700 }} />
+                              <span style={{ fontSize: "12px", color: "#94a3b8" }}>%</span>
+                            </div>
+                            <button type="button" onClick={() => removerSubclasse(c.key, s.key)}
+                              aria-label="Remover subclasse" style={{ ...iconBtn(false), color: "#ef4444" }}>🗑</button>
+                          </div>
+
+                          <div style={{ display: "flex", gap: "12px", marginTop: "9px" }}
+                            title="Tolerância (p.p. da classe) e limite máximo de concentração desta subclasse.">
+                            <div>
+                              <label style={miniLabel}>Tolerância ±</label>
+                              <input value={s.tolerancia} inputMode="decimal" placeholder="0"
+                                aria-label={`Tolerância da subclasse ${s.nome || "sem nome"}`}
+                                onChange={e => atualizarSubclasse(c.key, s.key, { tolerancia: apenasNumero(e.target.value) })}
+                                style={{ ...controlStyle, width: "62px", textAlign: "right", fontSize: "12px" }} />
+                            </div>
+                            <div>
+                              <label style={miniLabel}>Limite máximo</label>
+                              <input value={s.limite_maximo} inputMode="decimal" placeholder="—"
+                                aria-label={`Limite máximo da subclasse ${s.nome || "sem nome"}`}
+                                onChange={e => atualizarSubclasse(c.key, s.key, { limite_maximo: apenasNumero(e.target.value) })}
+                                style={{ ...controlStyle, width: "62px", textAlign: "right", fontSize: "12px" }} />
+                            </div>
+                            <div style={{ marginLeft: "auto", alignSelf: "flex-end" }}>
+                              <button type="button" onClick={() => adicionarSetor(c.key, s.key)}
+                                style={{ ...linkBtnStyle, fontSize: "11px", padding: "4px 10px" }}>
+                                + Setor
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* ── SETOR: nível opcional dentro da subclasse (o % é fatia dela) ── */}
+                          {s.setores.map(st => (
+                            <div key={st.key} style={{ display: "flex", gap: "7px", alignItems: "center", flexWrap: "wrap", marginTop: "9px", paddingLeft: "10px", borderLeft: "2px solid #eef2f7" }}>
+                              <input value={st.nome} placeholder="Setor (ex: Bancos)"
+                                aria-label={`Nome do setor ${st.nome || "sem nome"}`}
+                                onChange={e => atualizarSetor(c.key, s.key, st.key, { nome: e.target.value })}
+                                style={{ ...controlStyle, flex: 1, minWidth: "90px", fontSize: "12px" }} />
+                              <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                                <input value={st.percentual_ideal} inputMode="decimal" placeholder="0,00"
+                                  aria-label={`Percentual ideal do setor ${st.nome || "sem nome"}`}
+                                  title="Percentual do setor DENTRO da subclasse"
+                                  onChange={e => atualizarSetor(c.key, s.key, st.key, { percentual_ideal: apenasNumero(e.target.value) })}
+                                  style={{ ...controlStyle, width: "70px", textAlign: "right", fontSize: "12px" }} />
+                                <span style={{ fontSize: "11px", color: "#94a3b8" }}>%</span>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                                title="Tolerância (p.p. da subclasse) e limite máximo de concentração do setor.">
+                                <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>±</span>
+                                <input value={st.tolerancia} inputMode="decimal" placeholder="0"
+                                  aria-label={`Tolerância do setor ${st.nome || "sem nome"}`}
+                                  onChange={e => atualizarSetor(c.key, s.key, st.key, { tolerancia: apenasNumero(e.target.value) })}
+                                  style={{ ...controlStyle, width: "52px", textAlign: "right", fontSize: "12px" }} />
+                                <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>máx</span>
+                                <input value={st.limite_maximo} inputMode="decimal" placeholder="—"
+                                  aria-label={`Limite máximo do setor ${st.nome || "sem nome"}`}
+                                  onChange={e => atualizarSetor(c.key, s.key, st.key, { limite_maximo: apenasNumero(e.target.value) })}
+                                  style={{ ...controlStyle, width: "52px", textAlign: "right", fontSize: "12px" }} />
+                              </div>
+                              <button type="button" onClick={() => removerSetor(c.key, s.key, st.key)}
+                                aria-label="Remover setor" style={{ ...iconBtn(false), color: "#ef4444" }}>🗑</button>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+
+                      <button type="button" onClick={() => adicionarSubclasse(c.key)}
+                        style={{ ...linkBtnStyle, alignSelf: "flex-start" }}>
+                        + Subclasse
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
-            </div>
+            </article>
           );
         })}
       </div>
 
-      <div style={{ marginTop: "12px" }}>
+      <div style={{ marginTop: "18px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
         <button type="button" disabled={disponiveis.length === 0}
           onClick={() => onChange([...classes, novaClasseDraft(disponiveis[0].key)])}
           style={{ ...linkBtnStyle, opacity: disponiveis.length === 0 ? 0.5 : 1, cursor: disponiveis.length === 0 ? "not-allowed" : "pointer" }}>
           + Adicionar classe
         </button>
         {disponiveis.length === 0 && classes.length > 0 && (
-          <span style={{ fontSize: "11px", color: "#94a3b8", marginLeft: "10px" }}>
-            Todas as classes já foram usadas.
-          </span>
+          <span style={{ fontSize: "11.5px", color: "#94a3b8" }}>Todas as classes já foram usadas.</span>
         )}
       </div>
-    </div>
+    </section>
   );
 }
 

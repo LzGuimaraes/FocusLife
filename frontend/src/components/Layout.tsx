@@ -46,7 +46,10 @@ export default function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", width: "100%" }}>
+    /* SHELL DE ALTURA FIXA: quem rola é a área de conteúdo (<main>), não a
+       janela. É o que permite cabeçalho/barra de ações fixos dentro das
+       páginas (position: sticky gruda no container que rola de verdade). */
+    <div style={{ display: "flex", height: isDesktop ? "100vh" : "100dvh", width: "100%", overflow: "hidden" }}>
       {sidebarOpen && !isDesktop && (
         <div onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 90 }} />
       )}
@@ -92,7 +95,7 @@ export default function Layout({ children }: LayoutProps) {
             <span style={{ fontWeight: 600, fontSize: "15px", color: "#0f172a" }}>{navItems.find(i => i.path === location.pathname)?.label || "FocusLife"}</span>
           </header>
         )}
-        <main style={{ flex: 1, padding: isDesktop ? "28px 32px" : "16px", overflow: "auto" }}>
+        <main style={{ flex: 1, padding: isDesktop ? "28px 32px" : "16px", overflowY: "auto", overflowX: "hidden", minHeight: 0 }}>
           {children}
         </main>
       </div>

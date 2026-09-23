@@ -156,6 +156,118 @@ function LinhaBarra({ valor, escala, cor }: { valor: number; escala: number; cor
 }
 
 const card: React.CSSProperties = {
-  background: "white", borderRadius: "12px", padding: "18px",
-  boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #f1f5f9",
+  background: "white", borderRadius: "16px", padding: "22px 24px",
+  boxShadow: "0 1px 3px rgba(15,23,42,0.05)", border: "1px solid #eef2f7",
 };
+
+/* ══════════════════════════════════════════════════════════════════════
+   DONUTS "Atual × Ideal" (comparação visual imediata).
+
+   Dois círculos lado a lado, com a MESMA ordem e as MESMAS cores de classe:
+   a leitura é "a fatia que cresceu/diminuiu", sem precisar ler percentuais.
+   Legenda única embaixo (uma vez só), porque repetir a legenda em cada
+   gráfico só aumentaria o ruído da tela.
+
+   Cores e rótulos continuam vindo de `catInfo` — a distribuição é a mesma
+   do comparativo, nada é recalculado aqui.
+   ══════════════════════════════════════════════════════════════════════ */
+export function DonutsAtualIdeal({ comparativo }: { comparativo: Comparativo }) {
+  const classes = comparativo.classes;
+  if (classes.length === 0) return null;
+
+  const fatias = classes.map(c => ({
+    key: c.classe,
+    label: catInfo(c.classe).label,
+    icone: catInfo(c.classe).icon,
+    cor: catInfo(c.classe).color,
+    atual: c.percentual_atual,
+    ideal: c.percentual_ideal,
+  }));
+  const somaAtual = fatias.reduce((s, f) => s + f.atual, 0);
+  const somaIdeal = fatias.reduce((s, f) => s + f.ideal, 0);
+
+  return (
+    <div style={card}>
+      <h3 style={{ fontSize: "16px", fontWeight: 800, color: "#0f172a", margin: 0, letterSpacing: "-0.01em" }}>
+        Distribuição atual × ideal
+      </h3>
+      <p style={{ fontSize: "12.5px", color: "#64748b", margin: "5px 0 0" }}>
+        A mesma carteira, dois retratos: onde você está hoje e onde a sua metodologia diz que deve estar.
+      </p>
+
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "clamp(12px, 5vw, 44px)", flexWrap: "wrap", marginTop: "18px" }}>
+        <Donut titulo="Atual" soma={somaAtual}
+          fatias={fatias.map(f => ({ label: f.label, valor: f.atual, cor: f.cor }))} />
+        <Donut titulo="Ideal" soma={somaIdeal}
+          fatias={fatias.map(f => ({ label: f.label, valor: f.ideal, cor: f.cor }))} destaque />
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 16px", marginTop: "20px", paddingTop: "16px", borderTop: "1px solid #f1f5f9" }}>
+        {fatias.map(f => (
+          <span key={f.key} style={{ display: "inline-flex", alignItems: "center", gap: "7px", fontSize: "12.5px", color: "#475569" }}>
+            <span style={{ width: "10px", height: "10px", borderRadius: "3px", background: f.cor, flexShrink: 0 }} />
+            {f.icone} {f.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Um donut em SVG puro: sem dependência nova e sem imagem. */
+function Donut({ titulo, soma, fatias, destaque = false }: {
+  titulo: string;
+  soma: number;
+  fatias: { label: string; valor: number; cor: string }[];
+  destaque?: boolean;
+}) {
+  const raio = 54;
+  const espessura = 20;
+  const circunferencia = 2 * Math.PI * raio;
+  const total = fatias.reduce((s, f) => s + Math.max(0, f.valor), 0);
+  const base = total > 0 ? total : 1;
+
+  let acumulado = 0;
+  const arcos = fatias
+    .filter(f => f.valor > 0.005)
+    .map(f => {
+      const fracao = f.valor / base;
+      const inicio = acumulado;
+      acumulado += fracao;
+      return { ...f, fracao, inicio };
+    });
+
+  return (
+    <div style={{ textAlign: "center" }}>
+      <svg width="164" height="164" viewBox="0 0 164 164" role="img"
+        aria-label={`Distribuição ${titulo}: ${fmtPercentual(soma)}`}>
+        <g transform="rotate(-90 82 82)">
+          <circle cx="82" cy="82" r={raio} fill="none" stroke="#f1f5f9" strokeWidth={espessura} />
+          {arcos.map(a => (
+            <circle key={a.label} cx="82" cy="82" r={raio} fill="none"
+              stroke={a.cor} strokeWidth={espessura}
+              // O vão de 1,5% separa fatias de cores parecidas (a paleta do app
+              // usa tons próximos de azul/roxo) sem depender de contorno.
+              strokeDasharray={`${Math.max(0, a.fracao * circunferencia - 6)} ${circunferencia}`}
+              strokeDashoffset={-a.inicio * circunferencia}>
+              <title>{`${a.label}: ${fmtPercentual(a.valor)}`}</title>
+            </circle>
+          ))}
+        </g>
+        <text x="82" y="77" textAnchor="middle" fontSize="20" fontWeight="800" fill="#0f172a">
+          {fmtPercentual(soma)}
+        </text>
+        <text x="82" y="96" textAnchor="middle" fontSize="11" fontWeight="700" fill="#94a3b8"
+          letterSpacing="0.6">
+          {titulo.toUpperCase()}
+        </text>
+      </svg>
+      <p style={{
+        margin: "6px 0 0", fontSize: "12px", fontWeight: 700,
+        color: destaque ? "#4338ca" : "#64748b",
+      }}>
+        {titulo === "Ideal" ? "Sua metodologia" : "Sua carteira hoje"}
+      </p>
+    </div>
+  );
+}

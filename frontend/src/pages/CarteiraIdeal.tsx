@@ -4,20 +4,22 @@ import { toast } from "sonner";
 import api from "../api/api";
 import Layout from "../components/Layout";
 import { PageHeader, EmptyState, Spinner } from "../components/UI";
-import { Button } from "../components/Shared";
-import CarteiraIdealEditor, { type ClasseDraft } from "../components/CarteiraIdealEditor";
+import CarteiraIdealEditor, { type ClasseDraft, ajustarClassesPara100 } from "../components/CarteiraIdealEditor";
 import MetasEditor, { type MetaDraft } from "../components/MetasEditor";
 import ComparativoTable from "../components/ComparativoTable";
-import { BarrasAtualIdeal, DistribuicaoAtualIdeal } from "../components/GraficosCarteiraIdeal";
+import { BarrasAtualIdeal, DistribuicaoAtualIdeal, DonutsAtualIdeal } from "../components/GraficosCarteiraIdeal";
 import PlanejamentoNav from "../components/PlanejamentoNav";
 import DiagnosticoFinanceiroBanner from "../components/DiagnosticoFinanceiroBanner";
-import { boxStyle, controlStyle, miniLabel } from "../components/FormStyles";
+import {
+  controlStyle, miniLabel, noticeCard, numGrande, overline, primaryBtn,
+  secondaryBtn, segmentBtn, segmented,
+} from "../components/FormStyles";
 import { novaChave } from "../utils/chaves";
 import { numParaTexto, textoParaNum } from "../utils/numeros";
+import { catInfo, fmtPercentual, somaFechada, CATEGORIAS } from "../utils/percentual";
 import type {
   CarteiraIdeal, CarteiraIdealPayload, CarteiraResumo, Comparativo, Estrategia, MeusAtivos,
 } from "../types/planejamento";
-import { somaFechada } from "../utils/percentual";
 
 /* ══════════════════════════════════════════════════════════════════════
    Tela da Carteira Ideal (Módulos 1, 7 e 10 - parte do comparativo).
@@ -51,6 +53,8 @@ export default function CarteiraIdealPage() {
   const [comparativo, setComparativo] = useState<Comparativo | null>(null);
   const [meusAtivos, setMeusAtivos] = useState<MeusAtivos | null>(null);
   const [avisos, setAvisos] = useState<string[]>([]);
+  /** Pendências aparecem logo abaixo do cabeçalho (e podem ser recolhidas). */
+  const [alertasAbertos, setAlertasAbertos] = useState(true);
 
   /* ── Carrega a lista de carteiras + estratégias uma vez ── */
   useEffect(() => {
@@ -347,6 +351,67 @@ export default function CarteiraIdealPage() {
   // nada foi carregado não dá para saber (era isso que gerava o falso aviso).
   const semAtivos = meusAtivos != null && meusAtivos.ativos.length === 0;
 
+  /** Leva a soma das classes para 100% (mesma regra de sempre, agora no cabeçalho). */
+  const ajustarPara100 = () => {
+    if (classes.length === 0) {
+      toast.info("Adicione ou aplique um modelo antes de ajustar.");
+      return;
+    }
+    const ajustadas = ajustarClassesPara100(classes);
+    if (ajustadas == null) {
+      toast.info("A soma das classes já está em 100%.");
+      return;
+    }
+    setClasses(ajustadas);
+    toast.success(soma > 100
+      ? "Percentuais reduzidos proporcionalmente para somar 100%."
+      : `Completei os ${(100 - soma).toFixed(2).replace(".", ",")}% que faltavam com "Outros".`);
+  };
+
+  /** % atual de cada classe (vem do comparativo) — só leitura, para os cards. */
+  const atualPorClasse = Object.fromEntries(
+    (comparativo?.classes ?? []).map(c => [c.classe, c.percentual_atual]),
+  );
+
+  /**
+   * PENDÊNCIAS em cards (§1 das diretrizes): o que antes era texto solto na
+   * tela agora tem tom (erro/atenção/informação), título, explicação e —
+   * quando existe — o botão que resolve.
+   */
+  const alertas: { id: string; tom: "erro" | "atencao" | "info"; cor: string; titulo: string; texto?: string; acaoLabel?: string; acao?: () => void }[] = [];
+  if (classes.length > 0 && !somaFechada(soma)) {
+    alertas.push({
+      id: "soma",
+      tom: "erro",
+      cor: "#b91c1c",
+      titulo: `As classes somam ${fmtPercentual(soma)} e precisam fechar em 100%`,
+      texto: soma > 100
+        ? "O excedente é reduzido proporcionalmente entre as classes."
+        : "A diferença é completada em \"Outros\" — depois você pode redistribuir.",
+      acaoLabel: "⚖️ Ajustar para 100%",
+      acao: ajustarPara100,
+    });
+  }
+  for (const c of classes) {
+    const somaSub = c.subclasses.reduce((s, x) => s + textoParaNum(x.percentual_ideal), 0);
+    // Mesma regra da tela de classes: o % da subclasse é uma FATIA DA CLASSE,
+    // então a soma dela precisa fechar em 100% DA CLASSE (e não da carteira).
+    if (c.subclasses.length > 0 && somaSub > 100.01) {
+      alertas.push({
+        id: `sub-${c.key}`,
+        tom: "atencao",
+        cor: "#92400e",
+        titulo: `Subclasses de ${catInfo(c.classe).label} somam ${fmtPercentual(somaSub)}`,
+        texto: "O percentual da subclasse é uma fatia da classe: o detalhamento precisa fechar em 100% da classe.",
+      });
+    }
+  }
+  if (aba === "config") {
+    avisos.forEach((a, i) => {
+      alertas.push({ id: `aviso-${i}`, tom: "atencao", cor: "#92400e", titulo: humanizarClasse(a) });
+    });
+  }
+
   return (
     <Layout>
       <PlanejamentoNav ativo="carteira-ideal" />
@@ -361,69 +426,147 @@ export default function CarteiraIdealPage() {
       <DiagnosticoFinanceiroBanner mostrarSemPosicoes carteiraId={selecionada}
         onReparado={() => { if (selecionada != null) carregar(selecionada); }} />
 
-      {/* ── Toolbar ── */}
-      <div style={{ ...boxStyle, display: "flex", gap: "10px", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "16px" }}>
-        <div>
-          <label style={miniLabel}>Carteira</label>
-          <select value={selecionada ?? ""} aria-label="Carteira de investimento"
-            onChange={e => {
-              const id = Number(e.target.value);
-              setSelecionada(id);
-              navigate(`/planejamento/carteira-ideal/${id}`, { replace: true });
-            }}
-            style={{ ...controlStyle, minWidth: "200px" }}>
-            {carteiras.map(c => <option key={c.id} value={c.id}>{c.nome} ({c.moeda})</option>)}
-          </select>
-        </div>
+      {/* ── CABEÇALHO FIXO ──
+          Fica grudado no topo da área de conteúdo: o progresso da soma das
+          classes e as duas ações que fecham o fluxo (Ajustar para 100% e
+          Salvar) nunca saem da tela, por mais que a lista role. */}
+      <div style={barraFixa}>
+        <div style={{ display: "flex", gap: "16px", alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div>
+            <label style={miniLabel}>Carteira</label>
+            <select value={selecionada ?? ""} aria-label="Carteira de investimento"
+              onChange={e => {
+                const id = Number(e.target.value);
+                setSelecionada(id);
+                navigate(`/planejamento/carteira-ideal/${id}`, { replace: true });
+              }}
+              style={{ ...controlStyle, minWidth: "200px" }}>
+              {carteiras.map(c => <option key={c.id} value={c.id}>{c.nome} ({c.moeda})</option>)}
+            </select>
+          </div>
 
-        <div>
-          <label style={miniLabel}>Estratégia (opcional)</label>
-          <select value={estrategiaId} aria-label="Estratégia de investimentos"
-            onChange={e => setEstrategiaId(e.target.value)}
-            style={{ ...controlStyle, minWidth: "180px" }}>
-            <option value="">— Nenhuma —</option>
-            {estrategias.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
-          </select>
-        </div>
+          <div>
+            <label style={miniLabel}>Estratégia (opcional)</label>
+            <select value={estrategiaId} aria-label="Estratégia de investimentos"
+              onChange={e => setEstrategiaId(e.target.value)}
+              style={{ ...controlStyle, minWidth: "180px" }}>
+              <option value="">— Nenhuma —</option>
+              {estrategias.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+            </select>
+          </div>
 
-        <div style={{ display: "flex", gap: "4px", background: "#eef2f7", padding: "3px", borderRadius: "10px" }}>
-          <button type="button" onClick={() => setAba("config")} style={abaBtn(aba === "config")}>⚙️ Configuração</button>
-          <button type="button" onClick={() => setAba("comparativo")} style={abaBtn(aba === "comparativo")}>📊 Comparativo</button>
-        </div>
-
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          {classes.length > 0 && !somaFechada(soma) && (
-            <span style={{ fontSize: "12px", color: "#b45309", fontWeight: 600 }}>
-              ⚠ Classes em {soma.toFixed(2).replace(".", ",")}% — use "Ajustar para 100%"
-            </span>
+          {/* Progresso da soma das classes: o número manda, a barra confirma. */}
+          {classes.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div>
+                <span style={overline}>Soma das classes</span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "5px", marginTop: "1px" }}>
+                  <span style={{ ...numGrande, fontSize: "19px", color: somaFechada(soma) ? "#047857" : "#b45309" }}>
+                    {fmtPercentual(soma)}
+                  </span>
+                  <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#94a3b8" }}>/ 100%</span>
+                </div>
+              </div>
+              <div style={{ width: "84px", height: "6px", borderRadius: "4px", background: "#f1f5f9", overflow: "hidden" }}>
+                <div style={{
+                  width: `${Math.min(100, soma)}%`, height: "100%", borderRadius: "4px",
+                  background: somaFechada(soma) ? "#10b981" : "#f59e0b", transition: "width 0.35s ease",
+                }} />
+              </div>
+            </div>
           )}
-          <Button onClick={handleSalvar} loading={salvando}>Salvar</Button>
+
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            {alertas.length > 0 && (
+              <button type="button" onClick={() => setAlertasAbertos(v => !v)} aria-expanded={alertasAbertos}
+                style={{
+                  ...secondaryBtn,
+                  display: "inline-flex", alignItems: "center", gap: "7px",
+                  color: alertas.some(a => a.tom === "erro") ? "#b91c1c" : "#92400e",
+                  borderColor: alertas.some(a => a.tom === "erro") ? "#fecaca" : "#fde68a",
+                  background: alertas.some(a => a.tom === "erro") ? "#fef2f2" : "#fffbeb",
+                }}>
+                {alertas.some(a => a.tom === "erro") ? "⛔" : "⚠️"} {alertas.length} pendência{alertas.length > 1 ? "s" : ""}
+                <span style={{ fontSize: "10px" }}>{alertasAbertos ? "▲" : "▼"}</span>
+              </button>
+            )}
+            <button type="button" onClick={ajustarPara100} style={secondaryBtn}>⚖️ Ajustar para 100%</button>
+            <button type="button" onClick={handleSalvar} disabled={salvando} style={primaryBtn}>
+              {salvando ? "Salvando…" : "Salvar"}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", marginTop: "14px" }}>
+          <div style={segmented}>
+            <button type="button" onClick={() => setAba("config")} style={segmentBtn(aba === "config")}
+              aria-pressed={aba === "config"}>⚙️ Configuração</button>
+            <button type="button" onClick={() => setAba("comparativo")} style={segmentBtn(aba === "comparativo")}
+              aria-pressed={aba === "comparativo"}>📊 Comparativo</button>
+          </div>
+          <p style={{ fontSize: "11.5px", color: "#94a3b8", margin: 0 }}>
+            O salvamento é da configuração inteira — nada é enviado até você clicar em Salvar.
+          </p>
         </div>
       </div>
 
-      {avisos.length > 0 && aba === "config" && (
-        <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "10px", padding: "10px 14px", marginBottom: "16px" }}>
-          {avisos.map((a, i) => (
-            <p key={i} style={{ fontSize: "12px", color: "#92400e", margin: i === 0 ? 0 : "4px 0 0" }}>⚠ {a}</p>
+      {/* ── Pendências em CARDS expansíveis (substituem o texto solto) ── */}
+      {alertasAbertos && alertas.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "18px" }}>
+          {alertas.map(a => (
+            <div key={a.id} style={noticeCard(a.tom === "erro" ? "#dc2626" : a.tom === "atencao" ? "#d97706" : "#6366f1",
+              a.tom === "erro" ? "#fef2f2" : a.tom === "atencao" ? "#fffbeb" : "#eef2ff",
+              a.tom === "erro" ? "#fecaca" : a.tom === "atencao" ? "#fde68a" : "#c7d2fe")}>
+              <div style={{ display: "flex", gap: "11px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "16px", lineHeight: 1.2 }}>
+                  {a.tom === "erro" ? "⛔" : a.tom === "atencao" ? "⚠️" : "ℹ️"}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: "13.5px", fontWeight: 800, color: a.cor }}>{a.titulo}</p>
+                  {a.texto && (
+                    <p style={{ margin: "4px 0 0", fontSize: "12.5px", color: a.cor, lineHeight: 1.5 }}>{a.texto}</p>
+                  )}
+                  {a.acaoLabel && (
+                    <button type="button" onClick={a.acao}
+                      style={{ marginTop: "10px", ...secondaryBtn, padding: "6px 12px", fontSize: "12px" }}>
+                      {a.acaoLabel}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       )}
 
       {carregando ? <Spinner text="Carregando carteira..." /> : aba === "config" ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
           {semAtivos && (
-            <div style={{ background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: "10px", padding: "12px 16px" }}>
-              <p style={{ fontSize: "13px", color: "#3730a3", margin: 0 }}>
-                <strong>Esta carteira ainda não tem investimentos cadastrados.</strong> Você pode aplicar um modelo pronto
-                e definir metas desde já, ou cadastrar seus investimentos em Finanças para que eles apareçam aqui automaticamente.
-              </p>
-              <button type="button" onClick={() => navigate("/financas")}
-                style={{ marginTop: "8px", background: "white", border: "1px solid #c7d2fe", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: 700, color: "#4338ca", cursor: "pointer" }}>
-                Cadastrar investimentos em Finanças →
-              </button>
+            <div style={noticeCard("#6366f1", "#eef2ff", "#c7d2fe")}>
+              <div style={{ display: "flex", gap: "11px", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "17px", lineHeight: 1.2 }}>📥</span>
+                <div>
+                  <p style={{ fontSize: "13.5px", fontWeight: 800, color: "#3730a3", margin: 0 }}>
+                    Esta carteira ainda não tem investimentos cadastrados
+                  </p>
+                  <p style={{ fontSize: "12.5px", color: "#4338ca", margin: "4px 0 0", lineHeight: 1.5 }}>
+                    Você pode aplicar um modelo pronto e definir metas desde já, ou cadastrar seus investimentos em
+                    Finanças para que eles apareçam aqui automaticamente.
+                  </p>
+                  <button type="button" onClick={() => navigate("/financas")}
+                    style={{ marginTop: "10px", ...secondaryBtn, padding: "6px 12px", fontSize: "12px" }}>
+                    Cadastrar investimentos em Finanças →
+                  </button>
+                </div>
+              </div>
             </div>
           )}
-          <CarteiraIdealEditor classes={classes} onChange={setClasses} />
+
+          {/* Visualização gráfica integrada: os dois retratos lado a lado antes
+              de qualquer edição — dá o contexto antes de mexer nos números. */}
+          {comparativo && <DonutsAtualIdeal comparativo={comparativo} />}
+
+          <CarteiraIdealEditor classes={classes} onChange={setClasses} atualPorClasse={atualPorClasse} />
           <MetasEditor metas={metas} classes={classes} onChange={setMetas}
             onVincular={vincular}
             onAtribuirSubclasse={atribuirSubclasse}
@@ -453,10 +596,19 @@ export default function CarteiraIdealPage() {
   );
 }
 
-const abaBtn = (ativo: boolean): React.CSSProperties => ({
-  padding: "7px 14px", borderRadius: "8px", border: "none", cursor: "pointer",
-  fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap",
-  background: ativo ? "white" : "transparent",
-  color: ativo ? "#0f172a" : "#64748b",
-  boxShadow: ativo ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
-});
+/* Cabeçalho FIXO: gruda no topo da área de conteúdo (o shell do Layout tem
+   altura fixa e é o <main> que rola), então o progresso da soma e as ações do
+   fluxo — Ajustar para 100% e Salvar — nunca saem da tela. */
+const barraFixa: React.CSSProperties = {
+  position: "sticky", top: 0, zIndex: 30,
+  background: "white", borderRadius: "16px", padding: "16px 20px",
+  border: "1px solid #eef2f7", boxShadow: "0 6px 16px -8px rgba(15,23,42,0.18)",
+  marginBottom: "18px",
+};
+
+/**
+ * Os avisos do servidor citam a classe pelo nome do enum ("FIIS", "RENDA_FIXA"):
+ * aqui é só APRESENTAÇÃO, trocando o token pelo rótulo que o usuário conhece.
+ */
+const humanizarClasse = (texto: string): string =>
+  CATEGORIAS.reduce((t, c) => t.split(c.key).join(c.label), texto);
