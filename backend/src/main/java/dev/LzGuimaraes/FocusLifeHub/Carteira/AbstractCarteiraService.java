@@ -13,6 +13,7 @@ import dev.LzGuimaraes.FocusLifeHub.Carteira.dto.CarteiraResponseDTO;
 import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaModel;
 import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaRepository;
 import dev.LzGuimaraes.FocusLifeHub.Exceptions.ResourceNotFoundException;
+import dev.LzGuimaraes.FocusLifeHub.Planejamento.comum.PlanejamentoCleanup;
 import dev.LzGuimaraes.FocusLifeHub.User.UserModel;
 import dev.LzGuimaraes.FocusLifeHub.User.UserRepository;
 import dev.LzGuimaraes.FocusLifeHub.config.JWTUserData;
@@ -27,16 +28,19 @@ public abstract class AbstractCarteiraService<T extends CarteiraModel> {
     private final UserRepository userRepository;
     private final AtivoRepository ativoRepository;
     private final DespesaRepository despesaRepository;
+    private final PlanejamentoCleanup planejamentoCleanup;
 
     protected AbstractCarteiraService(
             CarteiraRepository<T> repository,
             UserRepository userRepository,
             AtivoRepository ativoRepository,
-            DespesaRepository despesaRepository) {
+            DespesaRepository despesaRepository,
+            PlanejamentoCleanup planejamentoCleanup) {
         this.repository = repository;
         this.userRepository = userRepository;
         this.ativoRepository = ativoRepository;
         this.despesaRepository = despesaRepository;
+        this.planejamentoCleanup = planejamentoCleanup;
     }
 
     protected abstract T createEmpty();
@@ -112,6 +116,9 @@ public abstract class AbstractCarteiraService<T extends CarteiraModel> {
 
         // Exclui os itens associados antes para evitar violação de FK
         if (carteira instanceof CarteiraInvestimentoModel) {
+            // Dados do módulo de Planejamento (Carteira Ideal / metas) também
+            // referenciam a carteira e precisam sair antes dela.
+            planejamentoCleanup.limparCarteira(id);
             ativoRepository.deleteAll(ativoRepository.findByCarteiraInvestimentoId(id));
         } else {
             despesaRepository.deleteAll(despesaRepository.findByCarteiraDividasId(id));

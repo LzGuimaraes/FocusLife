@@ -1,12 +1,14 @@
 import { useAuth } from "../auth/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
+import ResumoCarteiraIdealCard from "../components/ResumoCarteiraIdealCard";
 
 const cards = [
   { path: "/tarefas", icon: "✓", title: "Tarefas", desc: "Organize seu dia a dia com listas inteligentes", color: "#06b6d4", bg: "#ecfeff", stat: "Prioridades" },
   { path: "/materias", icon: "📝", title: "Matérias", desc: "Gerencie disciplinas e acompanhe estudos", color: "#ec4899", bg: "#fdf2f8", stat: "Disciplinas" },
   { path: "/metas", icon: "🎯", title: "Metas", desc: "Defina e acompanhe seus objetivos", color: "#f59e0b", bg: "#fffbeb", stat: "Progresso" },
   { path: "/financas", icon: "💰", title: "Finanças", desc: "Controle suas carteiras e contas", color: "#10b981", bg: "#ecfdf5", stat: "Carteiras" },
+  { path: "/planejamento", icon: "📐", title: "Planejamento", desc: "Carteira ideal, avaliações e prioridade de aportes", color: "#6366f1", bg: "#eef2ff", stat: "Metodologia" },
   { path: "/como-funciona", icon: "❓", title: "Como Funciona", desc: "Aprenda a usar todas as funcionalidades", color: "#8b5cf6", bg: "#f5f3ff", stat: "Guia" },
 ];
 
@@ -50,6 +52,9 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
+
+        {/* Carteira Atual × Ideal (planejamento) */}
+        <ResumoCarteiraIdealCard />
 
         {/* Navigation Cards */}
         <h2 style={{ fontSize: "clamp(16px, 2vw, 20px)", fontWeight: 700, color: "#0f172a", marginBottom: "clamp(12px, 2vw, 20px)" }}>Acesso Rápido</h2>

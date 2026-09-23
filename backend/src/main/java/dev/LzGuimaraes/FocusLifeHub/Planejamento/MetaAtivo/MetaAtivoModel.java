@@ -1,0 +1,73 @@
+package dev.LzGuimaraes.FocusLifeHub.Planejamento.MetaAtivo;
+
+import java.math.BigDecimal;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import dev.LzGuimaraes.FocusLifeHub.Ativo.CategoriaInvestimento;
+import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.AtivoCadastroModel;
+import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraInvestimentoModel;
+import dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSubclasseModel;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
+
+/**
+ * Meta individual de um ativo do catálogo dentro de uma carteira (Módulo 1) e
+ * sua prioridade manual de aporte 0–10 (Módulo 7).
+ *
+ * A meta é do ATIVO (ativo_cadastro / ticker), não da linha de posição: se o
+ * usuário tiver duas posições do mesmo ticker, a meta é uma só.
+ */
+@Entity
+@Table(name = "meta_ativo")
+@Getter
+@Setter
+public class MetaAtivoModel {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    /** % ideal que este ativo deve representar no valor total da carteira. */
+    @Column(name = "percentual_ideal", nullable = false, precision = 9, scale = 4)
+    private BigDecimal percentualIdeal = BigDecimal.ZERO;
+
+    /** Prioridade manual de aporte definida pelo usuário (0 a 10). */
+    @Column(name = "prioridade_manual", nullable = false)
+    private Integer prioridadeManual = 0;
+
+    @Column(nullable = false)
+    private Integer ordem = 0;
+
+    /** Classe da carteira ideal à qual a meta pertence (denormalizado p/ validação). */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 40)
+    private CategoriaInvestimento classe;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "carteira_investimento_id")
+    @JsonIgnore
+    private CarteiraInvestimentoModel carteiraInvestimento;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ativo_cadastro_id")
+    @JsonIgnore
+    private AtivoCadastroModel ativoCadastro;
+
+    /** Subclasse opcional (ex.: Ações → Bancos). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "subclasse_id")
+    @JsonIgnore
+    private CarteiraIdealSubclasseModel subclasse;
+}

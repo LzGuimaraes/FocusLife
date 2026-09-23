@@ -4,6 +4,7 @@ import org.springframework.stereotype.Service;
 
 import dev.LzGuimaraes.FocusLifeHub.Ativo.AtivoRepository;
 import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaRepository;
+import dev.LzGuimaraes.FocusLifeHub.Planejamento.comum.PlanejamentoCleanup;
 import dev.LzGuimaraes.FocusLifeHub.User.UserRepository;
 
 @Service
@@ -13,8 +14,9 @@ public class CarteiraDividasService extends AbstractCarteiraService<CarteiraDivi
             CarteiraDividasRepository repository,
             UserRepository userRepository,
             AtivoRepository ativoRepository,
-            DespesaRepository despesaRepository) {
-        super(repository, userRepository, ativoRepository, despesaRepository);
+            DespesaRepository despesaRepository,
+            PlanejamentoCleanup planejamentoCleanup) {
+        super(repository, userRepository, ativoRepository, despesaRepository, planejamentoCleanup);
     }
 
     @Override
