@@ -65,4 +65,14 @@ public class AtivoModel extends ItemFinanceiroModel {
     @JoinColumn(name = "subclasse_id")
     @JsonIgnore
     private dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSubclasseModel subclasse;
+
+    /**
+     * SETOR da Carteira Ideal ao qual esta POSIÇÃO pertence (V28) — nível
+     * opcional DENTRO da subclasse. Vale para ativos sem ticker (renda fixa,
+     * caixinhas), que não têm meta própria.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "setor_id")
+    @JsonIgnore
+    private dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSetorModel setor;
 }

@@ -68,6 +68,32 @@ public record CarteiraIdealRequestDTO(
             @DecimalMax(value = "100.0", message = "O limite máximo não pode passar de 100%")
             BigDecimal limite_maximo,
 
+            Integer ordem,
+
+            /** SETOR (opcional): um nível a mais dentro da subclasse. */
+            @Size(max = 30, message = "Uma subclasse pode ter no máximo 30 setores")
+            List<SetorIdealRequestDTO> setores
+    ) {}
+
+    public record SetorIdealRequestDTO(
+            @NotNull(message = "O nome do setor é obrigatório")
+            @Size(max = 80, message = "O nome do setor deve ter no máximo 80 caracteres")
+            String nome,
+
+            /** % do setor DENTRO da subclasse (a soma dos setores fecha em 100% dela). */
+            @NotNull(message = "O percentual ideal do setor é obrigatório")
+            @DecimalMin(value = "0.0", message = "O percentual ideal não pode ser negativo")
+            @DecimalMax(value = "100.0", message = "O percentual ideal não pode passar de 100%")
+            BigDecimal percentual_ideal,
+
+            @DecimalMin(value = "0.0", message = "A tolerância não pode ser negativa")
+            @DecimalMax(value = "100.0", message = "A tolerância não pode passar de 100%")
+            BigDecimal tolerancia,
+
+            @DecimalMin(value = "0.0", message = "O limite máximo não pode ser negativo")
+            @DecimalMax(value = "100.0", message = "O limite máximo não pode passar de 100%")
+            BigDecimal limite_maximo,
+
             Integer ordem
     ) {}
 
@@ -80,6 +106,9 @@ public record CarteiraIdealRequestDTO(
 
             /** Nome da subclasse já declarada nesta mesma classe (opcional). */
             String subclasse_nome,
+
+            /** Nome do setor já declarado nessa subclasse (opcional). */
+            String setor_nome,
 
             @NotNull(message = "O percentual ideal da meta é obrigatório")
             @DecimalMin(value = "0.0", message = "O percentual ideal não pode ser negativo")

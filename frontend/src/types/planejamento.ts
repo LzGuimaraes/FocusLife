@@ -24,6 +24,15 @@ export interface Estrategia {
 }
 
 /* ── Configuração da Carteira Ideal ── */
+export interface SetorIdeal {
+  id: number;
+  nome: string;
+  percentual_ideal: number;
+  tolerancia: number;
+  limite_maximo: number | null;
+  ordem: number;
+}
+
 export interface SubclasseIdeal {
   id: number;
   nome: string;
@@ -31,6 +40,8 @@ export interface SubclasseIdeal {
   tolerancia: number;
   limite_maximo: number | null;
   ordem: number;
+  /** SETOR é um nível opcional dentro da subclasse (o % é fatia da SUBCLASSE). */
+  setores: SetorIdeal[];
 }
 export interface ClasseIdeal {
   id: number;
@@ -49,6 +60,8 @@ export interface MetaIdeal {
   classe: CategoriaInvestimento;
   subclasse_id: number | null;
   subclasse_nome: string | null;
+  setor_id: number | null;
+  setor_nome: string | null;
   percentual_ideal: number;
   tolerancia: number;
   limite_maximo: number | null;
@@ -68,12 +81,21 @@ export interface CarteiraIdeal {
 }
 
 /* ── Payload de gravação (replace-all) ── */
+export interface SetorIdealPayload {
+  nome: string;
+  percentual_ideal: number;
+  tolerancia?: number;
+  limite_maximo?: number | null;
+  ordem: number;
+}
+
 export interface SubclasseIdealPayload {
   nome: string;
   percentual_ideal: number;
   tolerancia?: number;
   limite_maximo?: number | null;
   ordem: number;
+  setores?: SetorIdealPayload[];
 }
 
 export interface ClasseIdealPayload {
@@ -89,6 +111,7 @@ export interface MetaIdealPayload {
   ativo_cadastro_id: string;
   classe: CategoriaInvestimento;
   subclasse_nome: string | null;
+  setor_nome?: string | null;
   percentual_ideal: number;
   tolerancia?: number;
   limite_maximo?: number | null;
@@ -200,6 +223,8 @@ export interface MeuAtivo {
   prioridade_manual: number | null;
   subclasse_id: number | null;
   subclasse_nome: string | null;
+  setor_id: number | null;
+  setor_nome: string | null;
 }
 
 export interface MeusAtivos {

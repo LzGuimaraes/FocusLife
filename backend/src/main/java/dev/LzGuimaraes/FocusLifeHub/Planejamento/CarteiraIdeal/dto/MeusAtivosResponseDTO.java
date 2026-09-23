@@ -56,7 +56,10 @@ public record MeusAtivosResponseDTO(
             BigDecimal limite_maximo,
             Integer prioridade_manual,
             Long subclasse_id,
-            String subclasse_nome
+            String subclasse_nome,
+            /** Setor dentro da subclasse (nível opcional). */
+            Long setor_id,
+            String setor_nome
     ) {
 
         public boolean possuiMeta() {

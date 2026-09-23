@@ -37,15 +37,18 @@ public class AtivoService {
     private final CarteiraInvestimentoRepository carteiraInvestimentoRepository;
     private final AtivoCadastroRepository ativoCadastroRepository;
     private final dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSubclasseRepository subclasseRepository;
+    private final dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSetorRepository setorRepository;
 
     public AtivoService(AtivoRepository ativoRepository,
                         CarteiraInvestimentoRepository carteiraInvestimentoRepository,
                         AtivoCadastroRepository ativoCadastroRepository,
-                        dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSubclasseRepository subclasseRepository) {
+                        dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSubclasseRepository subclasseRepository,
+                        dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSetorRepository setorRepository) {
         this.ativoRepository = ativoRepository;
         this.carteiraInvestimentoRepository = carteiraInvestimentoRepository;
         this.ativoCadastroRepository = ativoCadastroRepository;
         this.subclasseRepository = subclasseRepository;
+        this.setorRepository = setorRepository;
     }
 
     private Long getAuthenticatedUserId() {
@@ -325,6 +328,78 @@ public class AtivoService {
 
         for (AtivoModel posicao : posicoes) {
             posicao.setSubclasse(subclasse);
+        }
+        ativoRepository.saveAll(posicoes);
+        return posicoes.size();
+    }
+
+    /**
+     * Atribui posições a um SETOR da Carteira Ideal (V28) — nível opcional
+     * DENTRO da subclasse (ex.: Renda Fixa → Reserva → "Caixa").
+     *
+     * setor_id nulo REMOVE a classificação. Ao definir o setor, a subclasse da
+     * posição passa a ser a do setor (coerência da hierarquia), a menos que a
+     * posição já esteja numa subclasse diferente — nesse caso 400 explicando.
+     */
+    @Transactional
+    public int atribuirSetor(List<Long> ativoIds, Long setorId) {
+        Long userId = getAuthenticatedUserId();
+
+        if (ativoIds == null || ativoIds.isEmpty()) {
+            throw new BusinessRuleException("Informe ao menos uma posição para classificar.");
+        }
+
+        List<AtivoModel> posicoes = ativoRepository
+                .findByIdInAndCarteiraInvestimento_UserId(ativoIds, userId);
+        if (posicoes.size() != ativoIds.size()) {
+            throw new ResourceNotFoundException(
+                    "Uma ou mais posições informadas não foram encontradas na sua carteira.");
+        }
+
+        if (setorId == null) {
+            for (AtivoModel posicao : posicoes) {
+                posicao.setSetor(null);
+            }
+            ativoRepository.saveAll(posicoes);
+            return posicoes.size();
+        }
+
+        dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSetorModel setor =
+                setorRepository.findById(setorId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Setor com ID " + setorId + " não encontrado"));
+
+        dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSubclasseModel subclasse =
+                setor.getSubclasse();
+        CarteiraInvestimentoModel carteira = (subclasse != null && subclasse.getClasse() != null)
+                ? subclasse.getClasse().getCarteiraInvestimento()
+                : null;
+        if (carteira == null || carteira.getUser() == null || !carteira.getUser().getId().equals(userId)) {
+            throw new ResourceNotFoundException("Setor com ID " + setorId + " não encontrado");
+        }
+
+        for (AtivoModel posicao : posicoes) {
+            if (posicao.getCarteiraInvestimento() == null
+                    || !carteira.getId().equals(posicao.getCarteiraInvestimento().getId())) {
+                throw new BusinessRuleException("A posição \"" + posicao.getNome() + "\" pertence a outra carteira.");
+            }
+            if (posicao.getSubclasse() != null
+                    && !posicao.getSubclasse().getId().equals(subclasse.getId())) {
+                throw new BusinessRuleException("A posição \"" + posicao.getNome() + "\" está na subclasse \""
+                        + posicao.getSubclasse().getNome() + "\", e o setor escolhido é da subclasse \""
+                        + subclasse.getNome() + "\". Escolha um setor da mesma subclasse.");
+            }
+            CategoriaInvestimento categoria = posicao.getCategoriaInvestimento();
+            if (categoria != null && categoria != subclasse.getClasse().getClasse()) {
+                throw new BusinessRuleException("A posição \"" + posicao.getNome() + "\" é "
+                        + categoria + ", mas o setor \"" + setor.getNome() + "\" é de "
+                        + subclasse.getClasse().getClasse() + ".");
+            }
+        }
+
+        for (AtivoModel posicao : posicoes) {
+            posicao.setSubclasse(subclasse);   // o setor implica a subclasse dele
+            posicao.setSetor(setor);
         }
         ativoRepository.saveAll(posicoes);
         return posicoes.size();

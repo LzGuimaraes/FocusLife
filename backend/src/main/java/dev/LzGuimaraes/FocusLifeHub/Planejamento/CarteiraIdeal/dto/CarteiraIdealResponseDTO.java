@@ -34,6 +34,16 @@ public record CarteiraIdealResponseDTO(
             BigDecimal percentual_ideal,
             BigDecimal tolerancia,
             BigDecimal limite_maximo,
+            Integer ordem,
+            List<SetorIdealResponseDTO> setores
+    ) {}
+
+    public record SetorIdealResponseDTO(
+            Long id,
+            String nome,
+            BigDecimal percentual_ideal,
+            BigDecimal tolerancia,
+            BigDecimal limite_maximo,
             Integer ordem
     ) {}
 
@@ -44,6 +54,8 @@ public record CarteiraIdealResponseDTO(
             CategoriaInvestimento classe,
             Long subclasse_id,
             String subclasse_nome,
+            Long setor_id,
+            String setor_nome,
             BigDecimal percentual_ideal,
             BigDecimal tolerancia,
             BigDecimal limite_maximo,

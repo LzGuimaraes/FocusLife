@@ -119,6 +119,8 @@ public class AporteService {
                     c.vinculado(),
                     c.subclasseId(),
                     c.subclasseNome(),
+                    c.setorId(),
+                    c.setorNome(),
                     c.quality(),
                     c.quality() != null,
                     (c.quality() != null) ? config.getPesoQuality() : BigDecimal.ZERO,
@@ -146,7 +148,8 @@ public class AporteService {
         List<RankingAportesDTO.ClasseAporteDTO> classes = classesDto(
                 comparativo,
                 (orcamento != null) ? orcamento.porClasse() : Map.of(),
-                (orcamento != null) ? orcamento.porSubclasse() : Map.of());
+                (orcamento != null) ? orcamento.porSubclasse() : Map.of(),
+                (orcamento != null) ? orcamento.porSetor() : Map.of());
 
         BigDecimal alocado = (orcamento != null) ? orcamento.alocado() : null;
         BigDecimal naoAlocado = (orcamento != null) ? valorAporte.subtract(alocado) : null;
@@ -212,7 +215,8 @@ public class AporteService {
      */
     private record Candidato(
             UUID ativoCadastroId, Long metaId, String nome, boolean vinculado,
-            Long subclasseId, String subclasseNome, CategoriaInvestimento classe,
+            Long subclasseId, String subclasseNome, Long setorId, String setorNome,
+            CategoriaInvestimento classe,
             BigDecimal quality, BigDecimal momento, BigDecimal fator,
             RankingAportesDTO.EstadoAtivo estado, List<String> bloqueios,
             BigDecimal limiteMaximo, boolean limiteAtingido,
@@ -223,10 +227,11 @@ public class AporteService {
             BigDecimal teto, Integer prioridade
     ) {}
 
-    /** Orçamento do aporte já distribuído (classe → subclasse → candidato). */
+    /** Orçamento do aporte já distribuído (classe → subclasse → setor → candidato). */
     private record Orcamento(
             Map<CategoriaInvestimento, BigDecimal> porClasse,
             Map<Long, BigDecimal> porSubclasse,
+            Map<Long, BigDecimal> porSetor,
             List<BigDecimal> porCandidato,
             BigDecimal alocado
     ) {}
@@ -302,7 +307,7 @@ public class AporteService {
 
             lista.add(new Candidato(
                     a.ativo_cadastro_id(), a.meta_id(), a.ticker(), a.vinculado(),
-                    a.subclasse_id(), a.subclasse_nome(),
+                    a.subclasse_id(), a.subclasse_nome(), a.setor_id(), a.setor_nome(),
                     (a.classe() != null) ? a.classe() : CategoriaInvestimento.OUTROS,
                     avaliacao.quality(), avaliacao.momento(), avaliacao.fator(),
                     estadoDe(avaliacao, bloqueios, teto),
@@ -426,7 +431,8 @@ public class AporteService {
     private List<RankingAportesDTO.ClasseAporteDTO> classesDto(
             ComparativoResponseDTO comparativo,
             Map<CategoriaInvestimento, BigDecimal> sugeridoPorClasse,
-            Map<Long, BigDecimal> sugeridoPorSubclasse) {
+            Map<Long, BigDecimal> sugeridoPorSubclasse,
+            Map<Long, BigDecimal> sugeridoPorSetor) {
 
         double total = nz(comparativo.valor_total());
         List<RankingAportesDTO.ClasseAporteDTO> classes = new ArrayList<>();
@@ -435,6 +441,15 @@ public class AporteService {
             List<RankingAportesDTO.SubclasseAporteDTO> subs = c.subclasses().stream()
                     .map(s -> {
                         BigDecimal sugeridoSub = sugeridoPorSubclasse.getOrDefault(s.id(), moeda(0d));
+                        List<RankingAportesDTO.SetorAporteDTO> setores = s.setores().stream()
+                                .map(st -> new RankingAportesDTO.SetorAporteDTO(
+                                        st.id(), st.nome(), st.percentual_atual(), st.percentual_ideal(),
+                                        st.valor_atual(), st.valor_ideal(), st.deficit(), st.excesso(),
+                                        st.tolerancia(), st.limite_maximo(),
+                                        statusDe(st.percentual_atual(), st.percentual_ideal(),
+                                                st.tolerancia(), st.limite_maximo()),
+                                        sugeridoPorSetor.getOrDefault(st.id(), moeda(0d))))
+                                .toList();
                         return new RankingAportesDTO.SubclasseAporteDTO(
                                 s.id(), s.nome(), s.percentual_atual(), s.percentual_ideal(),
                                 s.valor_atual(), s.valor_ideal(), s.deficit(), s.excesso(),
@@ -443,7 +458,8 @@ public class AporteService {
                                 sugeridoSub,
                                 (sugeridoSub.signum() <= 0 && sugerido.signum() > 0)
                                         ? "Neste aporte a verba da classe foi para as subclasses com déficit maior."
-                                        : null);
+                                        : null,
+                                setores);
                     })
                     .toList();
             classes.add(new RankingAportesDTO.ClasseAporteDTO(
@@ -563,6 +579,7 @@ public class AporteService {
 
         Map<CategoriaInvestimento, BigDecimal> porClasse = new LinkedHashMap<>();
         Map<Long, BigDecimal> porSubclasse = new LinkedHashMap<>();
+        Map<Long, BigDecimal> porSetor = new LinkedHashMap<>();
         List<BigDecimal> porCandidato = new ArrayList<>(
                 Collections.nCopies(candidatos.size(), moeda(0d)));
 
@@ -628,7 +645,51 @@ public class AporteService {
                     if (daSub.isEmpty()) {
                         continue;
                     }
-                    double distribuido = distribuir(candidatos, daSub, orcamentoSub, config, tol, porCandidato);
+
+                    // SETOR (nível opcional): se a subclasse tem setores com alvo, o
+                    // orçamento dela desce um nível antes de chegar ao ativo. O
+                    // percentual do setor é fatia da SUBCLASSE (teto em R$).
+                    List<ComparativoResponseDTO.SetorComparativoDTO> setores = sub.setores().stream()
+                            .filter(s -> nz(s.percentual_ideal()) > 0d)
+                            .toList();
+                    double distribuido;
+                    if (setores.isEmpty()) {
+                        distribuido = distribuir(candidatos, daSub, orcamentoSub, config, tol, porCandidato);
+                    } else {
+                        double restanteSub = orcamentoSub;
+                        double valorIdealDaSub = nz(sub.valor_ideal());
+                        for (ComparativoResponseDTO.SetorComparativoDTO st : setores) {
+                            double alvoSetor = nz(st.valor_ideal())
+                                    + nz(st.tolerancia()) / 100d * valorIdealDaSub;
+                            double tetoSetor = Math.max(0d, alvoSetor - nz(st.valor_atual()));
+                            double jaNoSetor = porSetor.getOrDefault(st.id(), moeda(0d)).doubleValue();
+                            double orcamentoSetor = Math.min(Math.max(0d, tetoSetor - jaNoSetor), restanteSub);
+                            List<Integer> doSetor = (orcamentoSetor > tol)
+                                    ? indicesDaSetor(candidatos, daSub, st.id())
+                                    : List.of();
+                            if (doSetor.isEmpty()) {
+                                continue;
+                            }
+                            double doSetorDistribuido = distribuir(candidatos, doSetor, orcamentoSetor,
+                                    config, tol, porCandidato);
+                            if (doSetorDistribuido > 0d) {
+                                porSetor.merge(st.id(), moeda(doSetorDistribuido), BigDecimal::add);
+                                restanteSub -= doSetorDistribuido;
+                            }
+                        }
+                        // Sobra da subclasse → candidatos fora de qualquer setor com alvo.
+                        List<Long> idsComAlvo = setores.stream()
+                                .map(ComparativoResponseDTO.SetorComparativoDTO::id).toList();
+                        List<Integer> foraDeSetor = daSub.stream()
+                                .filter(i -> candidatos.get(i).setorId() == null
+                                        || !idsComAlvo.contains(candidatos.get(i).setorId()))
+                                .toList();
+                        distribuido = orcamentoSub - restanteSub;
+                        if (restanteSub > tol && !foraDeSetor.isEmpty()) {
+                            distribuido += distribuir(candidatos, foraDeSetor, restanteSub, config, tol, porCandidato);
+                        }
+                    }
+
                     if (distribuido > 0d) {
                         porSubclasse.merge(sub.id(), moeda(distribuido), BigDecimal::add);
                         restanteClasse -= distribuido;
@@ -664,7 +725,7 @@ public class AporteService {
         }
 
         double alocado = porCandidato.stream().mapToDouble(BigDecimal::doubleValue).sum();
-        return new Orcamento(Map.copyOf(porClasse), Map.copyOf(porSubclasse),
+        return new Orcamento(Map.copyOf(porClasse), Map.copyOf(porSubclasse), Map.copyOf(porSetor),
                 List.copyOf(porCandidato), moeda(alocado));
     }
 
@@ -767,6 +828,12 @@ public class AporteService {
     private List<Integer> indicesDaSubclasse(List<Candidato> candidatos, List<Integer> daClasse, Long subclasseId) {
         return daClasse.stream()
                 .filter(i -> subclasseId.equals(candidatos.get(i).subclasseId()))
+                .toList();
+    }
+
+    private List<Integer> indicesDaSetor(List<Candidato> candidatos, List<Integer> daSubclasse, Long setorId) {
+        return daSubclasse.stream()
+                .filter(i -> setorId.equals(candidatos.get(i).setorId()))
                 .toList();
     }
 

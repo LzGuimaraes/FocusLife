@@ -259,7 +259,8 @@ function AportePorClasse({ ranking }: { ranking: RankingAportes }) {
               {subs.length > 0 && (
                 <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
                   {subs.map(s => (
-                    <div key={s.id} style={{ display: "flex", justifyContent: "space-between", gap: "10px", fontSize: "12px", color: "#475569", paddingLeft: "14px" }}>
+                    <div key={s.id} style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", fontSize: "12px", color: "#475569", paddingLeft: "14px" }}>
                       <span>
                         ↳ <strong style={{ color: "#334155" }}>{s.nome}</strong>
                         <span style={{ marginLeft: "8px", fontSize: "11px", color: "#94a3b8" }}>
@@ -281,6 +282,33 @@ function AportePorClasse({ ranking }: { ranking: RankingAportes }) {
                           </strong>
                         )}
                       </span>
+                    </div>
+
+                    {/* SETOR (opcional): o % é fatia da SUBCLASSE. */}
+                    {s.setores.length > 0 && (
+                      <div style={{ paddingLeft: "26px", display: "flex", flexDirection: "column", gap: "2px" }}>
+                        {s.setores.map(st => (
+                          <div key={st.id} style={{ display: "flex", justifyContent: "space-between", gap: "10px", fontSize: "11px", color: "#64748b" }}>
+                            <span>
+                              ➥ {st.nome}
+                              <span style={{ marginLeft: "6px", color: "#94a3b8" }}>
+                                {fmtPercentual(st.percentual_atual)} → {fmtPercentual(st.percentual_ideal)}
+                              </span>
+                            </span>
+                            <span style={{ display: "flex", gap: "10px" }}>
+                              <span style={{ color: st.deficit > 0 ? "#1d4ed8" : "#cbd5e1" }}>
+                                {st.deficit > 0 ? `falta ${fmtMoeda(st.deficit, moeda)}` : "no alvo"}
+                              </span>
+                              {comSugestao && (
+                                <strong style={{ color: st.sugerido > 0 ? "#047857" : "#cbd5e1" }}>
+                                  {fmtMoeda(st.sugerido, moeda)}
+                                </strong>
+                              )}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     </div>
                   ))}
                 </div>

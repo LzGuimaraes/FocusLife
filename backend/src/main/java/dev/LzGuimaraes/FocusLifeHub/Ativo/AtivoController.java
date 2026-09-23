@@ -90,6 +90,18 @@ public class AtivoController {
         return ResponseEntity.ok(Map.of("classificadas", classificadas));
     }
 
+    /**
+     * Classifica posições em um SETOR (nível opcional dentro da subclasse).
+     * Corpo com `setor_id: null` remove a classificação de setor.
+     */
+    @PostMapping("/atribuir-setor")
+    public ResponseEntity<Map<String, Integer>> atribuirSetor(@RequestBody AtribuirSetorRequest body) {
+        int classificadas = ativoService.atribuirSetor(
+                (body != null) ? body.ativo_ids : null,
+                (body != null) ? body.setor_id : null);
+        return ResponseEntity.ok(Map.of("classificadas", classificadas));
+    }
+
     // Admin-only: bulk update prices for ativos
     @PostMapping("/admin/update-prices")
     public ResponseEntity<Void> bulkUpdatePrices(@RequestBody List<AtivoPriceUpdate> updates) {
@@ -120,4 +132,10 @@ class VincularCatalogoRequest {
 class AtribuirSubclasseRequest {
     public List<Long> ativo_ids;
     public Long subclasse_id;
+}
+
+/** Corpo da classificação de posições em um setor da subclasse. */
+class AtribuirSetorRequest {
+    public List<Long> ativo_ids;
+    public Long setor_id;
 }

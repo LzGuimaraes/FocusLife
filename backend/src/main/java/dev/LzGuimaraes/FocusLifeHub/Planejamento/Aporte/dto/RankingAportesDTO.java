@@ -71,6 +71,9 @@ public final class RankingAportesDTO {
             boolean vinculado,
             Long subclasse_id,
             String subclasse_nome,
+            /** Setor dentro da subclasse (opcional). */
+            Long setor_id,
+            String setor_nome,
 
             /* ── Qualidade (Módulo 5) ── */
             BigDecimal quality_score,
@@ -151,7 +154,24 @@ public final class RankingAportesDTO {
             BigDecimal limite_maximo,
             StatusNivel status,
             BigDecimal sugerido,
-            String motivo
+            String motivo,
+            /** Setores da subclasse (nível opcional). O % do setor é fatia da SUBCLASSE. */
+            List<SetorAporteDTO> setores
+    ) {}
+
+    public record SetorAporteDTO(
+            Long id,
+            String nome,
+            BigDecimal percentual_atual,
+            BigDecimal percentual_ideal,
+            BigDecimal valor_atual,
+            BigDecimal valor_ideal,
+            BigDecimal deficit,
+            BigDecimal excesso,
+            BigDecimal tolerancia,
+            BigDecimal limite_maximo,
+            StatusNivel status,
+            BigDecimal sugerido
     ) {}
 
     public record Response(

@@ -50,6 +50,7 @@ public class CarteiraIdealService {
 
     private final CarteiraIdealClasseRepository classeRepository;
     private final CarteiraIdealSubclasseRepository subclasseRepository;
+    private final CarteiraIdealSetorRepository setorRepository;
     private final MetaAtivoRepository metaAtivoRepository;
     private final AtivoCadastroRepository ativoCadastroRepository;
     private final AtivoRepository ativoRepository;
@@ -59,6 +60,7 @@ public class CarteiraIdealService {
 
     public CarteiraIdealService(CarteiraIdealClasseRepository classeRepository,
                                 CarteiraIdealSubclasseRepository subclasseRepository,
+                                CarteiraIdealSetorRepository setorRepository,
                                 MetaAtivoRepository metaAtivoRepository,
                                 AtivoCadastroRepository ativoCadastroRepository,
                                 AtivoRepository ativoRepository,
@@ -67,6 +69,7 @@ public class CarteiraIdealService {
                                 PercentualCalculator calculator) {
         this.classeRepository = classeRepository;
         this.subclasseRepository = subclasseRepository;
+        this.setorRepository = setorRepository;
         this.metaAtivoRepository = metaAtivoRepository;
         this.ativoCadastroRepository = ativoCadastroRepository;
         this.ativoRepository = ativoRepository;
@@ -128,14 +131,38 @@ public class CarteiraIdealService {
         validarClasses(classesReq);
         Map<UUID, AtivoCadastroModel> catalogo = carregarCatalogo(metasReq);
 
-        // ── Apaga a configuração anterior (metas antes das classes: meta → subclasse) ──
+        // ── Apaga a configuração anterior ──
+        // Ordem importa: os SETORES apontam para as subclasses (e a posição/meta
+        // aponta para o setor), então os filhos saem antes dos pais.
+        Long metaComSetor = metaAtivoRepository
+                .findByCarteiraInvestimentoIdOrderByOrdemAscIdAsc(carteiraId).stream()
+                .filter(m -> m.getSetor() != null)
+                .count();
+        if (metaComSetor > 0) {
+            // Limpa as referências antes de remover os setores (sem cascade).
+            for (MetaAtivoModel m : metaAtivoRepository
+                    .findByCarteiraInvestimentoIdOrderByOrdemAscIdAsc(carteiraId)) {
+                m.setSetor(null);
+            }
+            metaAtivoRepository.flush();
+        }
         metaAtivoRepository.deleteByCarteiraInvestimentoId(carteiraId);
         metaAtivoRepository.flush();
+
+        List<Long> subclasseIds = subclassesDasClasses(
+                classeRepository.findByCarteiraInvestimentoIdOrderByOrdemAscIdAsc(carteiraId)).stream()
+                .map(CarteiraIdealSubclasseModel::getId)
+                .toList();
+        if (!subclasseIds.isEmpty()) {
+            setorRepository.deleteBySubclasseIdIn(subclasseIds);
+            setorRepository.flush();
+        }
         classeRepository.deleteByCarteiraInvestimentoId(carteiraId);
         classeRepository.flush();
 
         // ── Recria classes + subclasses ──
         Map<String, CarteiraIdealSubclasseModel> subclassePorChave = new HashMap<>();
+        Map<String, CarteiraIdealSetorModel> setorPorChave = new HashMap<>();
         for (CarteiraIdealRequestDTO.ClasseIdealRequestDTO c : classesReq) {
             CarteiraIdealClasseModel classe = new CarteiraIdealClasseModel();
             classe.setClasse(c.classe());
@@ -158,6 +185,21 @@ public class CarteiraIdealService {
                 sub = subclasseRepository.save(sub);
                 subclassePorChave.put(chaveSubclasse(c.classe(), s.nome()), sub);
                 ordemSub++;
+
+                // ── SETORES da subclasse (nível opcional, V28) ──
+                int ordemSetor = 0;
+                for (CarteiraIdealRequestDTO.SetorIdealRequestDTO st : setoresDe(s)) {
+                    CarteiraIdealSetorModel setor = new CarteiraIdealSetorModel();
+                    setor.setNome(st.nome().trim());
+                    setor.setPercentualIdeal(calculator.percentualNormalizado(st.percentual_ideal()));
+                    setor.setTolerancia(toleranciaDe(st.tolerancia()));
+                    setor.setLimiteMaximo(st.limite_maximo());
+                    setor.setOrdem(st.ordem() == null ? ordemSetor : st.ordem());
+                    setor.setSubclasse(sub);
+                    setor = setorRepository.save(setor);
+                    setorPorChave.put(chaveSetor(c.classe(), s.nome(), st.nome()), setor);
+                    ordemSetor++;
+                }
             }
         }
 
@@ -175,6 +217,19 @@ public class CarteiraIdealService {
                             + "\" não existe na classe " + m.classe() + " da Carteira Ideal.");
                 }
                 meta.setSubclasse(sub);
+            }
+            if (m.setor_nome() != null && !m.setor_nome().isBlank()) {
+                if (meta.getSubclasse() == null) {
+                    throw new BusinessRuleException("O ativo \"" + m.ativo_cadastro_id()
+                            + "\" foi colocado num setor sem informar a subclasse dele.");
+                }
+                CarteiraIdealSetorModel setor = setorPorChave.get(
+                        chaveSetor(m.classe(), m.subclasse_nome(), m.setor_nome()));
+                if (setor == null) {
+                    throw new BusinessRuleException("O setor \"" + m.setor_nome().trim()
+                            + "\" não existe na subclasse \"" + m.subclasse_nome().trim() + "\".");
+                }
+                meta.setSetor(setor);
             }
             meta.setPercentualIdeal(calculator.percentualNormalizado(m.percentual_ideal()));
             meta.setTolerancia(toleranciaDe(m.tolerancia()));
@@ -226,12 +281,22 @@ public class CarteiraIdealService {
         // da renda fixa/caixinhas sem ticker) tem prioridade; na falta dela, vale
         // a subclasse da meta do ticker (caminho dos ativos com ticker).
         Map<Long, Double> valorPorSubclasse = new HashMap<>();
+        Map<Long, Double> valorPorSetor = new HashMap<>();
         for (AtivoModel posicao : ativoRepository.findByCarteiraInvestimentoId(carteiraId)) {
             Long subclasseId = subclasseDaPosicao(posicao, metas);
             if (subclasseId != null) {
                 valorPorSubclasse.merge(subclasseId, calculator.valorPosicao(posicao), Double::sum);
             }
+            Long setorId = setorDaPosicao(posicao, metas);
+            if (setorId != null) {
+                valorPorSetor.merge(setorId, calculator.valorPosicao(posicao), Double::sum);
+            }
         }
+
+        // Setores das subclasses (nível opcional): o percentual do setor é uma
+        // FATIA DA SUBCLASSE, então o valor ideal sai do valor ideal da subclasse.
+        Map<Long, List<CarteiraIdealSetorModel>> setoresPorSubclasse = setoresDasSubclasses(subclasses).stream()
+                .collect(Collectors.groupingBy(s -> s.getSubclasse().getId()));
 
         BigDecimal soma = somarPercentuaisClasses(classes);
 
@@ -266,6 +331,22 @@ public class CarteiraIdealService {
                 // uma subclasse de 60% aparecia como 60% do patrimônio inteiro e o
                 // déficit dela ficava inflado, estragando o rateio do aporte.
                 double vSubIdeal = valorIdeal(sub.getPercentualIdeal(), vIdeal);
+                List<ComparativoResponseDTO.SetorComparativoDTO> setorDtos = new ArrayList<>();
+                for (CarteiraIdealSetorModel st : setoresPorSubclasse.getOrDefault(sub.getId(), List.of())) {
+                    double vSetorAtual = valorPorSetor.getOrDefault(st.getId(), 0d);
+                    double alvoSetor = vSubIdeal * st.getPercentualIdeal().doubleValue() / 100d;
+                    setorDtos.add(new ComparativoResponseDTO.SetorComparativoDTO(
+                            st.getId(),
+                            st.getNome(),
+                            st.getPercentualIdeal(),
+                            calculator.percentual(vSetorAtual, vSubAtual),
+                            calculator.moeda(alvoSetor),
+                            calculator.moeda(vSetorAtual),
+                            calculator.moeda(Math.max(0d, alvoSetor - vSetorAtual)),
+                            calculator.moeda(Math.max(0d, vSetorAtual - alvoSetor)),
+                            st.getTolerancia(),
+                            st.getLimiteMaximo()));
+                }
                 subDtos.add(new ComparativoResponseDTO.SubclasseComparativoDTO(
                         sub.getId(),
                         sub.getNome(),
@@ -276,7 +357,8 @@ public class CarteiraIdealService {
                         calculator.moeda(Math.max(0d, vSubIdeal - vSubAtual)),
                         calculator.moeda(Math.max(0d, vSubAtual - vSubIdeal)),
                         sub.getTolerancia(),
-                        sub.getLimiteMaximo()));
+                        sub.getLimiteMaximo(),
+                        setorDtos));
             }
 
             List<ComparativoResponseDTO.AtivoComparativoDTO> ativosDtos = new ArrayList<>();
@@ -294,6 +376,7 @@ public class CarteiraIdealService {
                         cadastroId,
                         nomePorTicker.getOrDefault(cadastroId, meta.getAtivoCadastro().getNome()),
                         (meta.getSubclasse() != null) ? meta.getSubclasse().getId() : null,
+                        (meta.getSetor() != null) ? meta.getSetor().getId() : null,
                         meta.getPercentualIdeal(),
                         calculator.percentual(vAtivoAtual, total),
                         calculator.moeda(vAtivoIdeal),
@@ -317,6 +400,7 @@ public class CarteiraIdealService {
                         null,
                         cadastroId,
                         nomePorTicker.get(cadastroId),
+                        null,
                         null,
                         BigDecimal.ZERO.setScale(PercentualCalculator.ESCALA_PERCENTUAL),
                         calculator.percentual(vAtivoAtual, total),
@@ -404,6 +488,9 @@ public class CarteiraIdealService {
             if (acumulado.subclasse == null && posicao.getSubclasse() != null) {
                 acumulado.subclasse = posicao.getSubclasse();
             }
+            if (acumulado.setor == null && posicao.getSetor() != null) {
+                acumulado.setor = posicao.getSetor();
+            }
         }
 
         Map<UUID, MetaAtivoModel> metasPorTicker = new LinkedHashMap<>();
@@ -429,6 +516,9 @@ public class CarteiraIdealService {
                     // própria posição (renda fixa sem ticker, atribuída na V26).
                     CarteiraIdealSubclasseModel subclasseLinha =
                             (meta != null && meta.getSubclasse() != null) ? meta.getSubclasse() : acumulado.subclasse;
+                    // O setor segue a mesma regra (V28).
+                    CarteiraIdealSetorModel setorLinha =
+                            (meta != null && meta.getSetor() != null) ? meta.getSetor() : acumulado.setor;
 
                     return new MeusAtivosResponseDTO.MeuAtivoDTO(
                             acumulado.catalogoId,
@@ -449,7 +539,9 @@ public class CarteiraIdealService {
                             (meta != null) ? meta.getLimiteMaximo() : null,
                             (meta != null) ? meta.getPrioridadeManual() : null,
                             (subclasseLinha != null) ? subclasseLinha.getId() : null,
-                            (subclasseLinha != null) ? subclasseLinha.getNome() : null);
+                            (subclasseLinha != null) ? subclasseLinha.getNome() : null,
+                            (setorLinha != null) ? setorLinha.getId() : null,
+                            (setorLinha != null) ? setorLinha.getNome() : null);
                 })
                 .sorted(Comparator.comparing(MeusAtivosResponseDTO.MeuAtivoDTO::vinculado).reversed()
                         .thenComparing(MeusAtivosResponseDTO.MeuAtivoDTO::valor_atual, Comparator.reverseOrder()))
@@ -486,6 +578,27 @@ public class CarteiraIdealService {
         return null;
     }
 
+    /**
+     * SETOR de uma POSIÇÃO: atribuição explícita na posição (renda fixa) ou o
+     * setor da meta do ticker. null quando a posição não está em nenhum setor.
+     */
+    private Long setorDaPosicao(AtivoModel posicao, List<MetaAtivoModel> metas) {
+        if (posicao.getSetor() != null) {
+            return posicao.getSetor().getId();
+        }
+        if (posicao.getAtivoCadastro() == null) {
+            return null;
+        }
+        UUID ticker = posicao.getAtivoCadastro().getId();
+        for (MetaAtivoModel meta : metas) {
+            if (meta.getAtivoCadastro() != null && meta.getAtivoCadastro().getId().equals(ticker)
+                    && meta.getSetor() != null) {
+                return meta.getSetor().getId();
+            }
+        }
+        return null;
+    }
+
     /** Acumulador por ativo (o usuário pode ter mais de uma posição do mesmo ativo). */
     private static final class Acumulado {
         private final UUID catalogoId;
@@ -494,6 +607,7 @@ public class CarteiraIdealService {
         private final Float precoAtual;
         private final List<Long> ativoIds = new ArrayList<>();
         private CarteiraIdealSubclasseModel subclasse;
+        private CarteiraIdealSetorModel setor;
         private float quantidade;
         private double valor;
 
@@ -608,6 +722,15 @@ public class CarteiraIdealService {
         return subclasseRepository.findByClasseIdInOrderByOrdemAscIdAsc(ids);
     }
 
+    /** Setores das subclasses informadas (nível opcional da hierarquia). */
+    private List<CarteiraIdealSetorModel> setoresDasSubclasses(List<CarteiraIdealSubclasseModel> subclasses) {
+        List<Long> ids = subclasses.stream().map(CarteiraIdealSubclasseModel::getId).toList();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return setorRepository.findBySubclasseIdInOrderByOrdemAscIdAsc(ids);
+    }
+
     private BigDecimal somarPercentuaisClasses(List<CarteiraIdealClasseModel> classes) {
         return classes.stream()
                 .map(CarteiraIdealClasseModel::getPercentualIdeal)
@@ -635,6 +758,17 @@ public class CarteiraIdealService {
         return classe.name() + "|" + nome.trim().toLowerCase();
     }
 
+    /** Chave do setor: classe + subclasse + nome (o nome do setor só é único dentro da subclasse). */
+    private String chaveSetor(CategoriaInvestimento classe, String subclasse, String setor) {
+        return classe.name() + "|" + subclasse.trim().toLowerCase() + "|" + setor.trim().toLowerCase();
+    }
+
+    /** Setores declarados em uma subclasse (nunca null). */
+    private List<CarteiraIdealRequestDTO.SetorIdealRequestDTO> setoresDe(
+            CarteiraIdealRequestDTO.SubclasseIdealRequestDTO s) {
+        return (s.setores() == null) ? List.of() : s.setores();
+    }
+
     private String formatar(BigDecimal valor) {
         return valor.setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
     }
@@ -643,6 +777,9 @@ public class CarteiraIdealService {
             List<CarteiraIdealClasseModel> classes,
             List<CarteiraIdealSubclasseModel> subclasses) {
 
+        List<CarteiraIdealSetorModel> setores = setoresDasSubclasses(subclasses);
+        Map<Long, List<CarteiraIdealSetorModel>> setoresPorSubclasse = setores.stream()
+                .collect(Collectors.groupingBy(s -> s.getSubclasse().getId()));
         Map<Long, List<CarteiraIdealSubclasseModel>> porClasse = subclasses.stream()
                 .collect(Collectors.groupingBy(s -> s.getClasse().getId()));
 
@@ -657,7 +794,12 @@ public class CarteiraIdealService {
                         porClasse.getOrDefault(c.getId(), List.of()).stream()
                                 .map(s -> new CarteiraIdealResponseDTO.SubclasseIdealResponseDTO(
                                         s.getId(), s.getNome(), s.getPercentualIdeal(),
-                                        s.getTolerancia(), s.getLimiteMaximo(), s.getOrdem()))
+                                        s.getTolerancia(), s.getLimiteMaximo(), s.getOrdem(),
+                                        setoresPorSubclasse.getOrDefault(s.getId(), List.of()).stream()
+                                                .map(st -> new CarteiraIdealResponseDTO.SetorIdealResponseDTO(
+                                                        st.getId(), st.getNome(), st.getPercentualIdeal(),
+                                                        st.getTolerancia(), st.getLimiteMaximo(), st.getOrdem()))
+                                                .toList()))
                                 .toList()))
                 .toList();
     }
@@ -671,6 +813,8 @@ public class CarteiraIdealService {
                         m.getClasse(),
                         (m.getSubclasse() != null) ? m.getSubclasse().getId() : null,
                         (m.getSubclasse() != null) ? m.getSubclasse().getNome() : null,
+                        (m.getSetor() != null) ? m.getSetor().getId() : null,
+                        (m.getSetor() != null) ? m.getSetor().getNome() : null,
                         m.getPercentualIdeal(),
                         m.getTolerancia(),
                         m.getLimiteMaximo(),

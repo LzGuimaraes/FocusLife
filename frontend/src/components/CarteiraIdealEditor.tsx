@@ -13,6 +13,16 @@ import { boxStyle, controlStyle, iconBtn, linkBtnStyle } from "./FormStyles";
    seja livre; a conversão para número acontece no save da página.
    ══════════════════════════════════════════════════════════════════════ */
 
+export interface SetorDraft {
+  key: string;
+  /** ID no backend (null enquanto o setor não foi salvo). */
+  id?: number | null;
+  nome: string;
+  percentual_ideal: string;
+  tolerancia: string;
+  limite_maximo: string;
+}
+
 export interface SubclasseDraft {
   key: string;
   /** ID no backend (null enquanto a subclasse não foi salva). */
@@ -22,6 +32,8 @@ export interface SubclasseDraft {
   /** Faixa (p.p. da classe) de equilíbrio e teto do aporte. */
   tolerancia: string;
   limite_maximo: string;
+  /** Setores (opcional): o % de cada um é uma fatia DESTA subclasse. */
+  setores: SetorDraft[];
 }
 
 export interface ClasseDraft {
@@ -40,6 +52,10 @@ export function novaClasseDraft(classe: CategoriaInvestimento): ClasseDraft {
 }
 
 export function novaSubclasseDraft(): SubclasseDraft {
+  return { key: novaChave(), nome: "", percentual_ideal: "", tolerancia: "", limite_maximo: "", setores: [] };
+}
+
+export function novoSetorDraft(): SetorDraft {
   return { key: novaChave(), nome: "", percentual_ideal: "", tolerancia: "", limite_maximo: "" };
 }
 
@@ -122,6 +138,24 @@ export default function CarteiraIdealEditor({ classes, onChange }: Props) {
       c.key === key
         ? { ...c, subclasses: c.subclasses.map(s => (s.key === subKey ? { ...s, ...patch } : s)) }
         : c));
+
+  const adicionarSetor = (key: string, subKey: string) =>
+    onChange(classes.map(c => c.key === key
+      ? { ...c, subclasses: c.subclasses.map(s => s.key === subKey
+          ? { ...s, setores: [...s.setores, novoSetorDraft()] } : s) }
+      : c));
+
+  const removerSetor = (key: string, subKey: string, setorKey: string) =>
+    onChange(classes.map(c => c.key === key
+      ? { ...c, subclasses: c.subclasses.map(s => s.key === subKey
+          ? { ...s, setores: s.setores.filter(st => st.key !== setorKey) } : s) }
+      : c));
+
+  const atualizarSetor = (key: string, subKey: string, setorKey: string, patch: Partial<SetorDraft>) =>
+    onChange(classes.map(c => c.key === key
+      ? { ...c, subclasses: c.subclasses.map(s => s.key === subKey
+          ? { ...s, setores: s.setores.map(st => (st.key === setorKey ? { ...st, ...patch } : st)) } : s) }
+      : c));
 
   return (
     <div style={boxStyle}>
@@ -245,21 +279,48 @@ export default function CarteiraIdealEditor({ classes, onChange }: Props) {
                         onChange={e => atualizarSubclasse(c.key, s.key, { limite_maximo: apenasNumero(e.target.value) })}
                         style={{ ...controlStyle, width: "58px", textAlign: "right", fontSize: "12px" }} />
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}
-                      title="Tolerância (p.p. da classe) e limite máximo de concentração desta subclasse.">
-                      <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>±</span>
-                      <input value={s.tolerancia} inputMode="decimal" placeholder="0"
-                        aria-label={`Tolerância da subclasse ${s.nome || "sem nome"}`}
-                        onChange={e => atualizarSubclasse(c.key, s.key, { tolerancia: apenasNumero(e.target.value) })}
-                        style={{ ...controlStyle, width: "58px", textAlign: "right", fontSize: "12px" }} />
-                      <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>máx</span>
-                      <input value={s.limite_maximo} inputMode="decimal" placeholder="—"
-                        aria-label={`Limite máximo da subclasse ${s.nome || "sem nome"}`}
-                        onChange={e => atualizarSubclasse(c.key, s.key, { limite_maximo: apenasNumero(e.target.value) })}
-                        style={{ ...controlStyle, width: "58px", textAlign: "right", fontSize: "12px" }} />
-                    </div>
                     <button type="button" onClick={() => removerSubclasse(c.key, s.key)}
                       aria-label="Remover subclasse" style={{ ...iconBtn(false), color: "#ef4444", marginLeft: "auto" }}>🗑</button>
+
+                    {/* ── SETOR: nível opcional dentro da subclasse (o % é fatia dela) ── */}
+                    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "5px", marginLeft: "24px" }}>
+                      {s.setores.map(st => (
+                        <div key={st.key} style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                          <span style={{ fontSize: "11px", color: "#94a3b8" }}>➥</span>
+                          <input value={st.nome} placeholder="Setor (ex: Bancos)"
+                            aria-label={`Nome do setor ${st.nome || "sem nome"}`}
+                            onChange={e => atualizarSetor(c.key, s.key, st.key, { nome: e.target.value })}
+                            style={{ ...controlStyle, minWidth: "140px", fontSize: "12px" }} />
+                          <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                            <input value={st.percentual_ideal} inputMode="decimal" placeholder="0,00"
+                              aria-label={`Percentual ideal do setor ${st.nome || "sem nome"}`}
+                              title="Percentual do setor DENTRO da subclasse"
+                              onChange={e => atualizarSetor(c.key, s.key, st.key, { percentual_ideal: apenasNumero(e.target.value) })}
+                              style={{ ...controlStyle, width: "78px", textAlign: "right", fontSize: "12px" }} />
+                            <span style={{ fontSize: "12px", color: "#64748b" }}>%</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "3px" }}
+                            title="Tolerância (p.p. da subclasse) e limite máximo de concentração do setor.">
+                            <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>±</span>
+                            <input value={st.tolerancia} inputMode="decimal" placeholder="0"
+                              aria-label={`Tolerância do setor ${st.nome || "sem nome"}`}
+                              onChange={e => atualizarSetor(c.key, s.key, st.key, { tolerancia: apenasNumero(e.target.value) })}
+                              style={{ ...controlStyle, width: "54px", textAlign: "right", fontSize: "12px" }} />
+                            <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8" }}>máx</span>
+                            <input value={st.limite_maximo} inputMode="decimal" placeholder="—"
+                              aria-label={`Limite máximo do setor ${st.nome || "sem nome"}`}
+                              onChange={e => atualizarSetor(c.key, s.key, st.key, { limite_maximo: apenasNumero(e.target.value) })}
+                              style={{ ...controlStyle, width: "54px", textAlign: "right", fontSize: "12px" }} />
+                          </div>
+                          <button type="button" onClick={() => removerSetor(c.key, s.key, st.key)}
+                            aria-label="Remover setor" style={{ ...iconBtn(false), color: "#ef4444", marginLeft: "auto" }}>🗑</button>
+                        </div>
+                      ))}
+                      <button type="button" onClick={() => adicionarSetor(c.key, s.key)}
+                        style={{ ...linkBtnStyle, fontSize: "11px", padding: "3px 9px", alignSelf: "flex-start" }}>
+                        + Setor
+                      </button>
+                    </div>
                   </div>
                 ))}
 

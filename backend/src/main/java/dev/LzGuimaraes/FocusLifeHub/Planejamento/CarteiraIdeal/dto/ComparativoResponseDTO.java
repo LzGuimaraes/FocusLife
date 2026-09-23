@@ -57,6 +57,21 @@ public record ComparativoResponseDTO(
             BigDecimal deficit,
             BigDecimal excesso,
             BigDecimal tolerancia,
+            BigDecimal limite_maximo,
+            /** Setores desta subclasse (opcional). O % do setor é fatia da SUBCLASSE. */
+            List<SetorComparativoDTO> setores
+    ) {}
+
+    public record SetorComparativoDTO(
+            Long id,
+            String nome,
+            BigDecimal percentual_ideal,
+            BigDecimal percentual_atual,
+            BigDecimal valor_ideal,
+            BigDecimal valor_atual,
+            BigDecimal deficit,
+            BigDecimal excesso,
+            BigDecimal tolerancia,
             BigDecimal limite_maximo
     ) {}
 
@@ -65,6 +80,7 @@ public record ComparativoResponseDTO(
             UUID ativo_cadastro_id,
             String ticker,
             Long subclasse_id,
+            Long setor_id,
             BigDecimal percentual_ideal,
             BigDecimal percentual_atual,
             BigDecimal valor_ideal,

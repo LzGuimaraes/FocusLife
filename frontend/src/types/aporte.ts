@@ -79,6 +79,9 @@ export interface ItemRanking {
   vinculado: boolean;
   subclasse_id: number | null;
   subclasse_nome: string | null;
+  /** Setor dentro da subclasse (opcional). */
+  setor_id: number | null;
+  setor_nome: string | null;
 
   /** Quality Score do ativo (Módulo 5) — null = ainda sem avaliação. */
   quality_score: number | null;
@@ -119,6 +122,22 @@ export interface ItemRanking {
   motivo: string | null;
 }
 
+/** Setor dentro da subclasse (nível opcional): % é fatia da SUBCLASSE. */
+export interface SetorAporte {
+  id: number;
+  nome: string;
+  percentual_atual: number;
+  percentual_ideal: number;
+  valor_atual: number;
+  valor_ideal: number;
+  deficit: number;
+  excesso: number;
+  tolerancia: number;
+  limite_maximo: number | null;
+  status: StatusNivel;
+  sugerido: number;
+}
+
 /** Onde o dinheiro entra, no nível da decisão: classe → subclasse. */
 export interface SubclasseAporte {
   id: number;
@@ -134,6 +153,7 @@ export interface SubclasseAporte {
   status: StatusNivel;
   sugerido: number;
   motivo: string | null;
+  setores: SetorAporte[];
 }
 
 export interface ClasseAporte {

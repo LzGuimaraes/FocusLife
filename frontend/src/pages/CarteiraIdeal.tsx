@@ -102,6 +102,14 @@ export default function CarteiraIdealPage() {
           percentual_ideal: numParaTexto(s.percentual_ideal),
           tolerancia: numParaTexto(s.tolerancia),
           limite_maximo: numParaTexto(s.limite_maximo),
+          setores: (s.setores ?? []).map(st => ({
+            key: novaChave(),
+            id: st.id,
+            nome: st.nome,
+            percentual_ideal: numParaTexto(st.percentual_ideal),
+            tolerancia: numParaTexto(st.tolerancia),
+            limite_maximo: numParaTexto(st.limite_maximo),
+          })),
         })),
       })));
 
@@ -119,6 +127,7 @@ export default function CarteiraIdealPage() {
           ticker: a.ticker,
           classe: a.classe,
           subclasse_nome: meta?.subclasse_nome ?? "",
+          setor_nome: meta?.setor_nome ?? "",
           percentual_ideal: meta ? numParaTexto(meta.percentual_ideal) : "",
           prioridade_manual: String(meta?.prioridade_manual ?? 0),
           incluir: meta != null,
@@ -129,6 +138,8 @@ export default function CarteiraIdealPage() {
           sugestao_catalogo_nome: a.sugestao_catalogo_nome,
           subclasse_id: a.subclasse_id ?? null,
           subclasse_nome_posicao: a.subclasse_nome ?? null,
+          setor_id: a.setor_id ?? null,
+          setor_nome_posicao: a.setor_nome ?? null,
           tolerancia: numParaTexto(meta?.tolerancia ?? null),
           limite_maximo: numParaTexto(meta?.limite_maximo ?? null),
           percentual_atual: a.percentual_atual,
@@ -143,6 +154,7 @@ export default function CarteiraIdealPage() {
           ticker: m.ticker ?? "",
           classe: m.classe,
           subclasse_nome: m.subclasse_nome ?? "",
+          setor_nome: "",
           percentual_ideal: numParaTexto(m.percentual_ideal),
           prioridade_manual: String(m.prioridade_manual ?? 0),
           incluir: true,
@@ -153,6 +165,8 @@ export default function CarteiraIdealPage() {
           sugestao_catalogo_nome: null,
           subclasse_id: null,
           subclasse_nome_posicao: null,
+          setor_id: null,
+          setor_nome_posicao: null,
           tolerancia: "",
           limite_maximo: "",
           percentual_atual: null,
@@ -230,12 +244,20 @@ export default function CarteiraIdealPage() {
           tolerancia: textoParaNum(s.tolerancia),
           limite_maximo: s.limite_maximo.trim() === "" ? null : textoParaNum(s.limite_maximo),
           ordem: j,
+          setores: s.setores.map((st, k) => ({
+            nome: st.nome.trim(),
+            percentual_ideal: textoParaNum(st.percentual_ideal),
+            tolerancia: textoParaNum(st.tolerancia),
+            limite_maximo: st.limite_maximo.trim() === "" ? null : textoParaNum(st.limite_maximo),
+            ordem: k,
+          })),
         })),
       })),
       metas: metas.filter(m => m.incluir).map((m, i) => ({
         ativo_cadastro_id: m.ativo_cadastro_id,
         classe: m.classe,
         subclasse_nome: m.subclasse_nome || null,
+        setor_nome: m.setor_nome || null,
         percentual_ideal: textoParaNum(m.percentual_ideal),
         tolerancia: textoParaNum(m.tolerancia),
         limite_maximo: m.limite_maximo.trim() === "" ? null : textoParaNum(m.limite_maximo),
@@ -285,6 +307,17 @@ export default function CarteiraIdealPage() {
       if (selecionada != null) carregar(selecionada);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Erro ao classificar a posição");
+    }
+  };
+
+  /* ── Classificação de posição num SETOR (chamada pelo MetasEditor) ── */
+  const atribuirSetor = async (ativoIds: number[], setorId: number | null) => {
+    try {
+      await api.post("/ativos/atribuir-setor", { ativo_ids: ativoIds, setor_id: setorId });
+      toast.success(setorId == null ? "Setor removido." : "Posição classificada no setor!");
+      if (selecionada != null) carregar(selecionada);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Erro ao classificar o setor");
     }
   };
 
@@ -394,6 +427,7 @@ export default function CarteiraIdealPage() {
           <MetasEditor metas={metas} classes={classes} onChange={setMetas}
             onVincular={vincular}
             onAtribuirSubclasse={atribuirSubclasse}
+            onAtribuirSetor={atribuirSetor}
             moeda={meusAtivos?.moeda ?? "BRL"}
             valorTotal={meusAtivos?.valor_total ?? 0} />
         </div>

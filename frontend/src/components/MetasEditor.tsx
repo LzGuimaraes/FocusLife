@@ -26,6 +26,8 @@ export interface MetaDraft {
   ticker: string;
   classe: CategoriaInvestimento;
   subclasse_nome: string;
+  /** Setor dentro da subclasse (nível opcional). */
+  setor_nome: string;
   percentual_ideal: string;
   prioridade_manual: string;
   /** Linha marcada participa do payload (as desmarcadas perdem a meta). */
@@ -45,6 +47,9 @@ export interface MetaDraft {
    */
   subclasse_id: number | null;
   subclasse_nome_posicao: string | null;
+  /** Setor atribuído À POSIÇÃO (renda fixa / sem ticker). */
+  setor_id: number | null;
+  setor_nome_posicao: string | null;
 
   /** Tolerância (p.p. sobre o % ideal) — dentro dela o ativo conta como no alvo. */
   tolerancia: string;
@@ -63,6 +68,7 @@ export function novaMetaPlanejada(classe: CategoriaInvestimento): MetaDraft {
     ticker: "",
     classe,
     subclasse_nome: "",
+    setor_nome: "",
     percentual_ideal: "",
     prioridade_manual: "0",
     incluir: true,
@@ -73,6 +79,8 @@ export function novaMetaPlanejada(classe: CategoriaInvestimento): MetaDraft {
     sugestao_catalogo_nome: null,
     subclasse_id: null,
     subclasse_nome_posicao: null,
+    setor_id: null,
+    setor_nome_posicao: null,
     tolerancia: "",
     limite_maximo: "",
     percentual_atual: null,
@@ -90,10 +98,12 @@ interface Props {
   onVincular: (ativoIds: number[], ativoCadastroId: string) => void;
   /** Classifica posições sem ticker em uma subclasse da Carteira Ideal (null = remover). */
   onAtribuirSubclasse: (ativoIds: number[], subclasseId: number | null) => void;
+  /** Classifica posições em um SETOR da subclasse (null = remover). */
+  onAtribuirSetor: (ativoIds: number[], setorId: number | null) => void;
 }
 
 export default function MetasEditor({
-  metas, classes, moeda, valorTotal, onChange, onVincular, onAtribuirSubclasse,
+  metas, classes, moeda, valorTotal, onChange, onVincular, onAtribuirSubclasse, onAtribuirSetor,
 }: Props) {
   const [buscando, setBuscando] = useState<string | null>(null);
 
@@ -102,6 +112,16 @@ export default function MetasEditor({
 
   const subclassesDaClasse = (classe: CategoriaInvestimento) =>
     classes.find(c => c.classe === classe)?.subclasses ?? [];
+
+  /** Setores de uma subclasse específica (nível opcional dentro dela). */
+  const setoresDaSubclasse = (classe: CategoriaInvestimento, subclasseNome: string) =>
+    subclassesDaClasse(classe).find(s => s.nome === subclasseNome)?.setores ?? [];
+
+  /** Todos os setores da classe (com o nome da subclasse), para a posição sem ticker. */
+  const setoresDaClasse = (classe: CategoriaInvestimento) =>
+    subclassesDaClasse(classe).flatMap(s => s.setores.map(st => ({
+      id: st.id ?? null, nome: st.nome, subclasse: s.nome, key: st.key,
+    }))).filter(st => st.id != null);
 
   const incluídas = metas.filter(m => m.incluir && m.ativo_cadastro_id);
   const somaIdeal = incluídas.reduce((s, m) => s + textoParaNum(m.percentual_ideal), 0);
@@ -170,6 +190,7 @@ export default function MetasEditor({
                   <th style={{ ...th, textAlign: "right" }}>±</th>
                   <th style={{ ...th, textAlign: "right" }}>máx %</th>
                   <th style={{ ...th, textAlign: "left" }}>Subclasse</th>
+                  <th style={{ ...th, textAlign: "left" }}>Setor</th>
                 </tr>
               </thead>
               <tbody>
@@ -177,6 +198,7 @@ export default function MetasEditor({
                   const info = catInfo(m.classe);
                   const valorIdeal = valorTotal * (textoParaNum(m.percentual_ideal) / 100);
                   const subs = subclassesDaClasse(m.classe);
+                  const setores = setoresDaSubclasse(m.classe, m.subclasse_nome);
                   const temAlvo = m.percentual_ideal.trim() !== "";
                   return (
                     <tr key={m.key} style={{ borderTop: "1px solid #f1f5f9", opacity: m.incluir ? 1 : 0.55 }}>
@@ -235,10 +257,22 @@ export default function MetasEditor({
                       <td style={td}>
                         <select value={m.subclasse_nome} disabled={!m.incluir || subs.length === 0}
                           aria-label={`Subclasse de ${m.ticker}`}
-                          onChange={e => atualizar(m.key, { subclasse_nome: e.target.value })}
+                          onChange={e => atualizar(m.key, { subclasse_nome: e.target.value, setor_nome: "" })}
                           style={{ ...controlStyle, minWidth: "120px", opacity: (!m.incluir || subs.length === 0) ? 0.5 : 1 }}>
                           <option value="">—</option>
                           {subs.map(s => <option key={s.key} value={s.nome}>{s.nome || "(sem nome)"}</option>)}
+                        </select>
+                      </td>
+                      <td style={td}>
+                        <select value={m.setor_nome} disabled={!m.incluir || setores.length === 0}
+                          aria-label={`Setor de ${m.ticker}`}
+                          title={setores.length === 0
+                            ? "Esta subclasse não tem setores cadastrados na Carteira Ideal"
+                            : "Setor dentro da subclasse (opcional)"}
+                          onChange={e => atualizar(m.key, { setor_nome: e.target.value })}
+                          style={{ ...controlStyle, minWidth: "110px", opacity: (!m.incluir || setores.length === 0) ? 0.5 : 1 }}>
+                          <option value="">—</option>
+                          {setores.map(st => <option key={st.key} value={st.nome}>{st.nome || "(sem nome)"}</option>)}
                         </select>
                       </td>
                     </tr>
@@ -278,8 +312,7 @@ export default function MetasEditor({
                     <span style={{ fontSize: "11px", color: "#b45309", maxWidth: "260px" }}>
                       Crie e salve subclasses em {info.label} para poder classificar esta posição.
                     </span>
-                  ) : (
-                    <div>
+                  ) : (                    <div>
                       <label style={miniLabel}>Subclasse de {info.label}</label>
                       <select value={m.subclasse_id ?? ""}
                         aria-label={`Subclasse de ${m.ticker}`}
@@ -291,6 +324,24 @@ export default function MetasEditor({
                         <option value="">— sem subclasse —</option>
                         {subs.map(s => (
                           <option key={s.id} value={s.id as number}>{s.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {setoresDaClasse(m.classe).length > 0 && (
+                    <div>
+                      <label style={miniLabel}>Setor (opcional)</label>
+                      <select value={m.setor_id ?? ""} aria-label={`Setor de ${m.ticker}`}
+                        title="Setor dentro da subclasse — define o teto do aporte deste nível"
+                        onChange={e => {
+                          const v = e.target.value;
+                          onAtribuirSetor(m.ativo_ids, v === "" ? null : Number(v));
+                        }}
+                        style={{ ...controlStyle, minWidth: "180px", fontSize: "12px" }}>
+                        <option value="">— sem setor —</option>
+                        {setoresDaClasse(m.classe).map(st => (
+                          <option key={st.key} value={st.id as number}>{st.subclasse} › {st.nome}</option>
                         ))}
                       </select>
                     </div>

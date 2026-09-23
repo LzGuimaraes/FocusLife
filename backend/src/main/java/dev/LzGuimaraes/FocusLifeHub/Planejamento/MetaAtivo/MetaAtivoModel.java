@@ -81,4 +81,14 @@ public class MetaAtivoModel {
     @JoinColumn(name = "subclasse_id")
     @JsonIgnore
     private CarteiraIdealSubclasseModel subclasse;
+
+    /**
+     * SETOR opcional (ex.: Ações → Bancos → "Bancos grandes"), dentro da
+     * subclasse. Quando a subclasse tem setores com alvo, o aporte é decidido
+     * nesse nível antes de chegar ao ticker.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "setor_id")
+    @JsonIgnore
+    private dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSetorModel setor;
 }
