@@ -267,7 +267,7 @@ export default function CarteiraIdealPage() {
 
       {/* Se a carteira selecionada aparecer vazia, o mais provável é que as
           posições tenham ficado sem vínculo numa migração antiga. */}
-      <DiagnosticoFinanceiroBanner mostrarSemPosicoes
+      <DiagnosticoFinanceiroBanner mostrarSemPosicoes carteiraId={selecionada}
         onReparado={() => { if (selecionada != null) carregar(selecionada); }} />
 
       {/* ── Toolbar ── */}

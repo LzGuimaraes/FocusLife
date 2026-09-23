@@ -25,14 +25,19 @@ interface Props {
   /** Chamado depois de um reparo bem-sucedido, para a tela recarregar os dados. */
   onReparado?: () => void;
   /**
-   * Mostra também o aviso "verificamos e não há nada a recuperar" quando as
-   * carteiras estão vazias. Faz sentido onde o sintoma aparece (Carteira Ideal);
-   * em Finanças isso seria ruído para quem só está começando.
+   * Mostra também o aviso "verificamos e não há nada a recuperar" quando a
+   * carteira aberta está vazia. Faz sentido onde o sintoma aparece (Carteira
+   * Ideal); em Finanças isso seria ruído para quem só está começando.
    */
   mostrarSemPosicoes?: boolean;
+  /**
+   * Carteira aberta na tela. O aviso de "carteira vazia" é calculado SÓ para
+   * ela: ter posições em outra carteira não pode esconder o diagnóstico desta.
+   */
+  carteiraId?: number | null;
 }
 
-export default function DiagnosticoFinanceiroBanner({ onReparado, mostrarSemPosicoes = false }: Props) {
+export default function DiagnosticoFinanceiroBanner({ onReparado, mostrarSemPosicoes = false, carteiraId = null }: Props) {
   const [diag, setDiag] = useState<DiagnosticoFinanceiro | null>(null);
   const [aberto, setAberto] = useState(false);
   const [reparando, setReparando] = useState(false);
@@ -45,7 +50,8 @@ export default function DiagnosticoFinanceiroBanner({ onReparado, mostrarSemPosi
       const { data } = await api.get<DiagnosticoFinanceiro>("/financeiro/diagnostico");
       setDiag(data);
     } catch {
-      // Diagnóstico é auxiliar: se falhar, simplesmente não mostra nada.
+      // Diagnóstico é auxiliar: se falhar (ex.: backend antigo, sem a rota),
+      // simplesmente não mostra nada. O interceptor de API já loga no console.
       setDiag(null);
     }
   }, []);
@@ -55,7 +61,9 @@ export default function DiagnosticoFinanceiroBanner({ onReparado, mostrarSemPosi
   if (!diag) return null;
 
   const orfas = diag.posicoes_sem_carteira + diag.despesas_sem_carteira;
-  const semPosicoes = mostrarSemPosicoes && diag.carteiras.length > 0 && diag.total_posicoes === 0;
+  const aberta = (carteiraId != null) ? diag.carteiras.find(c => c.id === carteiraId) ?? null : null;
+  const comItens = diag.carteiras.filter(c => c.itens > 0 && c.id !== carteiraId);
+  const semPosicoes = mostrarSemPosicoes && aberta != null && aberta.itens === 0;
   if (orfas === 0 && !semPosicoes) return null;
 
   const handleReparar = async () => {
@@ -152,21 +160,32 @@ export default function DiagnosticoFinanceiroBanner({ onReparado, mostrarSemPosi
     );
   }
 
-  /* ── Caso 2: nenhuma posição, e nenhum órfão — os dados realmente não existem ── */
+  /* ── Caso 2: a carteira aberta está vazia e não há órfãos para recuperar ── */
   return (
     <div style={banner("#eef2ff", "#c7d2fe")}>
       <p style={{ fontSize: "13px", color: "#3730a3", margin: 0, fontWeight: 600 }}>
-        � Verificamos os seus dados antigos e não há nada a recuperar.
+        🔍 Verificamos os seus dados antigos e não há nada a recuperar.
       </p>
       <p style={{ fontSize: "12px", color: "#4338ca", margin: "6px 0 0" }}>
-        Nenhuma posição ficou sem carteira, então as carteiras abaixo estão realmente vazias: cadastre as posições
-        em <strong>Finanças</strong> (abrir a carteira → Novo Ativo) e elas aparecem aqui automaticamente.
+        Nenhuma posição ficou sem carteira nas migrações, então <strong>{aberta?.nome ?? "esta carteira"}</strong> está
+        mesmo com {aberta?.itens ?? 0} posição(ões).
+        {comItens.length > 0 ? (
+          <> Os seus valores estão em <strong>{comItens.map(c => c.nome).join(", ")}</strong> — troque no seletor
+          <strong> Carteira</strong> acima para trabalhar nela.</>
+        ) : (
+          <> Cadastre as posições em <strong>Finanças</strong> (abrir a carteira → Novo Ativo) e elas aparecem aqui
+          automaticamente.</>
+        )}
       </p>
-      <ul style={{ margin: "8px 0 0", paddingLeft: "18px", fontSize: "12px", color: "#4338ca" }}>
-        {diag.carteiras.map(c => (
-          <li key={c.id}><strong>{c.nome}</strong> — {c.itens} posição(ões) · {fmtMoeda(c.valor, c.moeda ?? "BRL")}</li>
-        ))}
-      </ul>
+      {diag.carteiras.length > 1 && (
+        <ul style={{ margin: "8px 0 0", paddingLeft: "18px", fontSize: "12px", color: "#4338ca" }}>
+          {diag.carteiras.map(c => (
+            <li key={c.id}>
+              <strong>{c.nome}</strong> — {c.itens} posição(ões) · {fmtMoeda(c.valor, c.moeda ?? "BRL")}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

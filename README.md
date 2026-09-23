@@ -318,6 +318,25 @@ Sobe `backend`, `frontend` (nginx) e `db` (Postgres 15), já com labels do Traef
 - **Traefik** como reverse proxy: `focus.lzguimaraes.com.br` → frontend; `apifocus.lzguimaraes.com.br` → backend (rede externa `proxy`, TLS via `letsencrypt`).
 - Volume persistente `focuslife_pgdata` para o banco.
 
+### Atualizar produção (depois de um `push` na `main`)
+
+As imagens são **construídas no servidor**: subir o código sem `build` mantém a versão antiga no ar
+(foi assim que uma tela nova "não apareceu" mesmo com o código já na `main`).
+
+```bash
+cd /caminho/do/projeto
+git pull
+docker compose -f docker-compose.prod.yml build frontend backend
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Como conferir se o deploy pegou:
+
+| Verificação | Onde | O que mostra |
+|---|---|---|
+| Bundle do frontend | *Como Funciona* | Seções novas (ex.: "🧩 Recuperação de Carteiras Antigas") |
+| Backend | DevTools → Network → `GET /financeiro/diagnostico` | `200` (rota existe) ou `404` (backend antigo) |
+
 ---
 
 ## 🔧 Variáveis de ambiente
