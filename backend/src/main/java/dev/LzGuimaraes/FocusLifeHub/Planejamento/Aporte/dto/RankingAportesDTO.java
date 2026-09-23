@@ -117,7 +117,29 @@ public final class RankingAportesDTO {
 
             /** Quanto este item já recebeu de aporte nos últimos 30 dias (§24). */
             BigDecimal aportes_recentes,
-            Integer aportes_recentes_qtd
+            Integer aportes_recentes_qtd,
+
+            /**
+             * Cálculo aberto do Contribution Score (§34): a conta exata, com os
+             * valores normalizados e os pesos aplicados, para o usuário reproduzir.
+             */
+            String formula
+    ) {}
+
+    /** Uma comparação de cenário (§33): mesmos dados, pesos de decisão diferentes. */
+    public record CenarioDTO(
+            String nome,
+            String descricao,
+            /** Pesos usados neste cenário (rótulo legível). */
+            String pesos,
+            BigDecimal valor_alocado,
+            BigDecimal valor_nao_alocado,
+            List<ItemCenarioDTO> itens
+    ) {}
+
+    public record ItemCenarioDTO(
+            String ticker,
+            BigDecimal valor
     ) {}
 
     /**
@@ -192,6 +214,13 @@ public final class RankingAportesDTO {
             List<ScoreConfigDTO.Termo> termos,
             List<String> avisos,
             List<Alerta> alertas,
+            /**
+             * Ordem em que o motor aplica as travas (§36). É FIXA e mostrada na
+             * tela de propósito: nenhuma regra escondida decide o aporte.
+             */
+            List<String> precedencia,
+            /** Cenários comparativos (§33) — só quando um valor de aporte foi informado. */
+            List<CenarioDTO> cenarios,
             List<ClasseAporteDTO> classes,
             List<Item> itens
     ) {}

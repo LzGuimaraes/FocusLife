@@ -75,6 +75,9 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
       {/* Onde o dinheiro entra: a decisão é da classe/subclasse, antes de olhar ticker. */}
       <AportePorClasse ranking={ranking} />
 
+      {/* Cenários (§33) e precedência das travas (§36) — transparência, nada escondido. */}
+      <CenariosAporte ranking={ranking} />
+
       {itens.length === 0 ? (
         <p style={{ fontSize: "13px", color: "#94a3b8", textAlign: "center", padding: "20px 0", margin: 0 }}>
           Nada para priorizar ainda. Cadastre posições e defina a Carteira Ideal (classes e subclasses).
@@ -140,7 +143,8 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
                       </span>
                     </td>
                     <td style={{ ...td, textAlign: "right" }}>
-                      <span style={{
+                      <span title={i.formula ?? ""}
+                        style={{
                         display: "inline-flex", alignItems: "center", gap: "6px", justifyContent: "flex-end",
                         padding: "2px 10px", borderRadius: "9999px", fontWeight: 700, fontSize: "12px",
                         background: scoreBg(i.contribution_score), color: scoreColor(i.contribution_score),
@@ -182,6 +186,64 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
         Quality Score = notas dos checklists de Qualidade · Momento = fator 0–1 dos checklists de Momento (não altera a qualidade).
         {comSugestao && " O teto de cada ativo é o déficit dele + tolerância: ninguém recebe de uma classe que já está no alvo."}
       </p>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   CENÁRIOS (§33) — como o aporte mudaria com outros pesos de decisão.
+   Não altera nada da carteira: é comparação, para o usuário escolher.
+   ══════════════════════════════════════════════════════════════════════ */
+function CenariosAporte({ ranking }: { ranking: RankingAportes }) {
+  const { cenarios, precedencia, moeda } = ranking;
+  if (cenarios.length === 0 && precedencia.length === 0) return null;
+
+  return (
+    <div style={{ marginBottom: "16px" }}>
+      {cenarios.length > 0 && (
+        <>
+          <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", margin: "0 0 6px" }}>
+            Como ficaria com outros critérios (cenários)
+          </h4>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))", gap: "10px", marginBottom: "10px" }}>
+            {cenarios.map(c => (
+              <div key={c.nome} style={{ border: "1px solid #e2e8f0", borderRadius: "10px", padding: "10px 12px", background: "#fcfdff" }}>
+                <p style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", margin: 0 }}>{c.nome}</p>
+                <p style={{ fontSize: "11px", color: "#64748b", margin: "2px 0 6px" }}>{c.descricao}</p>
+                <p style={{ fontSize: "12px", margin: 0 }}>
+                  Alocado <strong style={{ color: "#047857" }}>{fmtMoeda(c.valor_alocado, moeda)}</strong>
+                  {c.valor_nao_alocado > 0 && (
+                    <> · sem destino <strong style={{ color: "#b45309" }}>{fmtMoeda(c.valor_nao_alocado, moeda)}</strong></>
+                  )}
+                </p>
+                {c.itens.length > 0 && (
+                  <ul style={{ margin: "6px 0 0", paddingLeft: "16px", fontSize: "11px", color: "#475569" }}>
+                    {c.itens.map(i => (
+                      <li key={i.ticker}>{i.ticker} — {fmtMoeda(i.valor, moeda)}</li>
+                    ))}
+                  </ul>
+                )}
+                <p style={{ fontSize: "10px", color: "#94a3b8", margin: "6px 0 0" }}>{c.pesos}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {precedencia.length > 0 && (
+        <details style={{ fontSize: "11px", color: "#64748b" }}>
+          <summary style={{ cursor: "pointer", fontWeight: 600 }}>
+            Ordem em que o motor aplica as regras (precedência)
+          </summary>
+          <ol style={{ margin: "6px 0 0", paddingLeft: "18px" }}>
+            {precedencia.map(p => <li key={p}>{p}</li>)}
+          </ol>
+          <p style={{ margin: "6px 0 0", color: "#94a3b8" }}>
+            A ordem é fixa e mostrada de propósito: nenhuma regra escondida decide o aporte. O que você
+            configura são os pesos, as tolerâncias, os limites e as metas do círculo.
+          </p>
+        </details>
+      )}
     </div>
   );
 }

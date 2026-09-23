@@ -124,6 +124,24 @@ export interface ItemRanking {
   /** Quanto este item já recebeu de aporte nos últimos 30 dias (§24). */
   aportes_recentes: number;
   aportes_recentes_qtd: number;
+
+  /** Cálculo aberto do Contribution Score (§34) — a conta exata, passo a passo. */
+  formula: string | null;
+}
+
+/** Comparação de cenários (§33): mesmos dados, pesos de decisão diferentes. */
+export interface ItemCenario {
+  ticker: string;
+  valor: number;
+}
+
+export interface Cenario {
+  nome: string;
+  descricao: string;
+  pesos: string;
+  valor_alocado: number;
+  valor_nao_alocado: number;
+  itens: ItemCenario[];
 }
 
 /** Setor dentro da subclasse (nível opcional): % é fatia da SUBCLASSE. */
@@ -191,6 +209,10 @@ export interface RankingAportes {
   termos: Termo[];
   avisos: string[];
   alertas: Alerta[];
+  /** Ordem em que o motor aplica as travas (§36) — fixa e visível de propósito. */
+  precedencia: string[];
+  /** Cenários comparativos (§33) — vazio quando nenhum valor foi informado. */
+  cenarios: Cenario[];
   classes: ClasseAporte[];
   itens: ItemRanking[];
 }

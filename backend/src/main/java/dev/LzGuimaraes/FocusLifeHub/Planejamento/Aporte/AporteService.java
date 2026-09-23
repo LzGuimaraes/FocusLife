@@ -99,7 +99,8 @@ public class AporteService {
         ScoreConfigModel config = scoreConfigService.obterOuPadrao();
 
         Avaliacoes avaliacoes = avaliacoes(config);
-        List<Candidato> calculados = candidatos(meus, comparativo, avaliacoes, config, aportesRecentes(carteiraId));
+        AportesRecentes recentes = aportesRecentes(carteiraId);
+        List<Candidato> calculados = candidatos(meus, comparativo, avaliacoes, config, recentes);
         calculados.sort(Comparator
                 .comparing(Candidato::contribution, Comparator.reverseOrder())
                 // prioridade pode ser null (posição sem meta) — sem nullsLast, o
@@ -147,7 +148,8 @@ public class AporteService {
                     sugestao,
                     motivo(c, sugestao),
                     c.aportesRecentes(),
-                    c.aportesRecentesQtd()));
+                    c.aportesRecentesQtd(),
+                    formula(c, config)));
         }
 
         List<RankingAportesDTO.ClasseAporteDTO> classes = classesDto(
@@ -173,6 +175,8 @@ public class AporteService {
                 termosDaConfig(config),
                 avisos(comparativo, itens, meus, naoAlocado),
                 alertas,
+                precedencia(),
+                cenarios(meus, comparativo, avaliacoes, recentes, valorAporte, config),
                 classes,
                 itens);
     }
@@ -287,7 +291,10 @@ public class AporteService {
             BigDecimal valorAtual, BigDecimal valorIdeal,
             BigDecimal deficit, BigDecimal excesso, BigDecimal tolerancia,
             BigDecimal teto, Integer prioridade,
-            BigDecimal aportesRecentes, int aportesRecentesQtd
+            BigDecimal aportesRecentes, int aportesRecentesQtd,
+            /** Termos normalizados do Contribution Score (§34) — para a fórmula aberta. */
+            Double qualityNorm, double deficitNorm, double excessoNorm,
+            double prioridadeNorm, Double momentoNorm
     ) {}
 
     /** Orçamento do aporte já distribuído (classe → subclasse → setor → candidato). */
@@ -383,7 +390,12 @@ public class AporteService {
                     moeda(vAtual), moeda(vIdeal),
                     moeda(deficit), moeda(excesso), tolerancia,
                     moeda(teto), a.prioridade_manual(),
-                    recente.valor(), recente.quantidade()));
+                    recente.valor(), recente.quantidade(),
+                    (avaliacao.quality() != null) ? avaliacao.quality().doubleValue() / 100d : null,
+                    scoreCalculator.normalizar(deficit, maiorDeficit),
+                    scoreCalculator.normalizar(excesso, maiorExcesso),
+                    scoreCalculator.normalizarPrioridade(a.prioridade_manual()),
+                    (avaliacao.momento() == null) ? null : avaliacao.fator().doubleValue()));
         }
         return lista;
     }
@@ -1005,6 +1017,143 @@ public class AporteService {
                             : ": todas as classes elegíveis já estão completas.")));
         }
         return alertas;
+    }
+
+    /**
+     * Ordem FIXA em que as travas do motor são aplicadas (§36). Aparece na tela
+     * para o usuário saber exatamente o que decide antes do quê — o sistema
+     * nunca esconde um conflito entre regras.
+     */
+    private List<String> precedencia() {
+        return List.of(
+                "1. Critério eliminatório (bloqueia)",
+                "2. Limite máximo de concentração (bloqueia)",
+                "3. Déficit da CLASSE (define quanto entra no nível)",
+                "4. Déficit da SUBCLASSE (dentro da classe)",
+                "5. Déficit do SETOR (dentro da subclasse)",
+                "6. Déficit do ATIVO (teto: ideal + tolerância)",
+                "7. Fator de momento (0 a 1)",
+                "8. Contribution Score e estratégia (divide dentro do nível)");
+    }
+
+    /**
+     * Cálculo aberto do Contribution Score (§34): a conta exata que foi feita,
+     * com os termos normalizados e os pesos aplicados, para o usuário reproduzir.
+     */
+    private String formula(Candidato c, ScoreConfigModel config) {
+        List<String> termos = new ArrayList<>();
+        BigDecimal soma = BigDecimal.ZERO;
+
+        if (c.qualityNorm() != null) {
+            termos.add("+" + fmt(config.getPesoQuality()) + "×" + fmt(c.qualityNorm()));
+            soma = soma.add(config.getPesoQuality());
+        }
+        if (c.momentoNorm() != null) {
+            termos.add("+" + fmt(config.getPesoMomento()) + "×" + fmt(c.momentoNorm()));
+            soma = soma.add(config.getPesoMomento());
+        }
+        termos.add("+" + fmt(config.getPesoDeficit()) + "×" + fmt(c.deficitNorm()));
+        soma = soma.add(config.getPesoDeficit());
+        termos.add("−" + fmt(config.getPesoExcesso()) + "×" + fmt(c.excessoNorm()));
+        soma = soma.add(config.getPesoExcesso());
+        termos.add("+" + fmt(config.getPesoPrioridade()) + "×" + fmt(c.prioridadeNorm()));
+        soma = soma.add(config.getPesoPrioridade());
+
+        if (soma.compareTo(BigDecimal.ZERO) == 0) {
+            return "sem pesos configurados — o Contribution Score fica 0";
+        }
+        return "100 × [ " + String.join(" ", termos) + " ] ÷ " + fmt(soma)
+                + " = " + fmt(c.contribution());
+    }
+
+    private String fmt(BigDecimal valor) {
+        return (valor == null) ? "0" : valor.stripTrailingZeros().toPlainString();
+    }
+
+    private String fmt(double valor) {
+        return BigDecimal.valueOf(valor).setScale(4, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
+    }
+
+    /**
+     * CENÁRIOS (§33): mesmos dados da carteira, PESOS de decisão diferentes. Não
+     * altera nada da carteira — só mostra como a distribuição mudaria se outro
+     * critério pesasse mais. Serve para o usuário ver o efeito antes de escolher.
+     */
+    private List<RankingAportesDTO.CenarioDTO> cenarios(MeusAtivosResponseDTO meus,
+                                                        ComparativoResponseDTO comparativo,
+                                                        Avaliacoes avaliacoes,
+                                                        AportesRecentes recentes,
+                                                        BigDecimal valorAporte,
+                                                        ScoreConfigModel config) {
+        if (valorAporte == null || valorAporte.signum() <= 0) {
+            return List.of();
+        }
+        List<RankingAportesDTO.CenarioDTO> cenarios = new ArrayList<>();
+        cenarios.add(cenario("Conservador",
+                "Prioriza qualidade e evita o que já passou do alvo.",
+                config, meus, comparativo, avaliacoes, recentes, valorAporte,
+                new BigDecimal("5"), new BigDecimal("2"), new BigDecimal("3"), new BigDecimal("1"), new BigDecimal("4")));
+        cenarios.add(cenario("Balanceado",
+                "Equilibra déficit, qualidade e momento (os seus pesos atuais).",
+                config, meus, comparativo, avaliacoes, recentes, valorAporte,
+                config.getPesoQuality(), config.getPesoDeficit(), config.getPesoExcesso(),
+                config.getPesoPrioridade(), config.getPesoMomento()));
+        cenarios.add(cenario("Estrutural",
+                "Prioriza fechar o déficit de quem está mais longe da meta.",
+                config, meus, comparativo, avaliacoes, recentes, valorAporte,
+                new BigDecimal("1"), new BigDecimal("6"), new BigDecimal("2"), new BigDecimal("1"), new BigDecimal("1")));
+        return cenarios;
+    }
+
+    private RankingAportesDTO.CenarioDTO cenario(String nome, String descricao, ScoreConfigModel base,
+                                                MeusAtivosResponseDTO meus, ComparativoResponseDTO comparativo,
+                                                Avaliacoes avaliacoes, AportesRecentes recentes,
+                                                BigDecimal valorAporte,
+                                                BigDecimal pesoQuality, BigDecimal pesoDeficit,
+                                                BigDecimal pesoExcesso, BigDecimal pesoPrioridade,
+                                                BigDecimal pesoMomento) {
+        ScoreConfigModel cfg = comPesos(base, pesoQuality, pesoDeficit, pesoExcesso,
+                pesoPrioridade, pesoMomento);
+
+        List<Candidato> cs = candidatos(meus, comparativo, avaliacoes, cfg, recentes);
+        cs.sort(Comparator.comparing(Candidato::contribution, Comparator.reverseOrder()));
+        Orcamento o = ratear(cs, comparativo, valorAporte, cfg);
+
+        String pesos = "qualidade " + fmt(pesoQuality) + " · déficit " + fmt(pesoDeficit)
+                + " · excesso " + fmt(pesoExcesso) + " · prioridade " + fmt(pesoPrioridade)
+                + " · momento " + fmt(pesoMomento);
+        if (o == null) {
+            return new RankingAportesDTO.CenarioDTO(nome, descricao, pesos,
+                    moeda(0d), valorAporte, List.of());
+        }
+        List<RankingAportesDTO.ItemCenarioDTO> top = new ArrayList<>();
+        for (int i = 0; i < cs.size() && top.size() < 5; i++) {
+            BigDecimal sugestao = o.porCandidato().get(i);
+            if (sugestao != null && sugestao.signum() > 0) {
+                top.add(new RankingAportesDTO.ItemCenarioDTO(cs.get(i).nome(), sugestao));
+            }
+        }
+        return new RankingAportesDTO.CenarioDTO(nome, descricao, pesos,
+                o.alocado(), valorAporte.subtract(o.alocado()), top);
+    }
+
+    /** Cópia TRANSITÓRIA da configuração com outros pesos (não persiste nada). */
+    private ScoreConfigModel comPesos(ScoreConfigModel base,
+                                      BigDecimal quality, BigDecimal deficit, BigDecimal excesso,
+                                      BigDecimal prioridade, BigDecimal momento) {
+        ScoreConfigModel cfg = new ScoreConfigModel();
+        cfg.setPesoQuality(quality);
+        cfg.setPesoDeficit(deficit);
+        cfg.setPesoExcesso(excesso);
+        cfg.setPesoPrioridade(prioridade);
+        cfg.setPesoMomento(momento);
+        cfg.setEstrategiaAporte(base.getEstrategiaAporte());
+        cfg.setRedistribuir(base.getRedistribuir());
+        cfg.setMomentoFaixa1(base.getMomentoFaixa1());
+        cfg.setMomentoFaixa2(base.getMomentoFaixa2());
+        cfg.setMomentoFaixa3(base.getMomentoFaixa3());
+        cfg.setMomentoFaixa4(base.getMomentoFaixa4());
+        return cfg;
     }
 
     /** Explicação legível do valor não alocado (§32) — nunca apenas "R$ X não alocado". */
