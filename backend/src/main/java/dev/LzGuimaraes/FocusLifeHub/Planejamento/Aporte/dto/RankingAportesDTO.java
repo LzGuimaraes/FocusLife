@@ -113,7 +113,11 @@ public final class RankingAportesDTO {
             BigDecimal sugestao_aporte,
 
             /** Explicação objetiva da decisão (§29). */
-            String motivo
+            String motivo,
+
+            /** Quanto este item já recebeu de aporte nos últimos 30 dias (§24). */
+            BigDecimal aportes_recentes,
+            Integer aportes_recentes_qtd
     ) {}
 
     /**

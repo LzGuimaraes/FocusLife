@@ -6,6 +6,7 @@ import Layout from "../components/Layout";
 import { PageHeader, EmptyState, Spinner } from "../components/UI";
 import { Button } from "../components/Shared";
 import RankingAportesTable from "../components/RankingAportesTable";
+import HistoricoAportesSection from "../components/HistoricoAportesSection";
 import HistoricoCarteiraSection from "../components/HistoricoCarteiraSection";
 import PlanejamentoNav from "../components/PlanejamentoNav";
 import type { CarteiraResumo } from "../types/planejamento";
@@ -31,6 +32,8 @@ export default function ProximosAportes() {
   const [ranking, setRanking] = useState<RankingAportes | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [calculando, setCalculando] = useState(false);
+  const [registrando, setRegistrando] = useState(false);
+  const [versaoHistorico, setVersaoHistorico] = useState(0);
 
   useEffect(() => {
     api.get("/carteiras-investimento/all?page=0&size=100")
@@ -67,6 +70,42 @@ export default function ProximosAportes() {
 
   const top = ranking?.itens.find(i => (i.sugestao_aporte ?? 0) > 0) ?? ranking?.itens[0];
   const moeda = ranking?.moeda ?? "BRL";
+
+  /**
+   * Registra no histórico o aporte que o usuário EXECUTOU, a partir da sugestão
+   * calculada. O motor passa a enxergar a concentração recente (§24).
+   */
+  const registrarAporte = async () => {
+    if (carteiraId == null || !ranking) return;
+    const itens = ranking.itens
+      .filter(i => (i.sugestao_aporte ?? 0) > 0)
+      .map(i => ({
+        ativo_cadastro_id: i.ativo_cadastro_id,
+        ativo_id: null,
+        ticker: i.ticker,
+        classe: i.classe,
+        valor: i.sugestao_aporte as number,
+      }));
+    if (itens.length === 0) {
+      toast.error("Não há sugestão para registrar — calcule um valor de aporte primeiro.");
+      return;
+    }
+    setRegistrando(true);
+    try {
+      const { data } = await api.post("/aportes/registrar", {
+        carteira_investimento_id: carteiraId,
+        observacao: "Registrado a partir da sugestão do sistema",
+        itens,
+      });
+      toast.success(`Aporte registrado! ${data.registrados} lançamento(s).`);
+      setVersaoHistorico(v => v + 1);
+      carregar(carteiraId, valor);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Erro ao registrar o aporte");
+    } finally {
+      setRegistrando(false);
+    }
+  };
 
   if (carregando) return <Layout><Spinner text="Carregando..." /></Layout>;
 
@@ -131,8 +170,21 @@ export default function ProximosAportes() {
       {calculando ? (
         <Spinner text="Calculando prioridade..." />
       ) : ranking ? (
-        <RankingAportesTable ranking={ranking} />
+        <>
+          <RankingAportesTable ranking={ranking} />
+          {ranking.itens.some(i => (i.sugestao_aporte ?? 0) > 0) && (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "10px" }}>
+              <Button onClick={registrarAporte} loading={registrando}>
+                ✅ Registrar aporte executado
+              </Button>
+            </div>
+          )}
+        </>
       ) : null}
+
+      <div style={{ marginTop: "16px" }}>
+        <HistoricoAportesSection carteiraId={carteiraId as number} recarregar={versaoHistorico} />
+      </div>
 
       <div style={{ marginTop: "16px" }}>
         <HistoricoCarteiraSection carteiraId={carteiraId as number} />

@@ -48,6 +48,7 @@ public class AporteService {
     private final ChecklistAtivoService checklistAtivoService;
     private final ScoreConfigService scoreConfigService;
     private final ScoreCalculator scoreCalculator;
+    private final dev.LzGuimaraes.FocusLifeHub.Planejamento.Historico.AporteRegistroService aporteRegistroService;
 
     /**
      * Piso de ruído do cálculo, em reais: 0,01% do patrimônio (nunca menos de
@@ -67,12 +68,14 @@ public class AporteService {
                          CarteiraIdealService carteiraIdealService,
                          ChecklistAtivoService checklistAtivoService,
                          ScoreConfigService scoreConfigService,
-                         ScoreCalculator scoreCalculator) {
+                         ScoreCalculator scoreCalculator,
+                         dev.LzGuimaraes.FocusLifeHub.Planejamento.Historico.AporteRegistroService aporteRegistroService) {
         this.carteiraLookup = carteiraLookup;
         this.carteiraIdealService = carteiraIdealService;
         this.checklistAtivoService = checklistAtivoService;
         this.scoreConfigService = scoreConfigService;
         this.scoreCalculator = scoreCalculator;
+        this.aporteRegistroService = aporteRegistroService;
     }
 
     /**
@@ -96,7 +99,7 @@ public class AporteService {
         ScoreConfigModel config = scoreConfigService.obterOuPadrao();
 
         Avaliacoes avaliacoes = avaliacoes(config);
-        List<Candidato> calculados = candidatos(meus, comparativo, avaliacoes, config);
+        List<Candidato> calculados = candidatos(meus, comparativo, avaliacoes, config, aportesRecentes(carteiraId));
         calculados.sort(Comparator
                 .comparing(Candidato::contribution, Comparator.reverseOrder())
                 // prioridade pode ser null (posição sem meta) — sem nullsLast, o
@@ -142,7 +145,9 @@ public class AporteService {
                     c.teto(),
                     c.prioridade(),
                     sugestao,
-                    motivo(c, sugestao)));
+                    motivo(c, sugestao),
+                    c.aportesRecentes(),
+                    c.aportesRecentesQtd()));
         }
 
         List<RankingAportesDTO.ClasseAporteDTO> classes = classesDto(
@@ -173,6 +178,63 @@ public class AporteService {
     }
 
     /* ── Cálculo ── */
+
+    /** Aportes dos últimos 30 dias de um item (§24). */
+    private record Recente(BigDecimal valor, int quantidade) {}
+
+    /** Índice dos aportes recentes por ticker e por posição. */
+    private record AportesRecentes(Map<UUID, Recente> porCatalogo, Map<Long, Recente> porPosicao) {
+        Recente de(UUID catalogoId, List<Long> ativoIds) {
+            if (catalogoId != null) {
+                Recente r = porCatalogo.get(catalogoId);
+                if (r != null) {
+                    return r;
+                }
+            }
+            for (Long ativoId : ativoIds) {
+                Recente r = porPosicao.get(ativoId);
+                if (r != null) {
+                    return r;
+                }
+            }
+            return new Recente(BigDecimal.ZERO, 0);
+        }
+    }
+
+    /**
+     * Aportes executados nos últimos 30 dias, indexados por ticker e por posição.
+     * É o sinal de CONCENTRAÇÃO RECENTE do §24: informa, não decide sozinho.
+     */
+    private AportesRecentes aportesRecentes(Long carteiraId) {
+        Map<UUID, java.util.List<BigDecimal>> catValores = new HashMap<>();
+        Map<UUID, Integer> catQtd = new HashMap<>();
+        Map<Long, java.util.List<BigDecimal>> posValores = new HashMap<>();
+        Map<Long, Integer> posQtd = new HashMap<>();
+
+        for (dev.LzGuimaraes.FocusLifeHub.Planejamento.Historico.AporteRegistroModel r
+                : aporteRegistroService.recentes(carteiraId)) {
+            BigDecimal valor = (r.getValor() != null) ? r.getValor() : BigDecimal.ZERO;
+            if (r.getAtivoCadastroId() != null) {
+                catValores.computeIfAbsent(r.getAtivoCadastroId(), k -> new ArrayList<>()).add(valor);
+                catQtd.merge(r.getAtivoCadastroId(), 1, Integer::sum);
+            } else if (r.getAtivoId() != null) {
+                posValores.computeIfAbsent(r.getAtivoId(), k -> new ArrayList<>()).add(valor);
+                posQtd.merge(r.getAtivoId(), 1, Integer::sum);
+            }
+        }
+
+        Map<UUID, Recente> porCatalogo = new HashMap<>();
+        catValores.forEach((id, valores) -> porCatalogo.put(id,
+                new Recente(somar(valores), catQtd.getOrDefault(id, 0))));
+        Map<Long, Recente> porPosicao = new HashMap<>();
+        posValores.forEach((id, valores) -> porPosicao.put(id,
+                new Recente(somar(valores), posQtd.getOrDefault(id, 0))));
+        return new AportesRecentes(porCatalogo, porPosicao);
+    }
+
+    private BigDecimal somar(java.util.List<BigDecimal> valores) {
+        return valores.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
 
     /**
      * Avaliação consolidada de um ativo: os DOIS eixos (qualidade e momento),
@@ -224,7 +286,8 @@ public class AporteService {
             BigDecimal percentualAtual, BigDecimal percentualIdeal,
             BigDecimal valorAtual, BigDecimal valorIdeal,
             BigDecimal deficit, BigDecimal excesso, BigDecimal tolerancia,
-            BigDecimal teto, Integer prioridade
+            BigDecimal teto, Integer prioridade,
+            BigDecimal aportesRecentes, int aportesRecentesQtd
     ) {}
 
     /** Orçamento do aporte já distribuído (classe → subclasse → setor → candidato). */
@@ -238,7 +301,8 @@ public class AporteService {
 
     /** Monta os candidatos (posições reais) com estado, teto e Contribution Score. */
     private List<Candidato> candidatos(MeusAtivosResponseDTO meus, ComparativoResponseDTO comparativo,
-                                       Avaliacoes avaliacoes, ScoreConfigModel config) {
+                                       Avaliacoes avaliacoes, ScoreConfigModel config,
+                                       AportesRecentes recentes) {
         double totalValor = nz(comparativo.valor_total());
         double tol = tolerancia(totalValor);
 
@@ -280,6 +344,7 @@ public class AporteService {
             double excesso = (temMeta && vAtual - vIdeal > tol) ? vAtual - vIdeal : 0d;
 
             Avaliacao avaliacao = avaliacoes.de(a.ativo_cadastro_id(), a.ativo_ids());
+            Recente recente = recentes.de(a.ativo_cadastro_id(), a.ativo_ids());
             BigDecimal tolerancia = (a.tolerancia() != null) ? a.tolerancia() : BigDecimal.ZERO;
 
             // TETO do ativo = déficit + tolerância (o que a meta dele ainda aceita),
@@ -317,7 +382,8 @@ public class AporteService {
                     a.percentual_atual(), a.percentual_ideal(),
                     moeda(vAtual), moeda(vIdeal),
                     moeda(deficit), moeda(excesso), tolerancia,
-                    moeda(teto), a.prioridade_manual()));
+                    moeda(teto), a.prioridade_manual(),
+                    recente.valor(), recente.quantidade()));
         }
         return lista;
     }
@@ -424,7 +490,11 @@ public class AporteService {
         return "Recebe " + formatar(sugestao) + " de um teto de " + formatar(c.teto())
                 + " (déficit " + formatar(c.deficit()) + " + tolerância " + formatar(c.tolerancia())
                 + "%) — estado " + c.estado().getLabel()
-                + ", fator de momento " + formatar(c.fator()) + ".";
+                + ", fator de momento " + formatar(c.fator())
+                + (c.aportesRecentesQtd() > 0
+                        ? ". Já recebeu " + formatar(c.aportesRecentes()) + " em "
+                          + c.aportesRecentesQtd() + " aporte(s) nos últimos 30 dias."
+                        : ".");
     }
 
     /** Onde entra o dinheiro: uma linha por classe (e suas subclasses). */
@@ -916,6 +986,15 @@ public class AporteService {
             alertas.add(new RankingAportesDTO.Alerta("SEM_SUBCLASSE", semTickerSemSubclasse
                     + " posição(ões) sem ticker fora de qualquer subclasse: classifique-as em Carteira Ideal "
                     + "para entrarem no alvo da classe."));
+        }
+
+        // §24: concentração RECENTE — quantas vezes o dinheiro já foi para o mesmo item.
+        for (Candidato c : candidatos) {
+            if (c.aportesRecentesQtd() >= 2) {
+                alertas.add(new RankingAportesDTO.Alerta("APORTE_RECENTE", c.nome() + " já recebeu "
+                        + formatar(c.aportesRecentes()) + " em " + c.aportesRecentesQtd()
+                        + " aporte(s) nos últimos 30 dias — confira antes de repetir."));
+            }
         }
 
         if (naoAlocado != null && naoAlocado.signum() > 0) {

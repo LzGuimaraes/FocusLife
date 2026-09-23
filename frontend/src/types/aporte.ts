@@ -120,6 +120,10 @@ export interface ItemRanking {
 
   /** Explicação objetiva da decisão (§29). */
   motivo: string | null;
+
+  /** Quanto este item já recebeu de aporte nos últimos 30 dias (§24). */
+  aportes_recentes: number;
+  aportes_recentes_qtd: number;
 }
 
 /** Setor dentro da subclasse (nível opcional): % é fatia da SUBCLASSE. */
@@ -189,6 +193,49 @@ export interface RankingAportes {
   alertas: Alerta[];
   classes: ClasseAporte[];
   itens: ItemRanking[];
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Histórico de aportes executados (§24).
+   ══════════════════════════════════════════════════════════════════════ */
+export interface AporteRegistro {
+  id: number;
+  data: string;
+  ativo_cadastro_id: string | null;
+  ativo_id: number | null;
+  ticker: string | null;
+  classe: string | null;
+  valor: number;
+  preco: number | null;
+  quantidade: number | null;
+  percentual_antes: number | null;
+  percentual_depois: number | null;
+  observacao: string | null;
+  created_at: string;
+}
+
+export interface AporteRegistroItemPayload {
+  ativo_cadastro_id: string | null;
+  ativo_id: number | null;
+  ticker: string | null;
+  classe: string | null;
+  valor: number;
+  preco?: number | null;
+  quantidade?: number | null;
+}
+
+export interface AporteRegistroPayload {
+  carteira_investimento_id: number;
+  data?: string | null;
+  observacao?: string | null;
+  itens: AporteRegistroItemPayload[];
+}
+
+export interface AporteRegistroResultado {
+  registrados: number;
+  valor_total: number;
+  data: string;
+  itens: AporteRegistro[];
 }
 
 export const ESTRATEGIAS_APORTE: { value: EstrategiaAporte; label: string; descricao: string }[] = [
