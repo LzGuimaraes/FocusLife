@@ -10,6 +10,7 @@ import MetasEditor, { type MetaDraft } from "../components/MetasEditor";
 import ComparativoTable from "../components/ComparativoTable";
 import { BarrasAtualIdeal, DistribuicaoAtualIdeal } from "../components/GraficosCarteiraIdeal";
 import PlanejamentoNav from "../components/PlanejamentoNav";
+import DiagnosticoFinanceiroBanner from "../components/DiagnosticoFinanceiroBanner";
 import { boxStyle, controlStyle, miniLabel } from "../components/FormStyles";
 import { novaChave } from "../utils/chaves";
 import { numParaTexto, textoParaNum } from "../utils/numeros";
@@ -263,6 +264,11 @@ export default function CarteiraIdealPage() {
         title="Carteira Ideal"
         subtitle="Classes, subclasses e metas dos seus ativos — a metodologia é sua, o sistema só organiza e calcula"
       />
+
+      {/* Se a carteira selecionada aparecer vazia, o mais provável é que as
+          posições tenham ficado sem vínculo numa migração antiga. */}
+      <DiagnosticoFinanceiroBanner mostrarSemPosicoes
+        onReparado={() => { if (selecionada != null) carregar(selecionada); }} />
 
       {/* ── Toolbar ── */}
       <div style={{ ...boxStyle, display: "flex", gap: "10px", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "16px" }}>

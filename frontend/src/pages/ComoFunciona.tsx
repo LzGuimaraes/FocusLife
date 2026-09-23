@@ -13,6 +13,20 @@ const features = [
     ],
   },
   {
+    icon: "🧩", title: "Recuperação de Carteiras Antigas",
+    color: "#b45309", bg: "#fffbeb",
+    desc: "As carteiras foram divididas em duas tabelas (investimentos e despesas) numa migração. Contas que ficaram sem vínculo desapareceram das telas — este diagnóstico acha e religa.",
+    steps: [
+      "O aviso aparece sozinho em Finanças e na Carteira Ideal quando existe algum registro sem carteira",
+      "O sintoma típico é uma carteira que abre vazia, com 'ainda não tem investimentos cadastrados', mesmo tendo dados",
+      "Diagnóstico por carteira: quantidade de posições e valor somado, para você ver onde está cada coisa",
+      "Recuperação em um clique: escolha para qual carteira as posições (e as despesas) devem voltar, ou deixe no automático",
+      "A recuperação só preenche o vínculo que está vazio — nenhum valor, nome ou data é alterado",
+      "Se nenhuma carteira existir, uma nova ('Investimentos recuperados') é criada para receber os dados",
+      "Sem registros órfãos, o aviso muda de tom: mostra o resumo por carteira e explica que basta cadastrar em Finanças",
+    ],
+  },
+  {
     icon: "📈", title: "6 Categorias de Investimento",
     color: "#8b5cf6", bg: "#f5f3ff",
     desc: "Sistema escalável com formulários condicionais — cada categoria exibe apenas os campos relevantes.",

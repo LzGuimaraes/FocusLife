@@ -14,4 +14,9 @@ public interface DespesaRepository extends JpaRepository<DespesaModel, Long> {
     List<DespesaModel> findByCarteiraDividasId(Long carteiraId);
     List<DespesaModel> findByPagoFalseAndDataVencimento(LocalDate dataVencimento);
     List<DespesaModel> findByCarteiraDividas_UserIdAndPagoFalseAndDataVencimento(Long userId, LocalDate dataVencimento);
+
+    /** Despesas sem carteira (dados legados): invisíveis em todas as telas. */
+    List<DespesaModel> findByCarteiraDividasIsNull();
+
+    long countByCarteiraDividasIsNull();
 }

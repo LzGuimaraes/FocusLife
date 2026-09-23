@@ -17,4 +17,13 @@ public interface AtivoRepository extends JpaRepository<AtivoModel, Long> {
 
     /** Posições do usuário, restritas a um conjunto de IDs (usado ao vincular ao catálogo). */
     List<AtivoModel> findByIdInAndCarteiraInvestimento_UserId(Collection<Long> ids, Long userId);
+
+    /**
+     * Posições SEM carteira (dados legados anteriores à divisão das carteiras).
+     * Como todo acesso a `ativo` passa pela carteira, uma linha assim fica
+     * invisível em todas as telas — é o que o diagnóstico financeiro detecta.
+     */
+    List<AtivoModel> findByCarteiraInvestimentoIsNull();
+
+    long countByCarteiraInvestimentoIsNull();
 }

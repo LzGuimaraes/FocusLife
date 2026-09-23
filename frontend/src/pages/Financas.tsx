@@ -9,6 +9,7 @@ import { Input, Select } from "../components/Form";
 import { Button } from "../components/Shared";
 import { Card, StatCard, Badge } from "../components/Shared";
 import { PageHeader, CardGrid, EmptyState, Spinner } from "../components/UI";
+import DiagnosticoFinanceiroBanner from "../components/DiagnosticoFinanceiroBanner";
 
 type TipoCarteira = "INVESTIMENTO" | "DESPESAS";
 // Após a divisão, cada carteira vive em uma tabela própria (carteira_investimento /
@@ -89,6 +90,10 @@ export default function Financas() {
   return (
     <Layout>
       <PageHeader icon="💰" title="Carteiras" subtitle="Gerencie suas carteiras de investimentos e despesas" actionLabel="Nova Carteira" onAction={() => openModal()} />
+
+      {/* Diagnóstico de dados legados: avisa (e permite reparar) posições que
+          ficaram sem carteira na migração que dividiu as carteiras. */}
+      <DiagnosticoFinanceiroBanner onReparado={fetchFinancas} />
 
       {/* ── Stats Row ── */}
       {!loading && (

@@ -16,10 +16,23 @@ public class ContextoUsuario {
 
     /** ID do usuário autenticado (JWT). Nunca retorna null em rota autenticada. */
     public Long id() {
+        return dados().userId();
+    }
+
+    /** Papel do usuário conforme o token (ex.: "ADMIN"). */
+    public String role() {
+        return dados().role();
+    }
+
+    public boolean isAdmin() {
+        return "ADMIN".equalsIgnoreCase(role());
+    }
+
+    private JWTUserData dados() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof JWTUserData dados)) {
             throw new ResourceNotFoundException("Usuário autenticado não encontrado");
         }
-        return dados.userId();
+        return dados;
     }
 }
