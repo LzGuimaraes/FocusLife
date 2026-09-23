@@ -64,6 +64,20 @@ export default function CarteiraIdealPage() {
       .catch(() => setEstrategias([]));
   }, []);
 
+  /* ── Garante SEMPRE uma carteira válida selecionada ──
+     O link do menu/hub (`/planejamento/carteira-ideal`, sem id) e ids antigos
+     deixavam `selecionada` nulo: NADA era carregado (configuração, comparativo
+     e meus-ativos) e a tela anunciava "esta carteira ainda não tem investimentos
+     cadastrados" com a carteira cheia — além de o Salvar virar um clique mudo.
+     Agora a primeira carteira é escolhida e a URL é corrigida sozinha. */
+  useEffect(() => {
+    if (carteiras.length === 0) return;
+    if (selecionada != null && carteiras.some(c => c.id === selecionada)) return;
+    const primeira = carteiras[0].id;
+    setSelecionada(primeira);
+    navigate(`/planejamento/carteira-ideal/${primeira}`, { replace: true });
+  }, [carteiras, selecionada, navigate]);
+
   /* ── Carrega a configuração + comparativo da carteira selecionada ── */
   const carregar = useCallback(async (id: number) => {
     setCarregando(true);
@@ -138,6 +152,10 @@ export default function CarteiraIdealPage() {
       setAvisos(ideal.avisos ?? []);
       setComparativo(compRes.data);
     } catch {
+      // Nunca deixar dados de OUTRA carteira na tela (e não usar o comparativo
+      // antigo): se a requisição falhar, a tela fica em estado neutro.
+      setMeusAtivos(null);
+      setComparativo(null);
       toast.error("Erro ao carregar a Carteira Ideal");
     } finally {
       setCarregando(false);
@@ -174,7 +192,10 @@ export default function CarteiraIdealPage() {
   };
 
   const handleSalvar = async () => {
-    if (selecionada == null) return;
+    if (selecionada == null) {
+      toast.error("Escolha uma carteira antes de salvar.");
+      return;
+    }
     const problema = validar();
     if (problema) {
       toast.error(problema);
@@ -254,7 +275,9 @@ export default function CarteiraIdealPage() {
 
   const soma = classes.reduce((s, c) => s + textoParaNum(c.percentual_ideal), 0);
   const carteiraAtual = carteiras.find(c => c.id === selecionada);
-  const semAtivos = (meusAtivos?.ativos.length ?? 0) === 0;
+  // Só afirma "sem investimentos" com a resposta do servidor em mãos: enquanto
+  // nada foi carregado não dá para saber (era isso que gerava o falso aviso).
+  const semAtivos = meusAtivos != null && meusAtivos.ativos.length === 0;
 
   return (
     <Layout>
