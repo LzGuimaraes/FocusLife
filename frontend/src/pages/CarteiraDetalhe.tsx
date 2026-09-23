@@ -214,6 +214,15 @@ export default function CarteiraDetalhe() {
               <button onClick={() => setViewMode("cards")} style={viewBtn(viewMode === "cards")} aria-label="Visualizar em cards">▦ Cards</button>
               <button onClick={() => setViewMode("list")} style={viewBtn(viewMode === "list")} aria-label="Visualizar em lista">☰ Lista</button>
             </div>
+            {isInvest && (
+              <button onClick={() => navigate(`/planejamento/carteira-ideal/${carteiraId}`)}
+                title="Definir a Carteira Ideal e as metas dos ativos desta carteira"
+                style={{ padding: "10px 16px", background: "#eef2ff", color: "#4338ca", border: "1.5px solid #c7d2fe", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: 600, whiteSpace: "nowrap", transition: "all 0.15s ease" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#e0e7ff"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "#eef2ff"; }}>
+                🎯 Planejar
+              </button>
+            )}
             <button onClick={() => openModal()}
               style={{ padding: "10px 18px", background: isInvest ? "#8b5cf6" : "#ef4444", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: 600, transition: "all 0.15s ease", whiteSpace: "nowrap" }}
               onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)"; }}

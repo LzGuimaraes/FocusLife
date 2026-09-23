@@ -24,6 +24,7 @@ import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.TipoAtivoCadastro;
 import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.dto.AtivoCadastroSyncDTO;
 import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraInvestimentoModel;
 import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraInvestimentoRepository;
+import dev.LzGuimaraes.FocusLifeHub.Exceptions.BusinessRuleException;
 import dev.LzGuimaraes.FocusLifeHub.Exceptions.ResourceNotFoundException;
 import dev.LzGuimaraes.FocusLifeHub.config.JWTUserData;
 import org.springframework.transaction.annotation.Transactional;
@@ -217,6 +218,45 @@ public class AtivoService {
     @Transactional
     public void deleteAllAtivos() {
         ativoRepository.deleteAllInBatch();
+    }
+
+    /**
+     * Vincula posições já existentes a um ativo do catálogo.
+     *
+     * Necessário para posições antigas (ou cadastradas sem o autocomplete) que
+     * ficaram sem `ativo_cadastro_id`: sem o vínculo elas aparecem na carteira,
+     * mas não podem ter meta individual na Carteira Ideal.
+     */
+    @Transactional
+    public int vincularCatalogo(List<Long> ativoIds, UUID ativoCadastroId) {
+        Long userId = getAuthenticatedUserId();
+
+        if (ativoIds == null || ativoIds.isEmpty()) {
+            throw new BusinessRuleException("Informe ao menos uma posição para vincular.");
+        }
+        if (ativoCadastroId == null) {
+            throw new BusinessRuleException("Informe o ativo do catálogo (ativo_cadastro_id).");
+        }
+
+        AtivoCadastroModel catalogo = resolveAtivoCadastro(ativoCadastroId);
+        List<AtivoModel> posicoes = ativoRepository
+                .findByIdInAndCarteiraInvestimento_UserId(ativoIds, userId);
+
+        if (posicoes.size() != ativoIds.size()) {
+            throw new ResourceNotFoundException(
+                    "Uma ou mais posições informadas não foram encontradas na sua carteira.");
+        }
+
+        for (AtivoModel posicao : posicoes) {
+            posicao.setAtivoCadastro(catalogo);
+            // Mesma convenção do autocomplete: o nome da posição acompanha o ticker.
+            posicao.setNome(catalogo.getNome());
+            if (posicao.getPrecoAtual() == null) {
+                posicao.setPrecoAtual(catalogo.getPrecoAtual());
+            }
+        }
+        ativoRepository.saveAll(posicoes);
+        return posicoes.size();
     }
 
     @Transactional

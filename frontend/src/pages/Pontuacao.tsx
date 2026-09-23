@@ -7,6 +7,7 @@ import { PageHeader, EmptyState, Spinner } from "../components/UI";
 import { Button, Badge } from "../components/Shared";
 import { NumberInput, Select } from "../components/Form";
 import RankingAportesTable from "../components/RankingAportesTable";
+import PlanejamentoNav from "../components/PlanejamentoNav";
 import type { CarteiraResumo } from "../types/planejamento";
 import type { RankingAportes, ScoreConfig, ScoreConfigPayload } from "../types/aporte";
 import { ESTRATEGIAS_APORTE } from "../types/aporte";
@@ -143,6 +144,7 @@ export default function Pontuacao() {
 
   return (
     <Layout>
+      <PlanejamentoNav ativo="pontuacao" />
       <PageHeader icon="⚙️" title="Pontuação"
         subtitle="Defina os pesos da sua prioridade de aporte — o sistema só aplica o que você configurar" />
 

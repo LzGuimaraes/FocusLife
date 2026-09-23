@@ -126,6 +126,12 @@ export default function Financas() {
                   <Button variant="ghost" size="sm" onClick={() => openModal(f)}>
                     <Pencil size={13} />
                   </Button>
+                  {f.tipo === "INVESTIMENTO" && (
+                    <Button variant="ghost" size="sm" onClick={() => navigate(`/planejamento/carteira-ideal/${f.id}`)}
+                      title="Planejar esta carteira (metas e carteira ideal)" aria-label={`Planejar ${f.nome}`}>
+                      🎯
+                    </Button>
+                  )}
                   <Button variant="ghost" size="sm" onClick={() => handleDuplicate(f)}
                     title="Duplicar carteira" aria-label={`Duplicar ${f.nome}`}>
                     <Copy size={13} />

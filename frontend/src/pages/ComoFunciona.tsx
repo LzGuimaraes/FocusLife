@@ -30,7 +30,7 @@ const features = [
     color: "#6366f1", bg: "#eef2ff",
     desc: "Visualize a composição da sua carteira de investimentos com gráficos de barra e percentuais.",
     steps: [
-      "Gráfico de barras horizontal mostrando cada categoria de investimento",
+      "Gráfico de barras horizontal por categoria na página da carteira (Finanças → abrir a carteira)",
       "Percentual de participação calculado automaticamente",
       "Valor total por categoria em tempo real",
       "Cálculo automático da posição: Preço Médio × Quantidade",
@@ -45,6 +45,7 @@ const features = [
       "Classes com percentual alvo (Ações, FIIs, Renda Fixa...): o sistema valida que a soma dá 100%",
       "Subclasses para detalhar dentro da classe (ex.: Ações → Bancos 10%, Energia 8%)",
       "Metas por ativo partem dos ATIVOS QUE VOCÊ JÁ TEM: cada linha já mostra o valor e o % atuais",
+      "Modelos prontos de partida (Conservador, Moderado, Arrojado, Dividendos) e botão 'Ajustar para 100%' quando faltar ou sobrar",
       "Atalho 'usar minha distribuição atual como alvo' preenche tudo de uma vez — depois você ajusta só o que discordar",
       "Gráficos de distribuição atual × ideal e de barras por classe, além do comparativo em tabela",
       "O comparativo inclui os ativos que ainda NÃO têm meta (marcados como 'sem meta'), para a leitura ser da carteira inteira",

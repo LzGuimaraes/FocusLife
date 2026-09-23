@@ -10,22 +10,35 @@ import dev.LzGuimaraes.FocusLifeHub.Ativo.CategoriaInvestimento;
  * Ativos que o usuário JÁ TEM na carteira (vindos das posições), para montar as
  * metas a partir do que existe — sem precisar recadastrar os ativos.
  *
- * Só entram posições vinculadas ao catálogo (`ativo_cadastro_id`), porque a
- * meta individual é por ticker. Posições sem vínculo (ex.: renda fixa) são
- * contadas em `posicoes_sem_catalogo` para a interface avisar o usuário — elas
- * continuam participando do cálculo por CLASSE normalmente.
+ * Inclui também as posições que NÃO estão vinculadas ao catálogo (renda fixa, ou
+ * ativo que ficou sem vínculo): elas aparecem agrupadas pelo nome, com
+ * `vinculado = false`, para o usuário entender por que não têm meta por ticker e
+ * — quando for o caso — vincular com um clique (`sugestao_catalogo_id`).
+ *
+ * Posições sem vínculo continuam participando do cálculo por CLASSE.
  */
 public record MeusAtivosResponseDTO(
         Long carteira_id,
         String moeda,
         BigDecimal valor_total,
+        /** Quantidade de POSIÇÕES (não de linhas) sem vínculo com o catálogo. */
         int posicoes_sem_catalogo,
         List<MeuAtivoDTO> ativos
 ) {
 
     public record MeuAtivoDTO(
+            /** null quando a posição (ou o grupo) não está vinculada ao catálogo. */
             UUID ativo_cadastro_id,
+            boolean vinculado,
+            /** Nome do ativo no catálogo quando vinculado; senão, o nome da posição. */
             String ticker,
+            /** Posições agrupadas nesta linha (permite vincular todas de uma vez). */
+            List<Long> ativo_ids,
+
+            /* ── Ajuda para vincular um ativo que ficou "solto" ── */
+            UUID sugestao_catalogo_id,
+            String sugestao_catalogo_nome,
+
             CategoriaInvestimento classe,
 
             /* ── Situação atual na carteira ── */

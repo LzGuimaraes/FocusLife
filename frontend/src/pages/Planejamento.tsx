@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import { PageHeader, CardGrid } from "../components/UI";
 import { Card, Badge } from "../components/Shared";
+import PlanejamentoNav from "../components/PlanejamentoNav";
 
 /* ══════════════════════════════════════════════════════════════════════
    Hub do módulo de Planejamento.
@@ -64,6 +65,7 @@ export default function Planejamento() {
 
   return (
     <Layout>
+      <PlanejamentoNav ativo="visao" />
       <PageHeader
         icon="📐"
         title="Planejamento"

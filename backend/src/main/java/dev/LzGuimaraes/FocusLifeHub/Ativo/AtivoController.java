@@ -2,6 +2,7 @@ package dev.LzGuimaraes.FocusLifeHub.Ativo;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -62,6 +63,19 @@ public class AtivoController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Vincula posições existentes a um ativo do catálogo. Usado pela tela de
+     * metas da Carteira Ideal para resolver posições antigas que ficaram sem
+     * `ativo_cadastro_id` (e por isso não podiam ter meta individual).
+     */
+    @PostMapping("/vincular-catalogo")
+    public ResponseEntity<Map<String, Integer>> vincularCatalogo(@RequestBody VincularCatalogoRequest body) {
+        int vinculadas = ativoService.vincularCatalogo(
+                (body != null) ? body.ativo_ids : null,
+                (body != null) ? body.ativo_cadastro_id : null);
+        return ResponseEntity.ok(Map.of("vinculadas", vinculadas));
+    }
+
     // Admin-only: bulk update prices for ativos
     @PostMapping("/admin/update-prices")
     public ResponseEntity<Void> bulkUpdatePrices(@RequestBody List<AtivoPriceUpdate> updates) {
@@ -80,4 +94,10 @@ public class AtivoController {
 class AtivoPriceUpdate {
     public Long ativoId;
     public Float precoAtual;
+}
+
+/** Corpo do vínculo de posições a um ativo do catálogo. */
+class VincularCatalogoRequest {
+    public List<Long> ativo_ids;
+    public UUID ativo_cadastro_id;
 }

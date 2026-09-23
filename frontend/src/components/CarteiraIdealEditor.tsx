@@ -1,6 +1,9 @@
+import { toast } from "sonner";
 import type { CategoriaInvestimento } from "../types/planejamento";
 import { CATEGORIAS, catInfo, fmtPercentual, somaFechada } from "../utils/percentual";
 import { novaChave } from "../utils/chaves";
+import { textoParaNum } from "../utils/numeros";
+import { MODELOS_PLANEJAMENTO, type ModeloPlanejamento } from "../utils/modelosPlanejamento";
 import { boxStyle, controlStyle, iconBtn, linkBtnStyle } from "./FormStyles";
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -39,9 +42,54 @@ interface Props {
 }
 
 export default function CarteiraIdealEditor({ classes, onChange }: Props) {
-  const soma = classes.reduce((s, c) => s + (parseFloat(c.percentual_ideal) || 0), 0);
+  // ATENÇÃO: usar `textoParaNum` (e não parseFloat) porque o usuário digita com
+  // vírgula — `parseFloat("12,5")` devolveria 12 e a soma sairia errada.
+  const soma = classes.reduce((s, c) => s + textoParaNum(c.percentual_ideal), 0);
   const usadas = classes.map(c => c.classe);
   const disponiveis = CATEGORIAS.filter(c => !usadas.includes(c.key));
+
+  /** Aplica um modelo pronto como ponto de partida (substitui as classes atuais). */
+  const aplicarModelo = (modelo: ModeloPlanejamento) => {
+    onChange(modelo.classes.map(c => ({
+      ...novaClasseDraft(c.classe),
+      percentual_ideal: c.percentual.toFixed(2).replace(".", ","),
+    })));
+    toast.success(`Modelo "${modelo.nome}" aplicado — revise os percentuais e ajuste o que quiser.`);
+  };
+
+  /** Leva a soma para exatamente 100% sem o usuário fazer conta. */
+  const ajustarPara100 = () => {
+    if (classes.length === 0) {
+      toast.info("Adicione ou aplique um modelo antes de ajustar.");
+      return;
+    }
+    if (somaFechada(soma)) {
+      toast.info("A soma das classes já está em 100%.");
+      return;
+    }
+    if (soma > 100) {
+      const fator = 100 / soma;
+      onChange(classes.map(c => ({
+        ...c,
+        percentual_ideal: (textoParaNum(c.percentual_ideal) * fator).toFixed(2).replace(".", ","),
+      })));
+      toast.success("Percentuais reduzidos proporcionalmente para somar 100%.");
+      return;
+    }
+    const falta = 100 - soma;
+    const indiceOutros = classes.findIndex(c => c.classe === "OUTROS");
+    if (indiceOutros >= 0) {
+      onChange(classes.map((c, i) => (i === indiceOutros
+        ? { ...c, percentual_ideal: (textoParaNum(c.percentual_ideal) + falta).toFixed(2).replace(".", ",") }
+        : c)));
+    } else {
+      onChange([...classes, {
+        ...novaClasseDraft("OUTROS"),
+        percentual_ideal: falta.toFixed(2).replace(".", ","),
+      }]);
+    }
+    toast.success(`Completei os ${falta.toFixed(2).replace(".", ",")}% que faltavam com "Outros".`);
+  };
 
   const atualizarClasse = (key: string, patch: Partial<ClasseDraft>) =>
     onChange(classes.map(c => (c.key === key ? { ...c, ...patch } : c)));
@@ -92,11 +140,37 @@ export default function CarteiraIdealEditor({ classes, onChange }: Props) {
         </p>
       )}
 
+      {classes.length === 0 && (
+        <div style={{ background: "#f8fafc", border: "1px dashed #e2e8f0", borderRadius: "10px", padding: "12px 14px", marginBottom: "12px" }}>
+          <p style={{ fontSize: "12px", fontWeight: 700, color: "#475569", margin: "0 0 8px" }}>
+            Comece por um modelo pronto (você edita tudo depois) ou monte do zero:
+          </p>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {MODELOS_PLANEJAMENTO.map(m => (
+              <button key={m.nome} type="button" onClick={() => aplicarModelo(m)}
+                title={m.descricao}
+                style={{ ...linkBtnStyle, borderStyle: "solid", borderColor: "#c7d2fe", color: "#4338ca", background: "white" }}>
+                {m.icon} {m.nome}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginBottom: "12px" }}>
+        <button type="button" onClick={ajustarPara100} style={linkBtnStyle}>
+          ⚖️ Ajustar para 100%
+        </button>
+        <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+          se faltar, completa com "Outros"; se passar, reduz proporcionalmente.
+        </span>
+      </div>
+
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         {classes.map((c, index) => {
           const info = catInfo(c.classe);
-          const somaSub = c.subclasses.reduce((s, x) => s + (parseFloat(x.percentual_ideal) || 0), 0);
-          const subExcede = somaSub > (parseFloat(c.percentual_ideal) || 0) + 0.01;
+          const somaSub = c.subclasses.reduce((s, x) => s + textoParaNum(x.percentual_ideal), 0);
+          const subExcede = somaSub > textoParaNum(c.percentual_ideal) + 0.01;
           return (
             <div key={c.key} style={{ border: "1px solid #e2e8f0", borderRadius: "10px", padding: "10px 12px", background: "#fcfdff" }}>
               <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>

@@ -10,6 +10,7 @@ import { Button, Card, Badge } from "../components/Shared";
 import ScoreBadge from "../components/ScoreBadge";
 import ChecklistExecucaoModal from "../components/ChecklistExecucaoModal";
 import HistoricoAtivoSection from "../components/HistoricoAtivoSection";
+import PlanejamentoNav from "../components/PlanejamentoNav";
 import type { AtivoAvaliado, Checklist, ModeloChecklistResumo, Pergunta } from "../types/checklist";
 import { tipoInfo } from "../utils/avaliacao";
 
@@ -130,6 +131,7 @@ export default function AvaliacaoAtivoDetalhe() {
 
   return (
     <Layout>
+      <PlanejamentoNav ativo="avaliacao" />
       <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "20px" }}>
         <button onClick={() => navigate("/avaliacao")} aria-label="Voltar"
           style={{ background: "#f1f5f9", border: "none", borderRadius: "8px", padding: "8px 12px", cursor: "pointer", fontSize: "16px", color: "#64748b" }}>←</button>

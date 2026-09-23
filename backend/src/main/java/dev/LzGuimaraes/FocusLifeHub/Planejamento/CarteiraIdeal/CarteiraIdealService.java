@@ -351,22 +351,30 @@ public class CarteiraIdealService {
         List<AtivoModel> posicoes = ativoRepository.findByCarteiraInvestimentoId(carteiraId);
         double total = posicoes.stream().mapToDouble(calculator::valorPosicao).sum();
 
-        Map<UUID, Acumulado> porTicker = new LinkedHashMap<>();
+        // Agrupa por ativo do catálogo quando vinculado; senão, pelo NOME da
+        // posição (é o que permite mostrar a renda fixa e ativos que ficaram
+        // sem vínculo, em vez de escondê-los da tela).
+        Map<String, Acumulado> porGrupo = new LinkedHashMap<>();
         int semCatalogo = 0;
         for (AtivoModel posicao : posicoes) {
-            if (posicao.getAtivoCadastro() == null || posicao.getAtivoCadastro().getId() == null) {
+            UUID catalogoId = (posicao.getAtivoCadastro() != null) ? posicao.getAtivoCadastro().getId() : null;
+            if (catalogoId == null) {
                 semCatalogo++;
-                continue;
             }
-            UUID cadastroId = posicao.getAtivoCadastro().getId();
-            Acumulado acumulado = porTicker.computeIfAbsent(cadastroId, k -> new Acumulado(
-                    posicao.getAtivoCadastro().getNome(),
+            String chave = (catalogoId != null)
+                    ? "cat:" + catalogoId
+                    : "nome:" + normalizarNome(posicao.getNome());
+
+            Acumulado acumulado = porGrupo.computeIfAbsent(chave, k -> new Acumulado(
+                    catalogoId,
+                    (posicao.getAtivoCadastro() != null) ? posicao.getAtivoCadastro().getNome() : posicao.getNome(),
                     (posicao.getCategoriaInvestimento() != null)
                             ? posicao.getCategoriaInvestimento()
                             : CategoriaInvestimento.OUTROS,
                     calculator.precoAtual(posicao)));
             acumulado.quantidade += (posicao.getQuantidade() != null) ? posicao.getQuantidade() : 0f;
             acumulado.valor += calculator.valorPosicao(posicao);
+            acumulado.ativoIds.add(posicao.getId());
         }
 
         Map<UUID, MetaAtivoModel> metasPorTicker = new LinkedHashMap<>();
@@ -377,13 +385,24 @@ public class CarteiraIdealService {
             }
         }
 
-        List<MeusAtivosResponseDTO.MeuAtivoDTO> ativos = porTicker.entrySet().stream()
-                .map(entrada -> {
-                    Acumulado acumulado = entrada.getValue();
-                    MetaAtivoModel meta = metasPorTicker.get(entrada.getKey());
+        List<MeusAtivosResponseDTO.MeuAtivoDTO> ativos = porGrupo.values().stream()
+                .map(acumulado -> {
+                    MetaAtivoModel meta = (acumulado.catalogoId != null)
+                            ? metasPorTicker.get(acumulado.catalogoId)
+                            : null;
+                    // Ativo sem vínculo: se existir um ticker com o MESMO nome no
+                    // catálogo, sugerimos vincular (um clique resolve).
+                    AtivoCadastroModel sugestao = (acumulado.catalogoId == null)
+                            ? ativoCadastroRepository.findByNomeIgnoreCase(acumulado.nome).orElse(null)
+                            : null;
+
                     return new MeusAtivosResponseDTO.MeuAtivoDTO(
-                            entrada.getKey(),
-                            acumulado.ticker,
+                            acumulado.catalogoId,
+                            acumulado.catalogoId != null,
+                            acumulado.nome,
+                            List.copyOf(acumulado.ativoIds),
+                            (sugestao != null) ? sugestao.getId() : null,
+                            (sugestao != null) ? sugestao.getNome() : null,
                             acumulado.classe,
                             BigDecimal.valueOf(acumulado.quantidade).setScale(8, RoundingMode.HALF_UP)
                                     .stripTrailingZeros(),
@@ -396,23 +415,32 @@ public class CarteiraIdealService {
                             (meta != null && meta.getSubclasse() != null) ? meta.getSubclasse().getId() : null,
                             (meta != null && meta.getSubclasse() != null) ? meta.getSubclasse().getNome() : null);
                 })
-                .sorted(Comparator.comparing(MeusAtivosResponseDTO.MeuAtivoDTO::valor_atual).reversed())
+                .sorted(Comparator.comparing(MeusAtivosResponseDTO.MeuAtivoDTO::vinculado).reversed()
+                        .thenComparing(MeusAtivosResponseDTO.MeuAtivoDTO::valor_atual, Comparator.reverseOrder()))
                 .toList();
 
         return new MeusAtivosResponseDTO(carteira.getId(), carteira.getMoeda(),
                 calculator.moeda(total), semCatalogo, ativos);
     }
 
-    /** Acumulador por ticker (o usuário pode ter mais de uma posição do mesmo ativo). */
+    /** Nome normalizado (agrupa posições sem vínculo que têm o mesmo nome). */
+    private String normalizarNome(String nome) {
+        return (nome == null) ? "" : nome.trim().toLowerCase();
+    }
+
+    /** Acumulador por ativo (o usuário pode ter mais de uma posição do mesmo ativo). */
     private static final class Acumulado {
-        private final String ticker;
+        private final UUID catalogoId;
+        private final String nome;
         private final CategoriaInvestimento classe;
         private final Float precoAtual;
+        private final List<Long> ativoIds = new ArrayList<>();
         private float quantidade;
         private double valor;
 
-        private Acumulado(String ticker, CategoriaInvestimento classe, Float precoAtual) {
-            this.ticker = ticker;
+        private Acumulado(UUID catalogoId, String nome, CategoriaInvestimento classe, Float precoAtual) {
+            this.catalogoId = catalogoId;
+            this.nome = nome;
             this.classe = classe;
             this.precoAtual = precoAtual;
         }

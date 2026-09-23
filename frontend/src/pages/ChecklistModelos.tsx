@@ -6,6 +6,7 @@ import Modal from "../components/Modal";
 import { Input, Select, TextArea } from "../components/Form";
 import { PageHeader, CardGrid, EmptyState, Spinner } from "../components/UI";
 import { Button, Card, Badge } from "../components/Shared";
+import PlanejamentoNav from "../components/PlanejamentoNav";
 import ChecklistBuilder from "../components/ChecklistBuilder";
 import {
   draftsParaPayloads, perguntaParaDraft, validarPerguntaDraft, type PerguntaDraft,
@@ -154,6 +155,7 @@ export default function ChecklistModelos() {
 
   return (
     <Layout>
+      <PlanejamentoNav ativo="modelos" />
       <PageHeader icon="🗂️" title="Modelos de Checklist"
         subtitle="Crie o molde da sua avaliação uma vez e aplique em quantos ativos quiser"
         actionLabel="Novo Modelo" onAction={abrirNovo} />

@@ -9,6 +9,7 @@ import CarteiraIdealEditor, { type ClasseDraft } from "../components/CarteiraIde
 import MetasEditor, { type MetaDraft } from "../components/MetasEditor";
 import ComparativoTable from "../components/ComparativoTable";
 import { BarrasAtualIdeal, DistribuicaoAtualIdeal } from "../components/GraficosCarteiraIdeal";
+import PlanejamentoNav from "../components/PlanejamentoNav";
 import { boxStyle, controlStyle, miniLabel } from "../components/FormStyles";
 import { novaChave } from "../utils/chaves";
 import { numParaTexto, textoParaNum } from "../utils/numeros";
@@ -89,10 +90,12 @@ export default function CarteiraIdealPage() {
       // existem no planejamento (ainda não comprados) entram como "planejado".
       const metasExistentes = ideal.metas ?? [];
       const daCarteira: MetaDraft[] = (meus.ativos ?? []).map(a => {
-        const meta = metasExistentes.find(m => m.ativo_cadastro_id === a.ativo_cadastro_id);
+        const meta = a.ativo_cadastro_id
+          ? metasExistentes.find(m => m.ativo_cadastro_id === a.ativo_cadastro_id)
+          : undefined;
         return {
           key: novaChave(),
-          ativo_cadastro_id: a.ativo_cadastro_id,
+          ativo_cadastro_id: a.ativo_cadastro_id ?? "",
           ticker: a.ticker,
           classe: a.classe,
           subclasse_nome: meta?.subclasse_nome ?? "",
@@ -100,6 +103,10 @@ export default function CarteiraIdealPage() {
           prioridade_manual: String(meta?.prioridade_manual ?? 0),
           incluir: meta != null,
           origem: "carteira",
+          vinculado: a.vinculado,
+          ativo_ids: a.ativo_ids ?? [],
+          sugestao_catalogo_id: a.sugestao_catalogo_id,
+          sugestao_catalogo_nome: a.sugestao_catalogo_nome,
           percentual_atual: a.percentual_atual,
           valor_atual: a.valor_atual,
         };
@@ -116,6 +123,10 @@ export default function CarteiraIdealPage() {
           prioridade_manual: String(m.prioridade_manual ?? 0),
           incluir: true,
           origem: "planejado" as const,
+          vinculado: true,
+          ativo_ids: [],
+          sugestao_catalogo_id: null,
+          sugestao_catalogo_nome: null,
           percentual_atual: null,
           valor_atual: null,
         }));
@@ -138,16 +149,18 @@ export default function CarteiraIdealPage() {
 
   /* ── Validação local (o backend valida de novo) ── */
   const validar = (): string | null => {
-    if (classes.length === 0) return "Adicione ao menos uma classe à Carteira Ideal.";
+    const somaClasses = classes.reduce((s, c) => s + textoParaNum(c.percentual_ideal), 0);
+    if (classes.length > 0 && !somaFechada(somaClasses)) {
+      return `A soma das classes está em ${somaClasses.toFixed(2).replace(".", ",")}% — precisa fechar em 100%. `
+        + "Use o botão \"Ajustar para 100%\" na parte de classes.";
+    }
     for (const c of classes) {
-      if (c.percentual_ideal.trim() === "") return "Informe o percentual ideal de todas as classes.";
+      if (c.percentual_ideal.trim() === "") return "Informe o percentual ideal de todas as classes (ou remova a classe).";
       for (const s of c.subclasses) {
         if (!s.nome.trim()) return "Toda subclasse precisa de um nome.";
         if (s.percentual_ideal.trim() === "") return `Informe o percentual da subclasse "${s.nome}".`;
       }
     }
-    const soma = classes.reduce((s, c) => s + textoParaNum(c.percentual_ideal), 0);
-    if (!somaFechada(soma)) return "A soma das classes deve ser 100%.";
     for (const m of metas.filter(x => x.incluir)) {
       if (!m.ativo_cadastro_id) return "Escolha o ativo de cada linha planejada (ou remova a linha).";
       if (m.percentual_ideal.trim() === "") return `Informe o % ideal de ${m.ticker || "cada ativo com meta"}.`;
@@ -204,6 +217,20 @@ export default function CarteiraIdealPage() {
     }
   };
 
+  /* ── Vinculação de posição sem catálogo (chamada pelo editor de metas) ── */
+  const vincular = async (ativoIds: number[], ativoCadastroId: string) => {
+    try {
+      await api.post("/ativos/vincular-catalogo", {
+        ativo_ids: ativoIds,
+        ativo_cadastro_id: ativoCadastroId,
+      });
+      toast.success("Posição vinculada ao catálogo! Agora ela pode ter meta por ativo.");
+      if (selecionada != null) carregar(selecionada);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Erro ao vincular a posição");
+    }
+  };
+
   /* ── Estados de tela ── */
   if (carregando && carteiras.length === 0) {
     return <Layout><Spinner text="Carregando..." /></Layout>;
@@ -225,15 +252,16 @@ export default function CarteiraIdealPage() {
   }
 
   const soma = classes.reduce((s, c) => s + textoParaNum(c.percentual_ideal), 0);
-  const podeSalvar = !salvando && (classes.length === 0 || somaFechada(soma));
   const carteiraAtual = carteiras.find(c => c.id === selecionada);
+  const semAtivos = (meusAtivos?.ativos.length ?? 0) === 0;
 
   return (
     <Layout>
+      <PlanejamentoNav ativo="carteira-ideal" />
       <PageHeader
         icon="🎯"
         title="Carteira Ideal"
-        subtitle="Classes, subclasses e metas de ativos — a metodologia é sua, o sistema só organiza e calcula"
+        subtitle="Classes, subclasses e metas dos seus ativos — a metodologia é sua, o sistema só organiza e calcula"
       />
 
       {/* ── Toolbar ── */}
@@ -266,13 +294,13 @@ export default function CarteiraIdealPage() {
           <button type="button" onClick={() => setAba("comparativo")} style={abaBtn(aba === "comparativo")}>📊 Comparativo</button>
         </div>
 
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px" }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           {classes.length > 0 && !somaFechada(soma) && (
             <span style={{ fontSize: "12px", color: "#b45309", fontWeight: 600 }}>
-              ⚠ A soma das classes está em {soma.toFixed(2).replace(".", ",")}%
+              ⚠ Classes em {soma.toFixed(2).replace(".", ",")}% — use "Ajustar para 100%"
             </span>
           )}
-          <Button onClick={handleSalvar} loading={salvando} disabled={!podeSalvar}>Salvar</Button>
+          <Button onClick={handleSalvar} loading={salvando}>Salvar</Button>
         </div>
       </div>
 
@@ -286,11 +314,23 @@ export default function CarteiraIdealPage() {
 
       {carregando ? <Spinner text="Carregando carteira..." /> : aba === "config" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {semAtivos && (
+            <div style={{ background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: "10px", padding: "12px 16px" }}>
+              <p style={{ fontSize: "13px", color: "#3730a3", margin: 0 }}>
+                <strong>Esta carteira ainda não tem investimentos cadastrados.</strong> Você pode aplicar um modelo pronto
+                e definir metas desde já, ou cadastrar seus investimentos em Finanças para que eles apareçam aqui automaticamente.
+              </p>
+              <button type="button" onClick={() => navigate("/financas")}
+                style={{ marginTop: "8px", background: "white", border: "1px solid #c7d2fe", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: 700, color: "#4338ca", cursor: "pointer" }}>
+                Cadastrar investimentos em Finanças →
+              </button>
+            </div>
+          )}
           <CarteiraIdealEditor classes={classes} onChange={setClasses} />
           <MetasEditor metas={metas} classes={classes} onChange={setMetas}
+            onVincular={vincular}
             moeda={meusAtivos?.moeda ?? "BRL"}
-            valorTotal={meusAtivos?.valor_total ?? 0}
-            posicoesSemCatalogo={meusAtivos?.posicoes_sem_catalogo ?? 0} />
+            valorTotal={meusAtivos?.valor_total ?? 0} />
         </div>
       ) : comparativo ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>

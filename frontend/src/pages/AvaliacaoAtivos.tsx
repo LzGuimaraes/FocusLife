@@ -8,6 +8,7 @@ import { Input, Select } from "../components/Form";
 import { PageHeader, CardGrid, EmptyState, Spinner, ProgressBar } from "../components/UI";
 import { Card, Badge } from "../components/Shared";
 import ScoreBadge from "../components/ScoreBadge";
+import PlanejamentoNav from "../components/PlanejamentoNav";
 import AtivoAutocomplete, { type AtivoCadastro } from "../components/AtivoAutocomplete";
 import type { AtivoAvaliado, ModeloChecklistResumo } from "../types/checklist";
 import { miniLabel } from "../components/FormStyles";
@@ -98,6 +99,7 @@ export default function AvaliacaoAtivos() {
 
   return (
     <Layout>
+      <PlanejamentoNav ativo="avaliacao" />
       <PageHeader icon="✅" title="Avaliação de Ativos"
         subtitle="Seus checklists e notas por ativo — a metodologia e os critérios são definidos por você"
         actionLabel="Nova Avaliação" onAction={abrirNovo} />

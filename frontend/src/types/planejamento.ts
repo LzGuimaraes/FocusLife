@@ -167,8 +167,16 @@ export interface ResumoIdeal {
 
 /* ── Ativos que o usuário já tem (base da tela de metas) ── */
 export interface MeuAtivo {
-  ativo_cadastro_id: string;
+  /** null quando a posição não está vinculada ao catálogo. */
+  ativo_cadastro_id: string | null;
+  /** false = posição sem vínculo (renda fixa, ou ativo que ficou sem catálogo). */
+  vinculado: boolean;
   ticker: string;
+  /** Posições agrupadas nesta linha (permite vincular todas de uma vez). */
+  ativo_ids: number[];
+  /** Catálogo com o MESMO nome — permite vincular com um clique. */
+  sugestao_catalogo_id: string | null;
+  sugestao_catalogo_nome: string | null;
   classe: CategoriaInvestimento;
   quantidade: number | null;
   preco_atual: number | null;
@@ -185,7 +193,7 @@ export interface MeusAtivos {
   carteira_id: number;
   moeda: string;
   valor_total: number;
-  /** Posições sem vínculo com o catálogo (ex.: renda fixa) — não têm meta por ticker. */
+  /** Quantidade de posições sem vínculo com o catálogo. */
   posicoes_sem_catalogo: number;
   ativos: MeuAtivo[];
 }

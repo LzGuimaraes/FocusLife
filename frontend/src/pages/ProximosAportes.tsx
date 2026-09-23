@@ -7,6 +7,7 @@ import { PageHeader, EmptyState, Spinner } from "../components/UI";
 import { Button } from "../components/Shared";
 import RankingAportesTable from "../components/RankingAportesTable";
 import HistoricoCarteiraSection from "../components/HistoricoCarteiraSection";
+import PlanejamentoNav from "../components/PlanejamentoNav";
 import type { CarteiraResumo } from "../types/planejamento";
 import type { RankingAportes } from "../types/aporte";
 import { boxStyle, controlStyle, miniLabel } from "../components/FormStyles";
@@ -82,6 +83,7 @@ export default function ProximosAportes() {
 
   return (
     <Layout>
+      <PlanejamentoNav ativo="aportes" />
       <PageHeader icon="💸" title="Próximos Aportes"
         subtitle="A ordem de prioridade e a sugestão de rateio segundo a sua metodologia"
         actionLabel="Ajustar pesos" onAction={() => navigate("/planejamento/pontuacao")} />
