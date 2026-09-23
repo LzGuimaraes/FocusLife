@@ -36,13 +36,16 @@ public class AtivoService {
     private final AtivoRepository ativoRepository;
     private final CarteiraInvestimentoRepository carteiraInvestimentoRepository;
     private final AtivoCadastroRepository ativoCadastroRepository;
+    private final dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSubclasseRepository subclasseRepository;
 
     public AtivoService(AtivoRepository ativoRepository,
                         CarteiraInvestimentoRepository carteiraInvestimentoRepository,
-                        AtivoCadastroRepository ativoCadastroRepository) {
+                        AtivoCadastroRepository ativoCadastroRepository,
+                        dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSubclasseRepository subclasseRepository) {
         this.ativoRepository = ativoRepository;
         this.carteiraInvestimentoRepository = carteiraInvestimentoRepository;
         this.ativoCadastroRepository = ativoCadastroRepository;
+        this.subclasseRepository = subclasseRepository;
     }
 
     private Long getAuthenticatedUserId() {
@@ -254,6 +257,74 @@ public class AtivoService {
             if (posicao.getPrecoAtual() == null) {
                 posicao.setPrecoAtual(catalogo.getPrecoAtual());
             }
+        }
+        ativoRepository.saveAll(posicoes);
+        return posicoes.size();
+    }
+
+    /**
+     * Atribui posições a uma SUBCLASSE da Carteira Ideal (V26).
+     *
+     * É o caminho da renda fixa, do Tesouro e das caixinhas: ativos sem ticker
+     * de catálogo ("Caixa PICPAY") não podem ter meta individual, mas precisam
+     * contar para o alvo da subclasse. A meta continua sendo o percentual da
+     * subclasse; aqui só dizemos a que subclasse cada posição pertence.
+     *
+     * Validações: a subclasse tem de ser de uma carteira do usuário; a posição
+     * também; e as duas têm de ser da MESMA carteira. Se a posição tiver
+     * categoria de investimento, ela tem de coincidir com a classe da subclasse
+     * (senão o total da classe e o da subclasse contariam coisas diferentes).
+     */
+    @Transactional
+    public int atribuirSubclasse(List<Long> ativoIds, Long subclasseId) {
+        Long userId = getAuthenticatedUserId();
+
+        if (ativoIds == null || ativoIds.isEmpty()) {
+            throw new BusinessRuleException("Informe ao menos uma posição para classificar.");
+        }
+
+        List<AtivoModel> posicoes = ativoRepository
+                .findByIdInAndCarteiraInvestimento_UserId(ativoIds, userId);
+        if (posicoes.size() != ativoIds.size()) {
+            throw new ResourceNotFoundException(
+                    "Uma ou mais posições informadas não foram encontradas na sua carteira.");
+        }
+
+        // subclasse_id nulo = REMOVER a classificação (volta a contar só no total da classe).
+        if (subclasseId == null) {
+            for (AtivoModel posicao : posicoes) {
+                posicao.setSubclasse(null);
+            }
+            ativoRepository.saveAll(posicoes);
+            return posicoes.size();
+        }
+
+        dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSubclasseModel subclasse =
+                subclasseRepository.findById(subclasseId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Subclasse com ID " + subclasseId + " não encontrada"));
+
+        CarteiraInvestimentoModel carteira = subclasse.getClasse().getCarteiraInvestimento();
+        if (carteira == null || carteira.getUser() == null || !carteira.getUser().getId().equals(userId)) {
+            throw new ResourceNotFoundException("Subclasse com ID " + subclasseId + " não encontrada");
+        }
+
+        for (AtivoModel posicao : posicoes) {
+            if (posicao.getCarteiraInvestimento() == null
+                    || !carteira.getId().equals(posicao.getCarteiraInvestimento().getId())) {
+                throw new BusinessRuleException("A posição \"" + posicao.getNome() + "\" pertence a outra carteira.");
+            }
+            CategoriaInvestimento categoria = posicao.getCategoriaInvestimento();
+            if (categoria != null && categoria != subclasse.getClasse().getClasse()) {
+                throw new BusinessRuleException("A posição \"" + posicao.getNome() + "\" é "
+                        + categoria + ", mas a subclasse \"" + subclasse.getNome() + "\" é de "
+                        + subclasse.getClasse().getClasse() + ". Ajuste a categoria da posição ou escolha "
+                        + "uma subclasse da mesma classe.");
+            }
+        }
+
+        for (AtivoModel posicao : posicoes) {
+            posicao.setSubclasse(subclasse);
         }
         ativoRepository.saveAll(posicoes);
         return posicoes.size();

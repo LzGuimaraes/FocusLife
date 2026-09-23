@@ -51,4 +51,18 @@ public class AtivoModel extends ItemFinanceiroModel {
     @JoinColumn(name = "carteira_investimento_id")
     @JsonIgnore
     private CarteiraInvestimentoModel carteiraInvestimento;
+
+    /**
+     * Subclasse da Carteira Ideal à qual esta POSIÇÃO pertence (V26).
+     *
+     * Existe para os ativos que não têm ticker de catálogo — renda fixa,
+     * Tesouro, caixinhas ("Caixa PICPAY"). Nesses casos a meta é o percentual
+     * da subclasse, e toda posição atribuída a ela conta para o alvo. Para
+     * ativos com ticker, o caminho normal continua sendo a meta
+     * (`meta_ativo.subclasse_id`); esta coluna é o fallback/override.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "subclasse_id")
+    @JsonIgnore
+    private dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSubclasseModel subclasse;
 }

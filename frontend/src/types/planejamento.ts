@@ -30,7 +30,6 @@ export interface SubclasseIdeal {
   percentual_ideal: number;
   ordem: number;
 }
-
 export interface ClasseIdeal {
   id: number;
   classe: CategoriaInvestimento;

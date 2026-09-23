@@ -95,6 +95,7 @@ export default function CarteiraIdealPage() {
         percentual_ideal: numParaTexto(c.percentual_ideal),
         subclasses: (c.subclasses ?? []).map(s => ({
           key: novaChave(),
+          id: s.id,
           nome: s.nome,
           percentual_ideal: numParaTexto(s.percentual_ideal),
         })),
@@ -122,6 +123,8 @@ export default function CarteiraIdealPage() {
           ativo_ids: a.ativo_ids ?? [],
           sugestao_catalogo_id: a.sugestao_catalogo_id,
           sugestao_catalogo_nome: a.sugestao_catalogo_nome,
+          subclasse_id: a.subclasse_id ?? null,
+          subclasse_nome_posicao: a.subclasse_nome ?? null,
           percentual_atual: a.percentual_atual,
           valor_atual: a.valor_atual,
         };
@@ -142,6 +145,8 @@ export default function CarteiraIdealPage() {
           ativo_ids: [],
           sugestao_catalogo_id: null,
           sugestao_catalogo_nome: null,
+          subclasse_id: null,
+          subclasse_nome_posicao: null,
           percentual_atual: null,
           valor_atual: null,
         }));
@@ -253,6 +258,22 @@ export default function CarteiraIdealPage() {
     }
   };
 
+  /* ── Classificação de posição sem ticker numa subclasse (chamada pelo MetasEditor) ── */
+  const atribuirSubclasse = async (ativoIds: number[], subclasseId: number | null) => {
+    try {
+      await api.post("/ativos/atribuir-subclasse", {
+        ativo_ids: ativoIds,
+        subclasse_id: subclasseId,
+      });
+      toast.success(subclasseId == null
+        ? "Classificação removida."
+        : "Posição classificada! Agora ela conta no alvo da subclasse.");
+      if (selecionada != null) carregar(selecionada);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Erro ao classificar a posição");
+    }
+  };
+
   /* ── Estados de tela ── */
   if (carregando && carteiras.length === 0) {
     return <Layout><Spinner text="Carregando..." /></Layout>;
@@ -358,6 +379,7 @@ export default function CarteiraIdealPage() {
           <CarteiraIdealEditor classes={classes} onChange={setClasses} />
           <MetasEditor metas={metas} classes={classes} onChange={setMetas}
             onVincular={vincular}
+            onAtribuirSubclasse={atribuirSubclasse}
             moeda={meusAtivos?.moeda ?? "BRL"}
             valorTotal={meusAtivos?.valor_total ?? 0} />
         </div>
@@ -376,7 +398,7 @@ export default function CarteiraIdealPage() {
       {carteiraAtual && (
         <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "14px" }}>
           Os valores atuais vêm das posições cadastradas em Finanças → {carteiraAtual.nome}.
-          Posições sem vínculo com o catálogo (ex.: renda fixa) entram na classe, mas não em metas por ticker.
+          Posições sem ticker (renda fixa, caixinhas) contam no total da classe e podem ser classificadas numa subclasse.
         </p>
       )}
     </Layout>

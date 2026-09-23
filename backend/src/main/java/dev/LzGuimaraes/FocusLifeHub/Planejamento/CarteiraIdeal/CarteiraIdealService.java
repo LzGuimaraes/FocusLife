@@ -216,6 +216,17 @@ public class CarteiraIdealService {
         Map<CategoriaInvestimento, List<MetaAtivoModel>> metasPorClasse = metas.stream()
                 .collect(Collectors.groupingBy(MetaAtivoModel::getClasse));
 
+        // Posição → subclasse. A atribuição EXPLÍCITA na posição (V26, o caminho
+        // da renda fixa/caixinhas sem ticker) tem prioridade; na falta dela, vale
+        // a subclasse da meta do ticker (caminho dos ativos com ticker).
+        Map<Long, Double> valorPorSubclasse = new HashMap<>();
+        for (AtivoModel posicao : ativoRepository.findByCarteiraInvestimentoId(carteiraId)) {
+            Long subclasseId = subclasseDaPosicao(posicao, metas);
+            if (subclasseId != null) {
+                valorPorSubclasse.merge(subclasseId, calculator.valorPosicao(posicao), Double::sum);
+            }
+        }
+
         BigDecimal soma = somarPercentuaisClasses(classes);
 
         // Classes do ideal + classes que existem só nas posições (para mostrar excesso).
@@ -243,17 +254,17 @@ public class CarteiraIdealService {
 
             List<ComparativoResponseDTO.SubclasseComparativoDTO> subDtos = new ArrayList<>();
             for (CarteiraIdealSubclasseModel sub : subsDaClasse) {
-                double vSubAtual = metasDaClasse.stream()
-                        .filter(m -> m.getSubclasse() != null && m.getSubclasse().getId().equals(sub.getId()))
-                        .filter(m -> m.getAtivoCadastro() != null)
-                        .mapToDouble(m -> valorPorTicker.getOrDefault(m.getAtivoCadastro().getId(), 0d))
-                        .sum();
-                double vSubIdeal = valorIdeal(sub.getPercentualIdeal(), total);
+                double vSubAtual = valorPorSubclasse.getOrDefault(sub.getId(), 0d);
+                // O percentual da subclasse é uma FATIA DA CLASSE (a soma das
+                // subclasses fecha em 100% da classe, não da carteira). Sem isto,
+                // uma subclasse de 60% aparecia como 60% do patrimônio inteiro e o
+                // déficit dela ficava inflado, estragando o rateio do aporte.
+                double vSubIdeal = valorIdeal(sub.getPercentualIdeal(), vIdeal);
                 subDtos.add(new ComparativoResponseDTO.SubclasseComparativoDTO(
                         sub.getId(),
                         sub.getNome(),
                         sub.getPercentualIdeal(),
-                        calculator.percentual(vSubAtual, total),
+                        calculator.percentual(vSubAtual, vAtual),
                         calculator.moeda(vSubIdeal),
                         calculator.moeda(vSubAtual),
                         calculator.moeda(Math.max(0d, vSubIdeal - vSubAtual)),
@@ -375,6 +386,10 @@ public class CarteiraIdealService {
             acumulado.quantidade += (posicao.getQuantidade() != null) ? posicao.getQuantidade() : 0f;
             acumulado.valor += calculator.valorPosicao(posicao);
             acumulado.ativoIds.add(posicao.getId());
+            // Renda fixa / caixinha: a subclasse vem da própria POSIÇÃO (V26).
+            if (acumulado.subclasse == null && posicao.getSubclasse() != null) {
+                acumulado.subclasse = posicao.getSubclasse();
+            }
         }
 
         Map<UUID, MetaAtivoModel> metasPorTicker = new LinkedHashMap<>();
@@ -396,6 +411,11 @@ public class CarteiraIdealService {
                             ? ativoCadastroRepository.findByNomeIgnoreCase(acumulado.nome).orElse(null)
                             : null;
 
+                    // A subclasse da LINHA: a da meta (ativos com ticker) ou a da
+                    // própria posição (renda fixa sem ticker, atribuída na V26).
+                    CarteiraIdealSubclasseModel subclasseLinha =
+                            (meta != null && meta.getSubclasse() != null) ? meta.getSubclasse() : acumulado.subclasse;
+
                     return new MeusAtivosResponseDTO.MeuAtivoDTO(
                             acumulado.catalogoId,
                             acumulado.catalogoId != null,
@@ -412,8 +432,8 @@ public class CarteiraIdealService {
                             (meta != null) ? meta.getId() : null,
                             (meta != null) ? meta.getPercentualIdeal() : null,
                             (meta != null) ? meta.getPrioridadeManual() : null,
-                            (meta != null && meta.getSubclasse() != null) ? meta.getSubclasse().getId() : null,
-                            (meta != null && meta.getSubclasse() != null) ? meta.getSubclasse().getNome() : null);
+                            (subclasseLinha != null) ? subclasseLinha.getId() : null,
+                            (subclasseLinha != null) ? subclasseLinha.getNome() : null);
                 })
                 .sorted(Comparator.comparing(MeusAtivosResponseDTO.MeuAtivoDTO::vinculado).reversed()
                         .thenComparing(MeusAtivosResponseDTO.MeuAtivoDTO::valor_atual, Comparator.reverseOrder()))
@@ -428,6 +448,28 @@ public class CarteiraIdealService {
         return (nome == null) ? "" : nome.trim().toLowerCase();
     }
 
+    /**
+     * Subclasse de uma POSIÇÃO: a atribuição explícita na posição manda; sem
+     * ela, vale a subclasse da meta do ticker (quando existe meta com subclasse).
+     * Devolve null quando a posição não está em nenhuma subclasse.
+     */
+    private Long subclasseDaPosicao(AtivoModel posicao, List<MetaAtivoModel> metas) {
+        if (posicao.getSubclasse() != null) {
+            return posicao.getSubclasse().getId();
+        }
+        if (posicao.getAtivoCadastro() == null) {
+            return null;
+        }
+        UUID ticker = posicao.getAtivoCadastro().getId();
+        for (MetaAtivoModel meta : metas) {
+            if (meta.getAtivoCadastro() != null && meta.getAtivoCadastro().getId().equals(ticker)
+                    && meta.getSubclasse() != null) {
+                return meta.getSubclasse().getId();
+            }
+        }
+        return null;
+    }
+
     /** Acumulador por ativo (o usuário pode ter mais de uma posição do mesmo ativo). */
     private static final class Acumulado {
         private final UUID catalogoId;
@@ -435,6 +477,7 @@ public class CarteiraIdealService {
         private final CategoriaInvestimento classe;
         private final Float precoAtual;
         private final List<Long> ativoIds = new ArrayList<>();
+        private CarteiraIdealSubclasseModel subclasse;
         private float quantidade;
         private double valor;
 

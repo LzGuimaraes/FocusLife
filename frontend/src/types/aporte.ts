@@ -46,9 +46,13 @@ export interface ScoreConfigPayload {
 export interface ItemRanking {
   posicao: number;
   ativo_cadastro_id: string | null;
-  meta_id: number;
+  meta_id: number | null;
   ticker: string | null;
   classe: CategoriaInvestimento;
+  /** false = posição sem ticker de catálogo (renda fixa, Tesouro, caixinha). */
+  vinculado: boolean;
+  subclasse_id: number | null;
+  subclasse_nome: string | null;
 
   /** Quality Score do ativo (Módulo 5) — null = ainda sem avaliação. */
   quality_score: number | null;
@@ -67,8 +71,34 @@ export interface ItemRanking {
   excesso: number;
   prioridade_manual: number;
 
-  /** Quanto deste aporte o ativo receberia (null quando nenhum valor foi informado). */
+  /** Quanto deste aporte este item receberia (null quando nenhum valor foi informado). */
   sugestao_aporte: number | null;
+}
+
+/** Onde o dinheiro entra, no nível da decisão: classe → subclasse. */
+export interface SubclasseAporte {
+  id: number;
+  nome: string;
+  percentual_atual: number;
+  percentual_ideal: number;
+  valor_atual: number;
+  valor_ideal: number;
+  deficit: number;
+  excesso: number;
+  sugerido: number;
+}
+
+export interface ClasseAporte {
+  classe: CategoriaInvestimento;
+  percentual_atual: number;
+  percentual_ideal: number;
+  valor_atual: number;
+  valor_ideal: number;
+  deficit: number;
+  excesso: number;
+  /** Quanto deste aporte a classe recebe (0 = já no alvo ou acima). */
+  sugerido: number;
+  subclasses: SubclasseAporte[];
 }
 
 export interface RankingAportes {
@@ -81,6 +111,7 @@ export interface RankingAportes {
   estrategia_aporte: EstrategiaAporte;
   termos: Termo[];
   avisos: string[];
+  classes: ClasseAporte[];
   itens: ItemRanking[];
 }
 

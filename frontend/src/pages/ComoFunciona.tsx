@@ -64,6 +64,7 @@ const features = [
       "Gráficos de distribuição atual × ideal e de barras por classe, além do comparativo em tabela",
       "O comparativo inclui os ativos que ainda NÃO têm meta (marcados como 'sem meta'), para a leitura ser da carteira inteira",
       "Prioridade manual de 0 a 10 por ativo, usada para desempatar a ordem dos aportes",
+      "Renda fixa, Tesouro e caixinhas (sem ticker) são classificados numa SUBCLASSE: assim entram no alvo da classe",
     ],
   },
   {
@@ -78,7 +79,10 @@ const features = [
       "Quality Score = soma ponderada DAS SUAS notas, com peso por pergunta e por checklist (sem nada respondido o score fica vazio, não zero)",
       "Contribution Score = prioridade de aporte, com os pesos que você define para qualidade, déficit, excesso e prioridade manual",
       "Histórico com gráfico de evolução (por ativo e por carteira) e registro idempotente: registrar duas vezes no mesmo dia atualiza o dia",
-      "Próximos Aportes: ordena a fila e rateia o valor que você pretende investir, sem passar do déficit de cada ativo",
+      "Próximos Aportes: o dinheiro é rateado por CLASSE → SUBCLASSE → ativo, com teto no déficit da classe",
+      "Classe no alvo (ou acima) não recebe aporte; dentro da classe em déficit, o ticker entra pelo Contribution Score",
+      "Sem déficit por ticker (metas que espelham a carteira atual), a divisão dentro da classe mantém a proporção que você já tem",
+      "O que não cabe em nenhuma classe fica como valor não alocado, em vez de ser empurrado para quem não precisa",
     ],
   },
   {

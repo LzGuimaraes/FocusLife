@@ -15,6 +15,8 @@ import { boxStyle, controlStyle, iconBtn, linkBtnStyle } from "./FormStyles";
 
 export interface SubclasseDraft {
   key: string;
+  /** ID no backend (null enquanto a subclasse não foi salva). */
+  id?: number | null;
   nome: string;
   percentual_ideal: string;
 }

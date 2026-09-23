@@ -38,6 +38,13 @@ export interface MetaDraft {
   ativo_ids: number[];
   sugestao_catalogo_id: string | null;
   sugestao_catalogo_nome: string | null;
+  /**
+   * Subclasse da Carteira Ideal atribuída À POSIÇÃO (renda fixa / sem ticker).
+   * É gravada na posição, não no payload da Carteira Ideal — vale para
+   * qualquer posição, com ou sem ticker.
+   */
+  subclasse_id: number | null;
+  subclasse_nome_posicao: string | null;
 
   /* ── Situação atual (informativo, vem das posições) ── */
   percentual_atual: number | null;
@@ -59,6 +66,8 @@ export function novaMetaPlanejada(classe: CategoriaInvestimento): MetaDraft {
     ativo_ids: [],
     sugestao_catalogo_id: null,
     sugestao_catalogo_nome: null,
+    subclasse_id: null,
+    subclasse_nome_posicao: null,
     percentual_atual: null,
     valor_atual: null,
   };
@@ -72,10 +81,12 @@ interface Props {
   onChange: (metas: MetaDraft[]) => void;
   /** Vincula posições sem catálogo a um ticker (um clique resolve). */
   onVincular: (ativoIds: number[], ativoCadastroId: string) => void;
+  /** Classifica posições sem ticker em uma subclasse da Carteira Ideal (null = remover). */
+  onAtribuirSubclasse: (ativoIds: number[], subclasseId: number | null) => void;
 }
 
 export default function MetasEditor({
-  metas, classes, moeda, valorTotal, onChange, onVincular,
+  metas, classes, moeda, valorTotal, onChange, onVincular, onAtribuirSubclasse,
 }: Props) {
   const [buscando, setBuscando] = useState<string | null>(null);
 
@@ -220,44 +231,73 @@ export default function MetasEditor({
       {semVinculo.length > 0 && (
         <div style={{ marginTop: "14px", borderTop: "1px solid #f1f5f9", paddingTop: "12px" }}>
           <p style={{ ...miniLabel, marginBottom: "6px" }}>
-            Na carteira, mas sem vínculo com o catálogo ({semVinculo.length})
+            Na carteira, mas sem ticker do catálogo ({semVinculo.length})
           </p>
           <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 8px" }}>
-            Sem um ticker do catálogo não existe meta por ativo — elas continuam contando no total da classe.
-            Se alguma for uma ação/FII que ficou sem vínculo, vincule para poder definir meta.
+            Renda fixa, Tesouro e caixinhas não têm ticker — então não existe meta por ativo. Classifique a posição
+            em uma <strong>subclasse</strong>: ela passa a contar no alvo da classe e entra na prioridade de aporte.
+            Se for ação/FII que ficou sem vínculo, vincule ao catálogo.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {semVinculo.map(m => (
-              <div key={m.key} style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", border: "1px solid #fde68a", background: "#fffbeb", borderRadius: "10px", padding: "8px 12px" }}>
-                <span style={{ fontSize: "13px", fontWeight: 700, color: "#92400e" }}>{m.ticker}</span>
-                <span style={{ fontSize: "11px", fontWeight: 600, color: "#b45309" }}>
-                  {fmtMoeda(m.valor_atual, moeda)} · {m.percentual_atual != null ? fmtPercentual(m.percentual_atual) : "—"}
-                </span>
-
-                {buscando === m.key ? (
-                  <div style={{ minWidth: "220px", flex: "1 1 220px" }}>
-                    <AtivoAutocomplete value="" onSelect={a => {
-                      onVincular(m.ativo_ids, a.id);
-                      setBuscando(null);
-                    }} />
+            {semVinculo.map(m => {
+              const info = catInfo(m.classe);
+              const subs = subclassesDaClasse(m.classe);
+              return (
+                <div key={m.key} style={{ display: "flex", gap: "10px", alignItems: "flex-end", flexWrap: "wrap", border: "1px solid #fde68a", background: "#fffbeb", borderRadius: "10px", padding: "8px 12px" }}>
+                  <div>
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#92400e", display: "block" }}>{m.ticker}</span>
+                    <span style={{ fontSize: "11px", fontWeight: 600, color: "#b45309" }}>
+                      {info.icon} {info.label} · {fmtMoeda(m.valor_atual, moeda)} · {m.percentual_atual != null ? fmtPercentual(m.percentual_atual) : "—"}
+                    </span>
                   </div>
-                ) : (
-                  <>
-                    {m.sugestao_catalogo_id && (
-                      <button type="button"
-                        onClick={() => onVincular(m.ativo_ids, m.sugestao_catalogo_id as string)}
-                        style={{ ...linkBtnStyle, borderStyle: "solid", borderColor: "#bbf7d0", color: "#047857", background: "white" }}>
-                        🔗 vincular a {m.sugestao_catalogo_nome}
+
+                  {subs.length === 0 ? (
+                    <span style={{ fontSize: "11px", color: "#b45309", maxWidth: "260px" }}>
+                      Crie e salve subclasses em {info.label} para poder classificar esta posição.
+                    </span>
+                  ) : (
+                    <div>
+                      <label style={miniLabel}>Subclasse de {info.label}</label>
+                      <select value={m.subclasse_id ?? ""}
+                        aria-label={`Subclasse de ${m.ticker}`}
+                        onChange={e => {
+                          const bruto = e.target.value;
+                          onAtribuirSubclasse(m.ativo_ids, bruto === "" ? null : Number(bruto));
+                        }}
+                        style={{ ...controlStyle, minWidth: "190px", fontSize: "12px" }}>
+                        <option value="">— sem subclasse —</option>
+                        {subs.map(s => (
+                          <option key={s.id} value={s.id as number}>{s.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {buscando === m.key ? (
+                    <div style={{ minWidth: "220px", flex: "1 1 220px" }}>
+                      <AtivoAutocomplete value="" onSelect={a => {
+                        onVincular(m.ativo_ids, a.id);
+                        setBuscando(null);
+                      }} />
+                    </div>
+                  ) : (
+                    <>
+                      {m.sugestao_catalogo_id && (
+                        <button type="button"
+                          onClick={() => onVincular(m.ativo_ids, m.sugestao_catalogo_id as string)}
+                          style={{ ...linkBtnStyle, borderStyle: "solid", borderColor: "#bbf7d0", color: "#047857", background: "white" }}>
+                          🔗 vincular a {m.sugestao_catalogo_nome}
+                        </button>
+                      )}
+                      <button type="button" onClick={() => setBuscando(m.key)}
+                        style={{ ...linkBtnStyle, color: "#64748b", borderColor: "#e2e8f0" }}>
+                        escolher outro ticker
                       </button>
-                    )}
-                    <button type="button" onClick={() => setBuscando(m.key)}
-                      style={{ ...linkBtnStyle, color: "#64748b", borderColor: "#e2e8f0" }}>
-                      escolher outro ticker
-                    </button>
-                  </>
-                )}
-              </div>
-            ))}
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

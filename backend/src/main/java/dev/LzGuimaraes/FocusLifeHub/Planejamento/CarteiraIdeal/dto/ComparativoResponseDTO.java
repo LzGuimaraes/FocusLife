@@ -16,8 +16,9 @@ import dev.LzGuimaraes.FocusLifeHub.Ativo.CategoriaInvestimento;
  *   • a lista de ativos de cada classe traz TAMBÉM os ativos que o usuário tem
  *     mas ainda não têm meta (possui_meta = false): o comparativo é da carteira
  *     real, não de um espaço paralelo;
- *   • na subclasse, o "atual" é a soma das posições dos ativos que possuem
- *     meta naquela subclasse (posições não são classificadas por subclasse);
+ *   • na SUBCLASSE, o percentual é uma FATIA DA CLASSE (as subclasses somam 100%
+ *     da classe) e o "atual" é a soma das posições daquela subclasse — incluindo
+ *     as que não têm ticker (renda fixa, caixinhas), atribuídas desde a V26;
  *   • classes presentes apenas nas posições aparecem com ideal = 0 (excesso);
  *     classes só no ideal aparecem com atual = 0 (déficit).
  */

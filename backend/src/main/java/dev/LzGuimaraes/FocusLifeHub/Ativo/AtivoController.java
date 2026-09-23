@@ -76,6 +76,20 @@ public class AtivoController {
         return ResponseEntity.ok(Map.of("vinculadas", vinculadas));
     }
 
+    /**
+     * Classifica posições SEM ticker (renda fixa, Tesouro, caixinhas) em uma
+     * subclasse da Carteira Ideal. A meta é o percentual da subclasse: com a
+     * posição atribuída, ela passa a contar para o alvo e para a prioridade de
+     * aporte — coisa que não era possível quando a meta exigia um ticker.
+     */
+    @PostMapping("/atribuir-subclasse")
+    public ResponseEntity<Map<String, Integer>> atribuirSubclasse(@RequestBody AtribuirSubclasseRequest body) {
+        int classificadas = ativoService.atribuirSubclasse(
+                (body != null) ? body.ativo_ids : null,
+                (body != null) ? body.subclasse_id : null);
+        return ResponseEntity.ok(Map.of("classificadas", classificadas));
+    }
+
     // Admin-only: bulk update prices for ativos
     @PostMapping("/admin/update-prices")
     public ResponseEntity<Void> bulkUpdatePrices(@RequestBody List<AtivoPriceUpdate> updates) {
@@ -100,4 +114,10 @@ class AtivoPriceUpdate {
 class VincularCatalogoRequest {
     public List<Long> ativo_ids;
     public UUID ativo_cadastro_id;
+}
+
+/** Corpo da classificação de posições em uma subclasse da Carteira Ideal. */
+class AtribuirSubclasseRequest {
+    public List<Long> ativo_ids;
+    public Long subclasse_id;
 }

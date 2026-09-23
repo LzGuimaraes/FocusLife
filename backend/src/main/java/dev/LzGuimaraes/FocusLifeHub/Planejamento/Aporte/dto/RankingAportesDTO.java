@@ -30,6 +30,10 @@ public final class RankingAportesDTO {
             Long meta_id,
             String ticker,
             CategoriaInvestimento classe,
+            /** false = posição sem ticker de catálogo (renda fixa, caixinha). */
+            boolean vinculado,
+            Long subclasse_id,
+            String subclasse_nome,
 
             /* ── Qualidade (Módulo 5) ── */
             BigDecimal quality_score,
@@ -52,6 +56,38 @@ public final class RankingAportesDTO {
             BigDecimal sugestao_aporte
     ) {}
 
+    /**
+     * Onde o dinheiro deve entrar: a CLASSE (e a subclasse) abaixo do alvo.
+     *
+     * A prioridade de aporte é decidida no nível da classe/subclasse — é ali
+     * que o usuário define a estratégia. O ticker entra depois, como destino
+     * dentro do orçamento já aprovado pela classe.
+     */
+    public record ClasseAporteDTO(
+            CategoriaInvestimento classe,
+            BigDecimal percentual_atual,
+            BigDecimal percentual_ideal,
+            BigDecimal valor_atual,
+            BigDecimal valor_ideal,
+            BigDecimal deficit,
+            BigDecimal excesso,
+            /** Quanto deste aporte a classe recebe (0 = já está no alvo ou acima). */
+            BigDecimal sugerido,
+            List<SubclasseAporteDTO> subclasses
+    ) {}
+
+    public record SubclasseAporteDTO(
+            Long id,
+            String nome,
+            BigDecimal percentual_atual,
+            BigDecimal percentual_ideal,
+            BigDecimal valor_atual,
+            BigDecimal valor_ideal,
+            BigDecimal deficit,
+            BigDecimal excesso,
+            BigDecimal sugerido
+    ) {}
+
     public record Response(
             Long carteira_id,
             String moeda,
@@ -62,6 +98,7 @@ public final class RankingAportesDTO {
             EstrategiaAporte estrategia_aporte,
             List<ScoreConfigDTO.Termo> termos,
             List<String> avisos,
+            List<ClasseAporteDTO> classes,
             List<Item> itens
     ) {}
 }
