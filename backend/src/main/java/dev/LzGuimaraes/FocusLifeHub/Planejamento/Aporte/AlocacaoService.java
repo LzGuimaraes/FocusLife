@@ -32,6 +32,21 @@ import dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.dto.ComparativoRe
 public class AlocacaoService {
 
     /**
+     * Rodadas de redistribuição entre níveis. Como cada rodada agora só oferece o
+     * que é ABSORVÍVEL (capacidade elegível), a convergência acontece na primeira
+     * ou segunda; o limite existe só para não girar à toa.
+     */
+    private static final int RODADAS = 6;
+
+    /**
+     * Meio centavo: o que importa para o TROCO. O piso de ruído (`tolerancia`) é
+     * outra coisa — ele existe para não tratar centavos de arredondamento de
+     * percentual como déficit de verdade, e usá-lo aqui descartaria troco real
+     * (R$ 0,51 some dentro de um piso de R$ 2,85 num patrimônio de R$ 28.500).
+     */
+    private static final double CENTAVO = 0.005;
+
+    /**
      * Piso de ruído do cálculo, em reais: 0,01% do patrimônio (nunca menos de
      * meio centavo). Percentual é guardado com 4 casas, então uma meta que
      * espelha a carteira difere do real em centavos — que com um piso fixo
@@ -50,12 +65,16 @@ public class AlocacaoService {
         double total = nz(comparativo.valor_total());
         double tol = tolerancia(total);
 
-        // Déficit de cada classe JÁ com a tolerância: dentro da faixa a classe
-        // conta como equilibrada e não puxa aporte.
+        // Déficit de cada classe em REAIS, direto do comparativo já projetado:
+        //
+        //     deficitClasse = max(0, alvoClasseProjetado − valorAtualClasse)
+        //
+        // (o `valor_ideal` do comparativo projetado É o `percentualIdeal × R`).
+        // Recalcular isso a partir dos percentuais redondados custava centavos e,
+        // pior, escondia a origem do número.
         Map<CategoriaInvestimento, Double> deficitClasse = new LinkedHashMap<>();
         for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
-            double deficit = deficit(c.percentual_ideal(), c.percentual_atual(), total)
-                    .doubleValue();
+            double deficit = Math.max(0d, nz(c.valor_ideal()) - nz(c.valor_atual()));
             if (deficit > tol) {
                 deficitClasse.put(c.classe(), deficit);
             }
@@ -79,18 +98,34 @@ public class AlocacaoService {
         // Rodadas: o valor que não achou destino elegível numa classe procura outra
         // classe com déficit. Sem isso, um ativo sem nota bloquearia o dinheiro.
         double restanteTotal = valorAporte.doubleValue();
-        for (int rodada = 0; rodada < 6 && restanteTotal > tol; rodada++) {
+        for (int rodada = 0; rodada < RODADAS && restanteTotal > tol; rodada++) {
             Map<CategoriaInvestimento, Double> capacidade = new LinkedHashMap<>();
+            Map<CategoriaInvestimento, List<Integer>> indicesPorClasse = new LinkedHashMap<>();
             for (Map.Entry<CategoriaInvestimento, Double> entrada : deficitClasse.entrySet()) {
-                double jaRecebeu = porClasse.getOrDefault(entrada.getKey(), moeda(0d)).doubleValue();
-                double sobra = entrada.getValue() - jaRecebeu;
-                if (sobra > tol) {
-                    capacidade.put(entrada.getKey(), sobra);
+                CategoriaInvestimento classe = entrada.getKey();
+                List<Integer> daClasse = indicesDaClasse(candidatos, classe);
+                if (daClasse.isEmpty()) {
+                    continue;   // classe com alvo e sem nenhum ativo: não tem por onde receber
+                }
+                double jaRecebeu = porClasse.getOrDefault(classe, moeda(0d)).doubleValue();
+
+                // A fatia da classe no rateio é o que os ATIVOS ELEGÍVEIS dela ainda
+                // absorvem — NUNCA o déficit do nível sozinho. Uma classe com déficit
+                // grande e ativos já no teto (ou sem ativo elegível) não pode reservar
+                // dinheiro que não tem onde entrar: era isso que diluía o fator em
+                // todas as rodadas e deixava sobra no fim, mesmo com outras classes
+                // ainda tendo capacidade.
+                double espacoNoNivel = entrada.getValue() - jaRecebeu;
+                double capacidadeElegivel = capacidadeElegivel(candidatos, daClasse, porCandidato);
+                double fatia = Math.min(espacoNoNivel, capacidadeElegivel);
+                if (fatia > tol) {
+                    capacidade.put(classe, fatia);
+                    indicesPorClasse.put(classe, daClasse);
                 }
             }
             double somaCapacidade = capacidade.values().stream().mapToDouble(Double::doubleValue).sum();
             if (somaCapacidade <= tol) {
-                break;
+                break;   // ninguém mais tem espaço: o que sobrar fica não alocado
             }
             double fator = Math.min(1d, restanteTotal / somaCapacidade);
             double distribuidoNaRodada = 0d;
@@ -98,15 +133,11 @@ public class AlocacaoService {
             for (Map.Entry<CategoriaInvestimento, Double> entrada : capacidade.entrySet()) {
                 CategoriaInvestimento classe = entrada.getKey();
                 double orcamentoClasse = Math.min(entrada.getValue(), entrada.getValue() * fator);
-
-                List<Integer> daClasse = indicesDaClasse(candidatos, classe);
-                if (daClasse.isEmpty()) {
-                    continue;   // classe com alvo e sem nenhum ativo: valor fica sem destino
-                }
+                List<Integer> daClasse = indicesPorClasse.get(classe);
 
                 List<ComparativoResponseDTO.SubclasseComparativoDTO> subs =
                         subsPorClasse.getOrDefault(classe, List.of()).stream()
-                                .filter(s -> capacidadeDaSubclasse(s, valorIdealClasse.getOrDefault(classe, 0d), tol) > 0)
+                                .filter(s -> capacidadeElegivelDaSubclasse(candidatos, daClasse, s, porCandidato) > tol)
                                 .toList();
 
                 double distribuido;
@@ -139,6 +170,7 @@ public class AlocacaoService {
         List<BigDecimal> quantidades = new ArrayList<>(Collections.nCopies(candidatos.size(), (BigDecimal) null));
         double sobra = arredondarParaUnidades(candidatos, porCandidato, quantidades);
         sobra = redistribuirTroco(candidatos, porCandidato, quantidades, sobra, tol);
+        sobra = absorverTrocoComFracao(candidatos, porCandidato, quantidades, sobra, tol);
 
         // Os totais por classe/subclasse saem do resultado FINAL (depois do
         // arredondamento e da redistribuição): antes eles eram somados rodada a
@@ -176,6 +208,42 @@ public class AlocacaoService {
     }
 
     /**
+     * CAPACIDADE ELEGÍVEL de um bucket: o quanto os ativos ELEGÍVEIS dele ainda
+     * conseguem absorver (capacidade do ativo menos o que ele já recebeu).
+     *
+     * É este número — e não o déficit do nível — que define a fatia do nível no
+     * rateio. Déficit da classe e capacidade elegível da classe são coisas
+     * diferentes: uma classe pode ter R$ 1.000 de déficit e R$ 0 de capacidade
+     * (todos os ativos no teto). Nesse caso ela não recebe, mas também NÃO pode
+     * segurar dinheiro que outras classes conseguiriam usar.
+     */
+    private double capacidadeElegivel(List<AporteCandidato> candidatos, List<Integer> indices,
+                                      List<BigDecimal> porCandidato) {
+        double soma = 0d;
+        for (int i : indices) {
+            AporteCandidato c = candidatos.get(i);
+            if (!c.elegivel()) {
+                continue;
+            }
+            soma += Math.max(0d, c.capacidade().doubleValue() - porCandidato.get(i).doubleValue());
+        }
+        return soma;
+    }
+
+    /**
+     * Capacidade elegível de uma SUBCLASSE: o menor valor entre o espaço que ainda
+     * falta para o alvo dela e o que os ativos elegíveis dela absorvem.
+     */
+    private double capacidadeElegivelDaSubclasse(List<AporteCandidato> candidatos, List<Integer> daClasse,
+                                                 ComparativoResponseDTO.SubclasseComparativoDTO sub,
+                                                 List<BigDecimal> porCandidato) {
+        List<Integer> daSub = daClasse.stream()
+                .filter(i -> sub.id().equals(candidatos.get(i).subclasseId()))
+                .toList();
+        return capacidadeElegivel(candidatos, daSub, porCandidato);
+    }
+
+    /**
      * Corta o valor sugerido no número INTEIRO de cotas que cabe nele.
      *
      * @return a sobra (dinheiro que não fecha uma cota) para redistribuir
@@ -204,13 +272,48 @@ public class AlocacaoService {
     }
 
     /**
-     * Devolve a sobra do arredondamento POR ORDEM DE NOTA: o candidato melhor
-     * avaliado que ainda tem espaço recebe quantas cotas couberem, e o que sobrar
-     * passa para o próximo. O que não fecha uma cota fica fora (é troco).
+     * Sobrou troco que não fecha uma COTA INTEIRA? Quem aceita FRAÇÃO (cripto,
+     * renda fixa, Tesouro) absorve — é dinheiro que pode ser investido e deixá-lo
+     * parado com capacidade disponível seria mentir sobre o aporte.
+     *
+     * O troco SÓ permanece quando ninguém tem espaço: aí ele é legítimo.
+     *
+     * @return o que não pôde ser alocado
+     */
+    private double absorverTrocoComFracao(List<AporteCandidato> candidatos, List<BigDecimal> porCandidato,
+                                          List<BigDecimal> quantidades, double sobra, double tol) {
+        if (sobra <= CENTAVO) {
+            return 0d;
+        }
+        for (int i = 0; i < candidatos.size() && sobra > CENTAVO; i++) {   // ordem = nota
+            AporteCandidato c = candidatos.get(i);
+            if (!c.elegivel() || compraEmUnidadesInteiras(c.classe())) {
+                continue;   // quem compra cota inteira não recebe fração de real
+            }
+            BigDecimal preco = c.precoUnitario();
+            double espaco = c.capacidade().doubleValue() - porCandidato.get(i).doubleValue();
+            if (espaco <= CENTAVO) {
+                continue;
+            }
+            double adicionar = Math.min(espaco, sobra);
+            porCandidato.set(i, moeda(porCandidato.get(i).doubleValue() + adicionar));
+            if (preco != null && preco.signum() > 0) {
+                quantidades.set(i, (quantidades.get(i) != null ? quantidades.get(i) : BigDecimal.ZERO)
+                        .add(BigDecimal.valueOf(adicionar / preco.doubleValue())));
+            }
+            sobra -= adicionar;
+        }
+        return sobra;
+    }
+
+    /**
+     * Devolve a sobra do arredondamento POR ORDEM DE NOTA, em COTAS INTEIRAS: o
+     * candidato melhor avaliado que ainda tem espaço recebe quantas cotas
+     * couberem, e o que sobrar passa para o próximo.
      */
     private double redistribuirTroco(List<AporteCandidato> candidatos, List<BigDecimal> porCandidato,
                                      List<BigDecimal> quantidades, double sobra, double tol) {
-        for (int rodada = 0; rodada < 4 && sobra > tol; rodada++) {
+        for (int rodada = 0; rodada < 4 && sobra > CENTAVO; rodada++) {
             boolean distribuiu = false;
             for (int i = 0; i < candidatos.size(); i++) {
                 AporteCandidato c = candidatos.get(i);
@@ -239,9 +342,15 @@ public class AlocacaoService {
     }
 
     /**
-     * Reparte o orçamento da classe entre as SUBCLASSES com alvo, proporcional ao
-     * espaço de cada uma (déficit + tolerância), e desce para os ativos de cada
-     * uma. A sobra da subclasse volta para os candidatos sem subclasse.
+     * Reparte o orçamento da classe entre as SUBCLASSES com espaço, proporcional à
+     * capacidade ELEGÍVEL de cada uma, e desce para os ativos de cada uma. A sobra
+     * da subclasse volta para os candidatos sem subclasse.
+     *
+     * Dois cuidados que já custaram caro:
+     *   • o espaço da subclasse é limitado pelo que os ATIVOS ELEGÍVEIS dela
+     *     absorvem (senão uma subclasse sem ativo elegível segura o dinheiro);
+     *   • o id da subclasse vai junto do grupo — antes o código usava
+     *     `subs.get(k)` enquanto pulava entradas, e creditava a subclasse errada.
      */
     private double distribuirEntreSubclasses(List<AporteCandidato> candidatos, List<Integer> daClasse,
                                              List<ComparativoResponseDTO.SubclasseComparativoDTO> subs,
@@ -250,18 +359,21 @@ public class AlocacaoService {
         List<Double> espacos = new ArrayList<>();
         List<Double> pesos = new ArrayList<>();
         List<List<Integer>> grupos = new ArrayList<>();
+        List<Long> ids = new ArrayList<>();
         for (ComparativoResponseDTO.SubclasseComparativoDTO sub : subs) {
-            double jaNaSub = porSubclasse.getOrDefault(sub.id(), moeda(0d)).doubleValue();
-            double espaco = Math.max(0d, capacidadeDaSubclasse(sub, valorIdealDaClasse, tol) - jaNaSub);
             List<Integer> indices = daClasse.stream()
                     .filter(i -> sub.id().equals(candidatos.get(i).subclasseId()))
                     .toList();
-            if (espaco <= tol || indices.stream().noneMatch(i -> candidatos.get(i).elegivel())) {
-                continue;
+            double jaNaSub = porSubclasse.getOrDefault(sub.id(), moeda(0d)).doubleValue();
+            double espacoNoNivel = Math.max(0d, capacidadeDaSubclasse(sub, valorIdealDaClasse, tol) - jaNaSub);
+            double espaco = Math.min(espacoNoNivel, capacidadeElegivel(candidatos, indices, porCandidato));
+            if (espaco <= tol) {
+                continue;   // sem alvo a preencher ou sem ativo elegível com espaço
             }
             espacos.add(espaco);
             pesos.add(espaco);
             grupos.add(indices);
+            ids.add(sub.id());
         }
         if (grupos.isEmpty()) {
             return 0d;
@@ -272,7 +384,7 @@ public class AlocacaoService {
         for (int k = 0; k < grupos.size(); k++) {
             double subDistribuido = distribuir(candidatos, grupos.get(k), cotas.get(k), tol, porCandidato);
             if (subDistribuido > 0d) {
-                porSubclasse.merge(subs.get(k).id(), moeda(subDistribuido), BigDecimal::add);
+                porSubclasse.merge(ids.get(k), moeda(subDistribuido), BigDecimal::add);
                 distribuido += subDistribuido;
             }
         }
