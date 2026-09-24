@@ -1,5 +1,6 @@
 import type { RankingAportes, StatusElegibilidade, StatusNivel, AcaoAtivo } from "../types/aporte";
-import { catInfo, fmtMoeda, fmtPercentual } from "../utils/percentual";
+import { catInfo, compraEmCotas, fmtMoeda, fmtPercentual } from "../utils/percentual";
+import { fmtUnidades } from "../utils/numeros";
 import { fmtScore, scoreBg, scoreColor } from "../utils/avaliacao";
 import { miniLabel } from "./FormStyles";
 /* ══════════════════════════════════════════════════════════════════════
@@ -135,7 +136,11 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
                       {acaoLabel(i.acao)}
                     </td>
                     <td style={{ ...td, textAlign: "right", color: "#475569" }}>{fmtPercentual(i.percentual_atual)}</td>
-                    <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#4338ca" }}>{fmtPercentual(i.percentual_ideal)}</td>
+                    <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#4338ca" }}>
+                      {i.meta_id == null
+                        ? <span title="Posição sem meta própria: o alvo dela é o da subclasse/classe" style={{ color: "#cbd5e1" }}>—</span>
+                        : fmtPercentual(i.percentual_ideal)}
+                    </td>
                     <td style={{ ...td, textAlign: "right", color: i.deficit > 0 ? "#1d4ed8" : "#cbd5e1" }}>
                       {fmtMoeda(i.deficit, moeda)}
                     </td>
@@ -143,6 +148,11 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
                     {comSugestao && (
                       <td style={{ ...td, textAlign: "right", fontWeight: 800, color: (i.sugestao_aporte ?? 0) > 0 ? "#047857" : "#cbd5e1" }}>
                         {fmtMoeda(i.sugestao_aporte ?? 0, moeda)}
+                        {i.quantidade != null && i.quantidade > 0 && (
+                          <div style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
+                            {fmtUnidades(i.quantidade, compraEmCotas(i.classe))} × {fmtMoeda(i.preco_unitario ?? 0, moeda)}
+                          </div>
+                        )}
                       </td>
                     )}
                   </tr>
@@ -209,7 +219,8 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
 
       <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "14px", marginBottom: 0 }}>
         A ordem do aporte é a <strong>nota do checklist</strong> (por subclasse, uma nota por ativo) ·
-        Capacidade = déficit + tolerância, respeitando o limite de concentração ·
+        A compra é em <strong>cotas inteiras</strong> (ação, FII e ETF) pelo preço atual — o valor de cada
+        ativo é arredondado para baixo e o que não fecha uma cota vira troco do próximo aporte ·
         Ninguém recebe mais do que falta: o que sobra fica não alocado.
         {ranking.valor_total_com_aporte != null && (
           <> Os alvos são calculados sobre o patrimônio <strong>depois</strong> do aporte

@@ -52,5 +52,12 @@ public record AporteCandidato(
         BigDecimal valorIdeal,
         BigDecimal deficit,
         BigDecimal excesso,
-        BigDecimal tolerancia
+        BigDecimal tolerancia,
+
+        /**
+         * Preço ATUAL da cota/unidade (catálogo quando vinculado). null = não se
+         * sabe o preço: nesse caso o valor sugerido não é arredondado para
+         * unidades inteiras, porque não há unidade para contar.
+         */
+        BigDecimal precoUnitario
 ) {}

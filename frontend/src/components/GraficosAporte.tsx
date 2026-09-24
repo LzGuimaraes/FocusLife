@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ItemRanking, RankingAportes } from "../types/aporte";
-import { catInfo, fmtMoeda, fmtPercentual } from "../utils/percentual";
+import { catInfo, compraEmCotas, fmtMoeda, fmtPercentual } from "../utils/percentual";
+import { fmtUnidades } from "../utils/numeros";
 
 /* ══════════════════════════════════════════════════════════════════════
    ROSCA DO APORTE — "onde este dinheiro vai entrar".
@@ -274,6 +275,12 @@ export default function DonutAporte({ ranking }: { ranking: RankingAportes }) {
                     <span style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
                       <strong>{fmtMoeda(a.valor, moeda)}</strong>
                       <span style={{ color: "#94a3b8" }}> · {fmtPercentual((a.valor / total) * 100)}</span>
+                      {a.item.quantidade != null && a.item.quantidade > 0 && (
+                        <span style={{ color: "#475569" }}>
+                          {" · "}{fmtUnidades(a.item.quantidade, compraEmCotas(a.item.classe))}
+                          {a.item.preco_unitario != null && ` × ${fmtMoeda(a.item.preco_unitario, moeda)}`}
+                        </span>
+                      )}
                     </span>
                   </div>
                 ))}

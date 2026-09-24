@@ -133,9 +133,109 @@ public class AlocacaoService {
             restanteTotal -= distribuidoNaRodada;
         }
 
+        // Arredonda para UNIDADES INTEIRAS (a compra é de cotas, não de frações
+        // de real) e devolve a sobra para quem tem a MELHOR NOTA — é a mesma
+        // preferência que decide a ordem do ranking.
+        List<BigDecimal> quantidades = new ArrayList<>(Collections.nCopies(candidatos.size(), (BigDecimal) null));
+        double sobra = arredondarParaUnidades(candidatos, porCandidato, quantidades);
+        sobra = redistribuirTroco(candidatos, porCandidato, quantidades, sobra, tol);
+
+        // Os totais por classe/subclasse saem do resultado FINAL (depois do
+        // arredondamento e da redistribuição): antes eles eram somados rodada a
+        // rodada, e o painel mostraria um valor que não é o que o ativo recebeu.
+        Map<CategoriaInvestimento, BigDecimal> totalPorClasse = new LinkedHashMap<>();
+        Map<Long, BigDecimal> totalPorSubclasse = new LinkedHashMap<>();
+        for (int i = 0; i < candidatos.size(); i++) {
+            BigDecimal valor = porCandidato.get(i);
+            if (valor.signum() <= 0) {
+                continue;
+            }
+            totalPorClasse.merge(candidatos.get(i).classe(), valor, BigDecimal::add);
+            if (candidatos.get(i).subclasseId() != null) {
+                totalPorSubclasse.merge(candidatos.get(i).subclasseId(), valor, BigDecimal::add);
+            }
+        }
+
         double alocado = porCandidato.stream().mapToDouble(BigDecimal::doubleValue).sum();
-        return new OrcamentoAporte(Map.copyOf(porClasse), Map.copyOf(porSubclasse),
-                List.copyOf(porCandidato), moeda(alocado));
+        // `quantidades` pode ter null (ativo sem preço conhecido) → List.copyOf
+        // recusaria a lista inteira por causa de um elemento nulo.
+        return new OrcamentoAporte(Map.copyOf(totalPorClasse), Map.copyOf(totalPorSubclasse),
+                List.copyOf(porCandidato), Collections.unmodifiableList(quantidades),
+                moeda(alocado), moeda(sobra));
+    }
+
+    /**
+     * A compra é de UNIDADES: ação, FII e ETF são cotas inteiras (ninguém compra
+     * 72,7 cotas); cripto, renda fixa e Tesouro aceitam fração, então o valor
+     * sugerido fica como está e a quantidade vira uma fração informativa.
+     */
+    public static boolean compraEmUnidadesInteiras(CategoriaInvestimento classe) {
+        return classe == CategoriaInvestimento.ACOES
+                || classe == CategoriaInvestimento.FIIS
+                || classe == CategoriaInvestimento.ETFS;
+    }
+
+    /**
+     * Corta o valor sugerido no número INTEIRO de cotas que cabe nele.
+     *
+     * @return a sobra (dinheiro que não fecha uma cota) para redistribuir
+     */
+    private double arredondarParaUnidades(List<AporteCandidato> candidatos, List<BigDecimal> porCandidato,
+                                          List<BigDecimal> quantidades) {
+        double sobra = 0d;
+        for (int i = 0; i < candidatos.size(); i++) {
+            AporteCandidato c = candidatos.get(i);
+            BigDecimal valor = porCandidato.get(i);
+            BigDecimal preco = c.precoUnitario();
+            if (valor.signum() <= 0 || preco == null || preco.signum() <= 0) {
+                continue;
+            }
+            if (!compraEmUnidadesInteiras(c.classe())) {
+                quantidades.set(i, valor.divide(preco, 8, RoundingMode.DOWN));
+                continue;
+            }
+            long unidades = (long) Math.floor(valor.doubleValue() / preco.doubleValue());
+            BigDecimal exato = moeda(preco.doubleValue() * unidades);
+            sobra += valor.doubleValue() - exato.doubleValue();
+            quantidades.set(i, BigDecimal.valueOf(unidades));
+            porCandidato.set(i, exato);
+        }
+        return sobra;
+    }
+
+    /**
+     * Devolve a sobra do arredondamento POR ORDEM DE NOTA: o candidato melhor
+     * avaliado que ainda tem espaço recebe quantas cotas couberem, e o que sobrar
+     * passa para o próximo. O que não fecha uma cota fica fora (é troco).
+     */
+    private double redistribuirTroco(List<AporteCandidato> candidatos, List<BigDecimal> porCandidato,
+                                     List<BigDecimal> quantidades, double sobra, double tol) {
+        for (int rodada = 0; rodada < 4 && sobra > tol; rodada++) {
+            boolean distribuiu = false;
+            for (int i = 0; i < candidatos.size(); i++) {
+                AporteCandidato c = candidatos.get(i);
+                BigDecimal preco = c.precoUnitario();
+                if (!c.elegivel() || preco == null || preco.signum() <= 0
+                        || !compraEmUnidadesInteiras(c.classe())) {
+                    continue;
+                }
+                double precoD = preco.doubleValue();
+                double espaco = c.capacidade().doubleValue() - porCandidato.get(i).doubleValue();
+                double cabem = Math.min(Math.floor(espaco / precoD), Math.floor(sobra / precoD));
+                if (cabem < 1d) {
+                    continue;
+                }
+                double adicionar = moeda(precoD * cabem).doubleValue();
+                porCandidato.set(i, moeda(porCandidato.get(i).doubleValue() + adicionar));
+                quantidades.set(i, quantidades.get(i).add(BigDecimal.valueOf((long) cabem)));
+                sobra -= adicionar;
+                distribuiu = true;
+            }
+            if (!distribuiu) {
+                break;
+            }
+        }
+        return sobra;
     }
 
     /**
@@ -295,10 +395,10 @@ public class AlocacaoService {
         return indices;
     }
 
-    /** Capacidade (R$) de uma subclasse: alvo em % DO IDEAL DA CLASSE + tolerância − atual. */
+    /** Capacidade (R$) de uma subclasse: alvo em % DO IDEAL DA CLASSE − atual. */
     private double capacidadeDaSubclasse(ComparativoResponseDTO.SubclasseComparativoDTO s,
                                          double valorIdealDaClasse, double tol) {
-        double alvo = nz(s.valor_ideal()) + nz(s.tolerancia()) / 100d * valorIdealDaClasse;
+        double alvo = nz(s.valor_ideal());
         return Math.max(0d, alvo - nz(s.valor_atual()));
     }
 

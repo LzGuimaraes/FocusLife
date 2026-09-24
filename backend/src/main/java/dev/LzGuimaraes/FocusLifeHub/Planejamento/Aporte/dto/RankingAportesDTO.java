@@ -96,6 +96,14 @@ public final class RankingAportesDTO {
 
             /** Quanto deste aporte o item recebeu (null quando nenhum valor foi informado). */
             BigDecimal sugestao_aporte,
+            /** Preço atual da cota (null = desconhecido). */
+            BigDecimal preco_unitario,
+            /**
+             * QUANTAS UNIDADES comprar: cotas inteiras para ação/FII/ETF e fração
+             * (8 casas) para cripto, renda fixa e Tesouro. null quando não há preço
+             * para contar.
+             */
+            BigDecimal quantidade,
             /** Explicação objetiva da decisão. */
             String motivo,
             AcaoAtivo acao

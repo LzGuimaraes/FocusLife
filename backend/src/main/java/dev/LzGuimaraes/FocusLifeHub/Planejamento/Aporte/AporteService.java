@@ -77,7 +77,7 @@ public class AporteService {
         // espelham o que já existe nunca tem déficit e o aporte fica sem destino.
         ComparativoResponseDTO referencia = comReferenciaDoAporte(comparativo, valorAporte);
 
-        List<AporteCandidato> calculados = candidatos(meus, referencia, notas);
+        List<AporteCandidato> calculados = candidatos(meus, referencia, nz(comparativo.valor_total()), notas);
 
         // Elegível primeiro (o descartado NÃO concorre), depois NOTA do checklist,
         // depois nome. É toda a ordenação que existe.
@@ -126,6 +126,8 @@ public class AporteService {
                     c.excesso(),
                     c.tolerancia(),
                     sugestao,
+                    c.precoUnitario(),
+                    quantidadeDe(c, sugestao),
                     motivo(c, sugestao),
                     acaoDe(c, sugestao)));
         }
@@ -144,7 +146,7 @@ public class AporteService {
                 naoAlocado,
                 totalElegiveis,
                 calculados.size() - totalElegiveis,
-                explicacaoNaoAlocado(naoAlocado, calculados),
+                explicacaoNaoAlocado(naoAlocado, calculados, orcamento),
                 avisos(referencia, calculados, itens),
                 alertas(calculados, itens, naoAlocado),
                 classesDto(referencia, calculados, (orcamento != null) ? orcamento.porClasse() : Map.of(),
@@ -300,9 +302,14 @@ public class AporteService {
        ══════════════════════════════════════════════════════════════════ */
 
     private List<AporteCandidato> candidatos(MeusAtivosResponseDTO meus, ComparativoResponseDTO comparativo,
-                                             Notas notas) {
+                                             double totalHoje, Notas notas) {
         double total = nz(comparativo.valor_total());
         double tol = AlocacaoService.tolerancia(total);
+        // O percentual ATUAL do item também é projetado para o patrimônio de
+        // DEPOIS do aporte (6.000 em 37.500 = 16%, não 21,82% de 27.500): senão a
+        // coluna "atual" diria uma coisa e o déficit, calculado no total novo,
+        // diria outra.
+        double fatorProjecao = (totalHoje > 0d && total > 0d) ? totalHoje / total : 1d;
 
         List<AporteCandidato> lista = new ArrayList<>();
         for (MeusAtivosResponseDTO.MeuAtivoDTO a : meus.ativos()) {
@@ -345,9 +352,10 @@ public class AporteService {
                     (nota != null) ? nota.bloqueios() : List.of(),
                     veredito.elegivel(), veredito.status(), veredito.motivos(),
                     a.limite_maximo(), limiteAtingido, capacidadeMoeda,
-                    a.percentual_atual(), a.percentual_ideal(),
+                    moeda(nz(a.percentual_atual()) * fatorProjecao), a.percentual_ideal(),
                     moeda(vAtual), moeda(vIdeal),
-                    moeda(deficit), moeda(excesso), tolerancia));
+                    moeda(deficit), moeda(excesso), tolerancia,
+                    a.preco_atual()));
         }
         return lista;
     }
@@ -546,13 +554,12 @@ public class AporteService {
             }
             if (algumElegivel && !algumaCapacidade) {
                 return "Tem déficit de " + formatar(falta)
-                        + ", mas os ativos da classe já estão no próprio alvo (déficit + tolerância) — "
-                        + "nada cabe aqui neste aporte. Aumente o alvo do ativo ou use a tolerância.";
+                        + ", mas os ativos da classe já estão no próprio alvo — nada cabe aqui neste aporte "
+                        + "(aumente o alvo do ativo para ele receber mais).";
             }
             if (!algumElegivel && soSemCapacidade > 0 && travados == 0) {
                 return "Tem déficit de " + formatar(falta)
-                        + ", mas os ativos da classe já estão no próprio alvo (déficit + tolerância) — "
-                        + "o dinheiro fica não alocado.";
+                        + ", mas os ativos da classe já estão no próprio alvo — o dinheiro fica não alocado.";
             }
             if (travados == 0) {
                 return "Tem déficit de " + formatar(falta)
@@ -571,6 +578,22 @@ public class AporteService {
        EXPLICAÇÕES, AVISOS E ALERTAS
        ══════════════════════════════════════════════════════════════════ */
 
+    /**
+     * QUANTAS UNIDADES comprar com o valor sugerido.
+     *
+     * Ação, FII e ETF são cotas INTEIRAS (o valor já vem arredondado para baixo
+     * pela alocação); cripto, renda fixa e Tesouro aceitam fração, então aqui a
+     * divisão é informativa (8 casas). Sem preço conhecido, não há quantidade.
+     */
+    private BigDecimal quantidadeDe(AporteCandidato c, BigDecimal sugestao) {
+        BigDecimal preco = c.precoUnitario();
+        if (sugestao == null || sugestao.signum() <= 0 || preco == null || preco.signum() <= 0) {
+            return null;
+        }
+        return sugestao.divide(preco,
+                AlocacaoService.compraEmUnidadesInteiras(c.classe()) ? 0 : 8, RoundingMode.DOWN);
+    }
+
     private RankingAportesDTO.AcaoAtivo acaoDe(AporteCandidato c, BigDecimal sugestao) {
         if (!c.elegivel()) {
             return (c.status() == StatusElegibilidade.SEM_AVALIACAO)
@@ -586,7 +609,7 @@ public class AporteService {
     /** Explicação objetiva da decisão (§29), do jeito mais curto que explique. */
     private String motivo(AporteCandidato c, BigDecimal sugestao) {
         String nota = (c.nota() != null)
-                ? "Nota " + formatar(c.nota()) + "% (" + c.respondidas() + "/" + c.perguntas() + " perguntas)"
+                ? "Nota " + percentual(c.nota()) + " (" + c.respondidas() + "/" + c.perguntas() + " perguntas)"
                 : "Sem nota no checklist";
         if (!c.elegivel()) {
             String primeiro = c.motivos().isEmpty() ? c.status().getLabel() : c.motivos().get(0);
@@ -596,7 +619,12 @@ public class AporteService {
             String teto = (c.limiteAtingido())
                     ? " Limite de concentração atingido: o resto vai para os próximos."
                     : " Respeita o teto de " + formatar(c.capacidade()) + ".";
-            return "Recebe " + formatar(sugestao) + " neste aporte. " + nota + "." + teto;
+            BigDecimal unidades = quantidadeDe(c, sugestao);
+            String compra = (unidades != null)
+                    ? " Compre " + unidadesTexto(unidades, c)
+                        + " a " + formatar(c.precoUnitario()) + " = " + formatar(sugestao) + "."
+                    : " Recebe " + formatar(sugestao) + " neste aporte.";
+            return compra + " " + nota + "." + teto;
         }
         if (sugestao == null) {
             return nota + ". Informe o valor do aporte para ver quanto entra.";
@@ -604,7 +632,28 @@ public class AporteService {
         return "Nada neste aporte: " + nota.toLowerCase() + ", mas o valor já foi direcionado a quem tem prioridade.";
     }
 
+    /** Unidades em texto: "72 cotas" ou "0,0031 unidades" (cripto/renda fixa). */
+    private String unidadesTexto(BigDecimal unidades, AporteCandidato c) {
+        String numero = unidades.stripTrailingZeros().toPlainString()
+                .replace(".", ",");
+        if (unidades.compareTo(BigDecimal.ONE) > 0) {
+            String plural = AlocacaoService.compraEmUnidadesInteiras(c.classe()) ? " cotas" : " unidades";
+            return numero + plural;
+        }
+        return AlocacaoService.compraEmUnidadesInteiras(c.classe())
+                ? numero + " cota"
+                : numero + " unidades";
+    }
+
     /** "R$ 1.234,56" — o texto das explicações. */
+    /** Nota em porcentagem: "90,0%". */
+    private String percentual(BigDecimal valor) {
+        if (valor == null) {
+            return "-";
+        }
+        return valor.setScale(1, RoundingMode.HALF_UP).toPlainString().replace(".", ",") + "%";
+    }
+
     private String formatar(BigDecimal valor) {
         if (valor == null) {
             return "-";
@@ -612,7 +661,29 @@ public class AporteService {
         return "R$ " + valor.setScale(2, RoundingMode.HALF_UP).toPlainString().replace(".", ",");
     }
 
-    private String explicacaoNaoAlocado(BigDecimal naoAlocado, List<AporteCandidato> candidatos) {
+    private String explicacaoNaoAlocado(BigDecimal naoAlocado, List<AporteCandidato> candidatos,
+                                        OrcamentoAporte orcamento) {
+        if (naoAlocado == null || naoAlocado.signum() <= 0) {
+            return null;
+        }
+        // Sobrou dinheiro e ALGUÉM ainda tinha espaço? Então o que travou foi a
+        // UNIDADE: o valor não fecha uma cota inteira do que sobrou com espaço.
+        for (int i = 0; i < candidatos.size(); i++) {
+            AporteCandidato c = candidatos.get(i);
+            BigDecimal preco = c.precoUnitario();
+            boolean temEspaco = orcamento != null
+                    && (orcamento.deCandidato(i).doubleValue() + 1e-9) < nz(c.capacidade());
+            if (c.elegivel() && temEspaco && preco != null && preco.signum() > 0) {
+                return "Sobraram " + formatar(naoAlocado) + ": é troco de arredondamento — não fecha uma "
+                        + "cota inteira dos ativos que ainda têm espaço (a cota mais barata deles custa "
+                        + formatar(preco) + "). Guarde para o próximo aporte.";
+            }
+        }
+        return explicacaoNaoAlocadoGenerica(naoAlocado, candidatos);
+    }
+
+    /** Sobra que não é troco de arredondamento: falta de espaço nos ativos. */
+    private String explicacaoNaoAlocadoGenerica(BigDecimal naoAlocado, List<AporteCandidato> candidatos) {
         if (naoAlocado == null || naoAlocado.signum() <= 0) {
             return null;
         }
@@ -622,7 +693,7 @@ public class AporteService {
             razoes.add(descartados + " ativo(s) foram descartados na elegibilidade (nível sem déficit, "
                     + "teto próprio, limite de concentração ou critério eliminatório do checklist)");
         }
-        razoes.add("os ativos elegíveis já estão completos (teto = déficit + tolerância)");
+        razoes.add("os ativos elegíveis já estão completos (teto = déficit do ativo)");
         return formatar(naoAlocado) + " sem destino neste aporte: " + String.join(" e ", razoes) + ".";
     }
 

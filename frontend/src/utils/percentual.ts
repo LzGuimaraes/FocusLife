@@ -29,6 +29,16 @@ const CATEGORIA_PADRAO = CATEGORIAS[CATEGORIAS.length - 1];
 export const catInfo = (classe: CategoriaInvestimento): CategoriaInfo =>
   CATEGORIAS.find(c => c.key === classe) ?? CATEGORIA_PADRAO;
 
+/**
+ * A classe é comprada em COTAS INTEIRAS?
+ *
+ * Ação, FII e ETF sim (ninguém compra 72,7 cotas); cripto, renda fixa e Tesouro
+ * aceitam fração, então a quantidade é informativa e com casas decimais.
+ * Mesma regra do backend (`AlocacaoService.compraEmUnidadesInteiras`).
+ */
+export const compraEmCotas = (classe: CategoriaInvestimento): boolean =>
+  classe === "ACOES" || classe === "FIIS" || classe === "ETFS";
+
 const MOEDA_SIMBOLO: Record<string, string> = {
   BRL: "R$", USD: "$", EUR: "€", GBP: "£", JPY: "¥",
 };

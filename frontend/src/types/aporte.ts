@@ -83,6 +83,13 @@ export interface ItemRanking {
 
   /** Quanto deste aporte o item recebeu (null quando nenhum valor foi informado). */
   sugestao_aporte: number | null;
+  /** Preço atual da cota (null = desconhecido). */
+  preco_unitario: number | null;
+  /**
+   * QUANTAS UNIDADES comprar: cotas INTEIRAS para ação/FII/ETF e fração
+   * (8 casas) para cripto, renda fixa e Tesouro. null quando não há preço.
+   */
+  quantidade: number | null;
   /** Explicação objetiva da decisão. */
   motivo: string | null;
   acao: AcaoAtivo;

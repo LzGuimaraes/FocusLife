@@ -19,3 +19,16 @@ export const textoParaNumOuNull = (v: string): number | null =>
 
 /** Mantém apenas dígitos, vírgula, ponto e sinal negativo. */
 export const apenasNumero = (v: string): string => v.replace(/[^0-9.,-]/g, "");
+
+/**
+ * Quantidade de unidades compradas: "72 cotas" (inteiro) ou "0,0031 un."
+ * (cripto/renda fixa, que aceitam fração). Singular/plural tratado.
+ */
+export const fmtUnidades = (quantidade: number, inteiro = true): string => {
+  const texto = quantidade.toLocaleString("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: inteiro ? 0 : 8,
+  });
+  if (!inteiro) return `${texto} un.`;
+  return `${texto} ${quantidade === 1 ? "cota" : "cotas"}`;
+};
