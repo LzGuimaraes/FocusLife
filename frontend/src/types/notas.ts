@@ -7,7 +7,13 @@
    ATIVO, tudo numa página: as listas de notas são ALINHADAS POR POSIÇÃO com a
    lista de perguntas (`notas[i]` = pergunta `i`), então o front desenha as
    colunas na ordem recebida.
+
+   O balde (`bucket`) é ONDE se dá nota: uma subclasse ou — para o que não tem
+   setor (cripto, renda fixa, Tesouro, caixinha) — a CLASSE INTEIRA, com o
+   checklist padrão do TIPO do ativo.
    ══════════════════════════════════════════════════════════════════════ */
+
+import type { CategoriaInvestimento } from "./planejamento";
 
 export interface NotaPergunta {
   id: number;
@@ -16,10 +22,23 @@ export interface NotaPergunta {
   ordem: number;
 }
 
+/** Onde dá para dar notas nesta carteira. */
+export interface NotaBucket {
+  slug: string;
+  nome: string;
+  classe: CategoriaInvestimento;
+  classe_label: string;
+  /** true = o balde é a classe inteira (o ativo não tem subclasse). */
+  classe_inteira: boolean;
+  qtd_ativos: number;
+}
+
 export interface NotaItem {
   ativo_cadastro_id: string | null;
   ativo_id: number | null;
   ticker: string | null;
+  /** Nome cadastrado na posição — mostrado abaixo do ticker. */
+  nome: string | null;
   checklist_id: number | null;
   /** Uma nota por pergunta (null = não respondida). */
   notas: (number | null)[];
@@ -30,6 +49,9 @@ export interface NotaItem {
 export interface NotasPainel {
   subclasse_slug: string;
   subclasse_nome: string;
+  classe: CategoriaInvestimento;
+  classe_label: string;
+  classe_inteira: boolean;
   modelo_id: number;
   modelo_nome: string;
   perguntas: NotaPergunta[];

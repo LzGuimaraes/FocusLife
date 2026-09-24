@@ -6,6 +6,7 @@ import Layout from "../components/Layout";
 import { PageHeader, EmptyState, Spinner } from "../components/UI";
 import { Button } from "../components/Shared";
 import RankingAportesTable from "../components/RankingAportesTable";
+import DonutAporte from "../components/GraficosAporte";
 import HistoricoAportesSection from "../components/HistoricoAportesSection";
 import HistoricoCarteiraSection from "../components/HistoricoCarteiraSection";
 import PlanejamentoNav from "../components/PlanejamentoNav";
@@ -171,7 +172,10 @@ export default function ProximosAportes() {
         <Spinner text="Calculando prioridade..." />
       ) : ranking ? (
         <>
-          <RankingAportesTable ranking={ranking} />
+          <DonutAporte ranking={ranking} />
+          <div style={{ marginTop: "16px" }}>
+            <RankingAportesTable ranking={ranking} />
+          </div>
           {ranking.itens.some(i => (i.sugestao_aporte ?? 0) > 0) && (
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "10px" }}>
               <Button onClick={registrarAporte} loading={registrando}>

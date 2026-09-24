@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../api/api";
@@ -8,20 +8,27 @@ import { Button } from "../components/Shared";
 import PlanejamentoNav from "../components/PlanejamentoNav";
 import { boxStyle, miniLabel, controlStyle } from "../components/FormStyles";
 import { catInfo } from "../utils/percentual";
-import type { CarteiraResumo, Comparativo, CategoriaInvestimento } from "../types/planejamento";
-import type { NotasPainel, NotasSalvas } from "../types/notas";
+import type { CarteiraResumo } from "../types/planejamento";
+import type { NotaBucket, NotasPainel, NotasSalvas } from "../types/notas";
 
 /* ══════════════════════════════════════════════════════════════════════
    NOTAS POR SUBCLASSE — a avaliação em UMA página.
 
-   Um checklist por SUBCLASSE ("Financeiro", "Bens Industriais") e uma nota por
-   EMPRESA: as perguntas são as colunas, os ativos são as linhas e cada célula
-   recebe uma nota de 0 a 10. Várias empresas do mesmo setor compartilham as
-   mesmas perguntas — é o que permite comparar duas delas.
+   Um checklist por BALDE e uma nota por ATIVO: as perguntas são as colunas, os
+   ativos são as linhas e cada célula recebe uma nota de 0 a 10. A nota final
+   (média das respostas, 0–100) é o que o motor de aporte usa para decidir quem
+   recebe primeiro.
 
-   A nota final de cada ativo (média das respostas, 0–100) é o que o motor de
-   aporte usa para decidir quem recebe primeiro. O checklist padrão (5 perguntas)
-   é criado sozinho na primeira vez que a subclasse é aberta.
+   O BALDE é onde se dá nota, e ele tem duas formas:
+     • SUBCLASSE — "Financeiro", "Bens Industriais": várias empresas do mesmo
+       setor respondem às MESMAS perguntas, o que permite comparar duas delas.
+     • CLASSE INTEIRA — cripto, renda fixa, Tesouro e caixinhas não têm setor,
+       então o balde é a própria classe. O checklist padrão vem do TIPO do ativo
+       ("paga dividendos?" é pergunta de ação, não de título público), e as
+       posições sem ticker entram na grade como qualquer outro ativo.
+
+   A lista de baldes vem do servidor (`/notas-subclasse/buckets`), montada a
+   partir da Carteira Ideal e da carteira real: nada é adivinhado aqui.
    ══════════════════════════════════════════════════════════════════════ */
 
 type Linha = {
@@ -29,7 +36,7 @@ type Linha = {
   ativo_cadastro_id: string | null;
   ativo_id: number | null;
   ticker: string;
-  classe: string;
+  nome: string | null;
   notas: (number | null)[];
   score: number | null;
 };
@@ -38,7 +45,7 @@ export default function NotasSubclasse() {
   const navigate = useNavigate();
   const [carteiras, setCarteiras] = useState<CarteiraResumo[]>([]);
   const [carteiraId, setCarteiraId] = useState<number | null>(null);
-  const [comparativo, setComparativo] = useState<Comparativo | null>(null);
+  const [buckets, setBuckets] = useState<NotaBucket[]>([]);
   const [slug, setSlug] = useState<string>("");
   const [painel, setPainel] = useState<NotasPainel | null>(null);
   const [linhas, setLinhas] = useState<Linha[]>([]);
@@ -57,94 +64,40 @@ export default function NotasSubclasse() {
       .finally(() => setCarregando(false));
   }, []);
 
-  /* ── Comparativo: é dele que saem as subclasses e os ativos de cada uma ── */
+  /* ── Baldes: subclasses + classes que não usam subclasse (cripto, RF...) ── */
   useEffect(() => {
     if (carteiraId == null) return;
-    api.get<Comparativo>(`/carteiras-investimento/${carteiraId}/ideal/comparativo`)
-      .then(r => setComparativo(r.data))
-      .catch(() => setComparativo(null));
+    api.get<NotaBucket[]>("/notas-subclasse/buckets", { params: { carteira_investimento_id: carteiraId } })
+      .then(r => {
+        setBuckets(r.data);
+        setSlug(prev => (r.data.some(b => b.slug === prev) ? prev : (r.data[0]?.slug ?? "")));
+      })
+      .catch(() => setBuckets([]));
   }, [carteiraId]);
 
-  /** Subclasses da carteira (com a classe de cada uma), na ordem da Carteira Ideal. */
-  const subclasses = useMemo(() => {
-    const lista: { nome: string; classe: CategoriaInvestimento }[] = [];
-    for (const c of comparativo?.classes ?? []) {
-      for (const s of c.subclasses ?? []) {
-        lista.push({ nome: s.nome, classe: c.classe });
-      }
-    }
-    return lista;
-  }, [comparativo]);
+  const bucketAtual = buckets.find(b => b.slug === slug) ?? null;
 
-  /** id da subclasse → nome (o comparativo referencia a subclasse por id). */
-  const subclasseDoAtivo = useCallback((subclasseId: number): string | null => {
-    for (const c of comparativo?.classes ?? []) {
-      for (const s of c.subclasses ?? []) {
-        if (s.id === subclasseId) return s.nome;
-      }
-    }
-    return null;
-  }, [comparativo]);
-
-  /* ── Escolhe a primeira subclasse ao trocar de carteira ── */
-  useEffect(() => {
-    if (subclasses.length > 0 && !subclasses.some(s => slugDe(s.nome) === slug)) {
-      setSlug(slugDe(subclasses[0].nome));
-    }
-  }, [subclasses, slug]);
-
-  const subclasseAtual = subclasses.find(s => slugDe(s.nome) === slug) ?? null;
-
-  /* ── Notas da subclasse escolhida ── */
-  const carregarNotas = useCallback(async (nome: string, meuSlug: string) => {
-    const { data } = await api.get<NotasPainel>(`/notas-subclasse/${meuSlug}`, { params: { nome } });
+  /* ── Notas do balde escolhido ── */
+  const carregarNotas = useCallback(async (alvo: NotaBucket) => {
+    const { data } = await api.get<NotasPainel>(`/notas-subclasse/${alvo.slug}`, {
+      params: { nome: alvo.nome, carteira_investimento_id: carteiraId },
+    });
     setPainel(data);
-
-    // Os ativos vêm do COMPARATIVO (a carteira real, não só quem já foi avaliado);
-    // as notas vêm do painel, casadas pelo ativo do catálogo.
-    const daSubclasse = (comparativo?.classes ?? [])
-      .flatMap(c => (c.ativos ?? []).map(a => ({ ...a, classe: c.classe })))
-      .filter(a => a.subclasse_id != null && subclasseDoAtivo(a.subclasse_id) === nome);
-
-    const conjunto = new Map<string, Linha>();
-    for (const a of daSubclasse) {
-      const chave = a.ativo_cadastro_id ?? `nome:${a.ticker}`;
-      conjunto.set(chave, {
-        chave,
-        ativo_cadastro_id: a.ativo_cadastro_id,
-        ativo_id: null,
-        ticker: a.ticker,
-        classe: a.classe,
-        notas: data.perguntas.map(() => null),
-        score: null,
-      });
-    }
-    for (const item of data.itens) {
-      const chave = item.ativo_cadastro_id ?? `id:${item.ativo_id}`;
-      const existente = conjunto.get(chave);
-      if (existente) {
-        existente.notas = normalizarNotas(item.notas, data.perguntas.length);
-        existente.score = item.score;
-      } else {
-        conjunto.set(chave, {
-          chave,
-          ativo_cadastro_id: item.ativo_cadastro_id,
-          ativo_id: item.ativo_id,
-          ticker: item.ticker ?? "—",
-          classe: "",
-          notas: normalizarNotas(item.notas, data.perguntas.length),
-          score: item.score,
-        });
-      }
-    }
-    setLinhas([...conjunto.values()]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [comparativo]);
+    setLinhas(data.itens.map(item => ({
+      chave: item.ativo_cadastro_id ?? `pos:${item.ativo_id}`,
+      ativo_cadastro_id: item.ativo_cadastro_id,
+      ativo_id: item.ativo_id,
+      ticker: item.ticker ?? item.nome ?? "—",
+      nome: item.nome,
+      notas: normalizarNotas(item.notas, data.perguntas.length),
+      score: item.score,
+    })));
+  }, [carteiraId]);
 
   useEffect(() => {
-    if (!subclasseAtual) return;
-    carregarNotas(subclasseAtual.nome, slug).catch(() => toast.error("Erro ao carregar as notas"));
-  }, [subclasseAtual, slug, carregarNotas]);
+    if (!bucketAtual) return;
+    carregarNotas(bucketAtual).catch(() => toast.error("Erro ao carregar as notas"));
+  }, [bucketAtual, carregarNotas]);
 
   const definirNota = (chave: string, i: number, valor: string) => {
     const numero = valor.trim() === "" ? null : Number(valor.replace(",", "."));
@@ -154,7 +107,7 @@ export default function NotasSubclasse() {
   };
 
   const salvar = async () => {
-    if (!painel || !subclasseAtual) return;
+    if (!painel || !bucketAtual) return;
     setSalvando(true);
     try {
       const itens = linhas
@@ -165,14 +118,16 @@ export default function NotasSubclasse() {
         return;
       }
       const { data } = await api.put<NotasSalvas>(`/notas-subclasse/${slug}`,
-        { subclasse_nome: subclasseAtual.nome, itens },
-        { params: { nome: subclasseAtual.nome } });
+        { subclasse_nome: bucketAtual.nome, itens },
+        { params: { nome: bucketAtual.nome, carteira_investimento_id: carteiraId } });
       toast.success(`Notas salvas para ${data.avaliados} ativo(s).`);
       // As notas finais vêm calculadas do servidor: nada de conta paralela na tela.
+      const porChave = new Map(data.itens.map(i => [i.ativo_cadastro_id ?? `pos:${i.ativo_id}`, i]));
       setLinhas(prev => prev.map(l => {
-        const atual = data.itens.find(i => i.ativo_cadastro_id === l.ativo_cadastro_id
-          && (i.ativo_id == null || i.ativo_id === l.ativo_id));
-        return atual ? { ...l, score: atual.score, notas: normalizarNotas(atual.notas, l.notas.length) } : l;
+        const atual = porChave.get(l.chave);
+        return atual
+          ? { ...l, score: atual.score, notas: normalizarNotas(atual.notas, l.notas.length) }
+          : l;
       }));
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Erro ao salvar as notas");
@@ -186,9 +141,9 @@ export default function NotasSubclasse() {
   if (carteiras.length === 0) {
     return (
       <Layout>
-        <PageHeader icon="📝" title="Notas por subclasse" subtitle="Uma nota por empresa, um checklist por setor" />
+        <PageHeader icon="📝" title="Notas" subtitle="Um checklist por tipo de ativo, uma nota por ativo" />
         <EmptyState icon="🎯" title="Nenhuma carteira de investimento"
-          text="As notas são dadas por subclasse da Carteira Ideal. Crie a carteira e as subclasses primeiro."
+          text="As notas são dadas por subclasse (ou por classe, quando o ativo não tem setor). Crie a carteira primeiro."
           actionLabel="Ir para a Carteira Ideal" onAction={() => navigate("/planejamento/carteira-ideal")} />
       </Layout>
     );
@@ -197,10 +152,10 @@ export default function NotasSubclasse() {
   return (
     <Layout>
       <PlanejamentoNav ativo="notas" />
-      <PageHeader icon="📝" title="Notas por subclasse"
-        subtitle="Um checklist por subclasse e uma nota para cada empresa — é essa nota que decide a ordem do aporte" />
+      <PageHeader icon="📝" title="Notas por tipo de ativo"
+        subtitle="Um checklist por subclasse — e, para cripto, renda fixa e Tesouro, o checklist do tipo do ativo" />
 
-      {/* ── Carteira + subclasse ── */}
+      {/* ── Carteira + balde ── */}
       <div style={{ ...boxStyle, display: "flex", gap: "12px", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "16px" }}>
         <div>
           <label style={miniLabel}>Carteira</label>
@@ -211,49 +166,57 @@ export default function NotasSubclasse() {
           </select>
         </div>
         <div>
-          <label style={miniLabel}>Subclasse</label>
-          <select value={slug} aria-label="Subclasse" disabled={subclasses.length === 0}
+          <label style={miniLabel}>Onde avaliar</label>
+          <select value={slug} aria-label="Subclasse ou tipo de ativo" disabled={buckets.length === 0}
             onChange={e => setSlug(e.target.value)}
-            style={{ ...controlStyle, minWidth: "240px", opacity: subclasses.length === 0 ? 0.5 : 1 }}>
-            {subclasses.length === 0 && <option value="">— sem subclasse na Carteira Ideal —</option>}
-            {subclasses.map(s => (
-              <option key={`${s.classe}:${s.nome}`} value={slugDe(s.nome)}>
-                {catInfo(s.classe).icon} {s.nome}
+            style={{ ...controlStyle, minWidth: "280px", opacity: buckets.length === 0 ? 0.5 : 1 }}>
+            {buckets.length === 0 && <option value="">— nada para avaliar nesta carteira —</option>}
+            {buckets.map(b => (
+              <option key={b.slug} value={b.slug}>
+                {catInfo(b.classe).icon} {b.classe_inteira ? `${b.classe_label} (sem subclasse)` : b.nome}
+                {` · ${b.qtd_ativos} ativo(s)`}
               </option>
             ))}
           </select>
         </div>
-        {subclasses.length === 0 && (
+        {bucketAtual?.classe_inteira && (
+          <span style={{ fontSize: "12px", color: "#0369a1", maxWidth: "420px" }}>
+            {bucketAtual.classe_label} não se divide em setores: o checklist é o do tipo do ativo e vale para toda a classe.
+          </span>
+        )}
+        {buckets.length === 0 && (
           <span style={{ fontSize: "12px", color: "#b45309" }}>
-            Crie subclasses na Carteira Ideal para avaliar por setor.
+            Monte a Carteira Ideal (classes, subclasses e metas) para os ativos aparecerem aqui.
           </span>
         )}
       </div>
 
-      {!painel || !subclasseAtual ? (
+      {!painel || !bucketAtual ? (
         <Spinner text="Carregando notas..." />
       ) : linhas.length === 0 ? (
-        <EmptyState icon="📝" title="Nenhum ativo nesta subclasse"
-          text="Coloque os ativos (ou as metas) nesta subclasse na Carteira Ideal para dar as notas." />
+        <EmptyState icon="📝" title="Nenhum ativo aqui ainda"
+          text={bucketAtual.classe_inteira
+            ? `Nenhum ativo de ${bucketAtual.classe_label} na carteira.`
+            : "Coloque os ativos (ou as metas) nesta subclasse na Carteira Ideal para dar as notas."} />
       ) : (
         <div style={boxStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "10px", flexWrap: "wrap" }}>
             <div>
               <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", margin: 0 }}>
-                {subclasseAtual.nome} · {painel.perguntas.length} perguntas
+                {catInfo(painel.classe).icon} {painel.subclasse_nome} · {painel.perguntas.length} perguntas
               </h3>
               <p style={{ fontSize: "12px", color: "#64748b", margin: "4px 0 0" }}>
-                Nota de 0 a pior / 10 a melhor em cada pergunta. A nota final é a média.
+                Nota de 0 (pior) a 10 (melhor) em cada pergunta. A nota final é a média das respostas.
               </p>
             </div>
             <Button onClick={salvar} loading={salvando}>Salvar notas</Button>
           </div>
 
           <div style={{ overflowX: "auto", marginTop: "14px" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", minWidth: `${240 + painel.perguntas.length * 118}px` }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", minWidth: `${260 + painel.perguntas.length * 118}px` }}>
               <thead>
                 <tr style={{ background: "#f8fafc" }}>
-                  <th style={{ ...th, textAlign: "left", minWidth: "170px" }}>Empresa</th>
+                  <th style={{ ...th, textAlign: "left", minWidth: "190px" }}>Ativo</th>
                   {painel.perguntas.map(p => (
                     <th key={p.id} style={{ ...th, textAlign: "center", maxWidth: "150px" }} title={p.titulo}>
                       {p.titulo}
@@ -265,7 +228,12 @@ export default function NotasSubclasse() {
               <tbody>
                 {linhas.map(l => (
                   <tr key={l.chave} style={{ borderTop: "1px solid #f1f5f9" }}>
-                    <td style={{ padding: "6px 10px", fontWeight: 700, color: "#0f172a" }}>{l.ticker}</td>
+                    <td style={{ padding: "6px 10px", color: "#0f172a" }}>
+                      <span style={{ fontWeight: 700 }}>{l.ticker}</span>
+                      {l.nome && l.nome.trim() !== l.ticker.trim() && (
+                        <span style={{ display: "block", fontSize: "11.5px", color: "#64748b" }}>{l.nome}</span>
+                      )}
+                    </td>
                     {painel.perguntas.map((p, i) => (
                       <td key={p.id} style={{ padding: "6px 8px", textAlign: "center" }}>
                         <input value={l.notas[i] ?? ""} inputMode="decimal"
@@ -286,8 +254,10 @@ export default function NotasSubclasse() {
           </div>
 
           <p style={{ fontSize: "11.5px", color: "#94a3b8", margin: "12px 0 0" }}>
-            As perguntas são as mesmas para todas as empresas desta subclasse — é o que permite comparar duas
-            empresas do mesmo setor. Quem não tem nota entra depois de quem foi avaliado.
+            {painel.classe_inteira
+              ? `As perguntas são o checklist padrão de ${painel.classe_label} (o mesmo para todos os ativos do tipo).`
+              : "As perguntas são as mesmas para todas as empresas desta subclasse — é o que permite comparar duas empresas do mesmo setor."}
+            {" "}Quem não tem nota entra depois de quem foi avaliado.
           </p>
         </div>
       )}
@@ -296,12 +266,6 @@ export default function NotasSubclasse() {
 }
 
 /* ── Apoio ── */
-
-/** Nome normalizado da subclasse: a mesma regra do backend. */
-function slugDe(nome: string): string {
-  return nome.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-}
 
 /** Garante que a lista de notas tenha o tamanho das perguntas. */
 function normalizarNotas(notas: (number | null)[] | undefined, tamanho: number): (number | null)[] {

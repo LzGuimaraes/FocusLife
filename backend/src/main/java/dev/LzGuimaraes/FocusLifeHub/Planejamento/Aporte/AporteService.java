@@ -140,7 +140,7 @@ public class AporteService {
                 explicacaoNaoAlocado(naoAlocado, calculados),
                 avisos(comparativo, calculados, itens),
                 alertas(calculados, itens, naoAlocado),
-                classesDto(comparativo, (orcamento != null) ? orcamento.porClasse() : Map.of(),
+                classesDto(comparativo, calculados, (orcamento != null) ? orcamento.porClasse() : Map.of(),
                         (orcamento != null) ? orcamento.porSubclasse() : Map.of()),
                 itens);
     }
@@ -347,6 +347,7 @@ public class AporteService {
 
     private List<RankingAportesDTO.ClasseAporteDTO> classesDto(
             ComparativoResponseDTO comparativo,
+            List<AporteCandidato> candidatos,
             Map<CategoriaInvestimento, BigDecimal> sugeridoPorClasse,
             Map<Long, BigDecimal> sugeridoPorSubclasse) {
 
@@ -374,7 +375,7 @@ public class AporteService {
                     c.tolerancia(), c.limite_maximo(),
                     statusDe(c.percentual_atual(), c.percentual_ideal(), c.tolerancia(), c.limite_maximo()),
                     sugerido,
-                    motivoDaClasse(c, sugerido, total),
+                    motivoDaClasse(c, sugerido, total, candidatos),
                     subs));
         }
         return classes;
@@ -400,8 +401,16 @@ public class AporteService {
         return RankingAportesDTO.StatusNivel.EQUILIBRADO;
     }
 
-    /** Por que a classe recebeu (ou não) parte do aporte. */
-    private String motivoDaClasse(ComparativoResponseDTO.ClasseComparativoDTO c, BigDecimal sugerido, double total) {
+    /**
+     * Por que a classe recebeu (ou não) parte do aporte.
+     *
+     * O motivo diz o que REALMENTE travou: antes ele dizia "nenhum ativo
+     * ELEGÍVEL" mesmo quando havia elegíveis sem capacidade (metas que já
+     * espelhavam a carteira), o que fazia o usuário procurar o problema no
+     * lugar errado.
+     */
+    private String motivoDaClasse(ComparativoResponseDTO.ClasseComparativoDTO c, BigDecimal sugerido,
+                                  double total, List<AporteCandidato> candidatos) {
         BigDecimal limite = c.limite_maximo();
         BigDecimal atual = c.percentual_atual();
         if (limite != null && limite.signum() > 0 && atual != null
@@ -413,8 +422,43 @@ public class AporteService {
             return "Não recebe: está no alvo (dentro da tolerância de " + formatar(c.tolerancia()) + "%).";
         }
         if (sugerido.signum() <= 0) {
+            List<AporteCandidato> daClasse = candidatos.stream()
+                    .filter(cand -> cand.classe() == c.classe())
+                    .toList();
+            boolean algumElegivel = daClasse.stream().anyMatch(AporteCandidato::elegivel);
+            boolean algumaCapacidade = daClasse.stream()
+                    .anyMatch(cand -> cand.elegivel() && nz(cand.capacidade()) > 0);
+            // "Travou por capacidade" ≠ "travou por regra": o ativo que só está
+            // no próprio alvo não é um problema de configuração, é o esperado.
+            long soSemCapacidade = daClasse.stream()
+                    .filter(cand -> cand.status() == StatusElegibilidade.SEM_CAPACIDADE
+                            || cand.status() == StatusElegibilidade.CLASSE_SEM_CAPACIDADE)
+                    .count();
+            long travados = daClasse.size() - soSemCapacidade;
+
+            if (daClasse.isEmpty()) {
+                return "Tem déficit de " + formatar(falta)
+                        + ", mas nenhum ativo da classe está na carteira: o aporte só entra em posição que existe "
+                        + "(meta de ativo ainda não comprado não recebe).";
+            }
+            if (algumElegivel && !algumaCapacidade) {
+                return "Tem déficit de " + formatar(falta)
+                        + ", mas os ativos da classe já estão no próprio alvo (déficit + tolerância) — "
+                        + "nada cabe aqui neste aporte. Aumente o alvo do ativo ou use a tolerância.";
+            }
+            if (!algumElegivel && soSemCapacidade > 0 && travados == 0) {
+                return "Tem déficit de " + formatar(falta)
+                        + ", mas os ativos da classe já estão no próprio alvo (déficit + tolerância) — "
+                        + "o dinheiro fica não alocado.";
+            }
+            if (travados == 0) {
+                return "Tem déficit de " + formatar(falta)
+                        + ", mas nenhum ativo da classe pode receber agora (limite atingido, critério eliminatório "
+                        + "ou sem checklist).";
+            }
             return "Tem déficit de " + formatar(falta)
-                    + ", mas nenhum ativo ELEGÍVEL da classe neste momento (alvo, limite ou checklist).";
+                    + ", mas nada foi direcionado a ela neste aporte: uns ativos já estão no próprio alvo e outros "
+                    + "estão travados (limite, critério eliminatório ou sem checklist).";
         }
         return "Recebe no máximo o déficit da classe: " + formatar(falta)
                 + " (ideal + tolerância − atual).";

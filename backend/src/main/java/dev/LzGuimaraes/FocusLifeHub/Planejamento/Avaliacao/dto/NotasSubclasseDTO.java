@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+import dev.LzGuimaraes.FocusLifeHub.Ativo.CategoriaInvestimento;
+
 /**
  * NOTAS POR SUBCLASSE — o jeito curto de avaliar.
  *
@@ -16,29 +18,59 @@ import java.util.UUID;
  * As listas são ALINHADAS POR POSIÇÃO: `notas[i]` é a nota da pergunta `i` de
  * `perguntas`. O front desenha as colunas na ordem de `perguntas` e manda de
  * volta na mesma ordem, então não há chave para procurar.
+ *
+ * NEM TODO ATIVO TEM SUBCLASSE (e nem deve ter): cripto, renda fixa, Tesouro e
+ * caixinhas não se dividem em setores. Nesses casos o balde da avaliação é a
+ * PRÓPRIA CLASSE (`classe_inteira = true`) e o checklist padrão é o do TIPO do
+ * ativo — renda fixa pergunta emissor/liquidez, cripto pergunta tese/custódia.
+ * É o que o `Bucket` descreve: a lista de ONDE dá para dar notas.
  */
 public final class NotasSubclasseDTO {
 
     private NotasSubclasseDTO() {}
 
-    /** Uma pergunta do checklist padrão da subclasse. */
+    /** Uma pergunta do checklist padrão do balde. */
     public record Pergunta(Long id, String titulo, BigDecimal nota_maxima, int ordem) {}
 
-    /** Uma empresa avaliada: notas na ordem das perguntas (null = não respondida). */
+    /**
+     * Uma linha avaliável: um ativo do catálogo (ticker) OU uma posição sem
+     * ticker (renda fixa, Tesouro, caixinha).
+     */
     public record Item(
             UUID ativo_cadastro_id,
             Long ativo_id,
             String ticker,
+            /** Nome cadastrado na posição — a tela mostra abaixo do ticker. */
+            String nome,
             Long checklist_id,
             List<BigDecimal> notas,
             /** Nota final 0–100 (null enquanto nada foi respondido). */
             BigDecimal score
     ) {}
 
-    /** Tudo o que a página precisa para desenhar a grade de uma subclasse. */
+    /**
+     * Onde dá para dar notas nesta carteira: cada SUBCLASSE e, para as classes
+     * que não usam subclasse (cripto, renda fixa...), a CLASSE inteira.
+     */
+    public record Bucket(
+            /** Identidade do checklist padrão (subclasse ou classe). */
+            String slug,
+            String nome,
+            CategoriaInvestimento classe,
+            /** Rótulo em português da classe ("Criptomoedas"). */
+            String classe_label,
+            /** true = o balde é a classe inteira (o ativo não tem subclasse). */
+            boolean classe_inteira,
+            int qtd_ativos
+    ) {}
+
+    /** Tudo o que a página precisa para desenhar a grade de um balde. */
     public record Painel(
             String subclasse_slug,
             String subclasse_nome,
+            CategoriaInvestimento classe,
+            String classe_label,
+            boolean classe_inteira,
             Long modelo_id,
             String modelo_nome,
             List<Pergunta> perguntas,
