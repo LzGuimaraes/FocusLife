@@ -124,8 +124,8 @@ export default function ProximosAportes() {
     <Layout>
       <PlanejamentoNav ativo="aportes" />
       <PageHeader icon="💸" title="Próximos Aportes"
-        subtitle="A ordem de prioridade e a sugestão de rateio segundo a sua metodologia"
-        actionLabel="Ajustar pesos" onAction={() => navigate("/planejamento/pontuacao")} />
+        subtitle="Déficit de cada classe e, dentro dela, a nota do checklist"
+        actionLabel="Dar as notas" onAction={() => navigate("/avaliacao/notas")} />
 
       {/* ── Controles ── */}
       <div style={{ ...boxStyle, display: "flex", gap: "12px", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "16px" }}>
