@@ -258,6 +258,8 @@ public class CarteiraIdealService {
             meta.setPercentualIdeal(calculator.percentualNormalizado(m.percentual_ideal()));
             meta.setTolerancia(toleranciaDe(m.tolerancia()));
             meta.setLimiteMaximo(m.limite_maximo());
+            // Regra de compra do investidor (NULL = sem regra de preço).
+            meta.setPrecoMaximoCompra(m.preco_maximo_compra());
             meta.setPrioridadeManual(m.prioridade_manual() == null ? 0 : m.prioridade_manual());
             meta.setOrdem(m.ordem() == null ? ordemMeta : m.ordem());
             metaAtivoRepository.save(meta);
@@ -583,6 +585,7 @@ public class CarteiraIdealService {
                             (meta != null) ? meta.getPercentualIdeal() : null,
                             (meta != null) ? meta.getTolerancia() : null,
                             (meta != null) ? meta.getLimiteMaximo() : null,
+                            (meta != null) ? meta.getPrecoMaximoCompra() : null,
                             (meta != null) ? meta.getPrioridadeManual() : null,
                             (subclasseLinha != null) ? subclasseLinha.getId() : null,
                             (subclasseLinha != null) ? subclasseLinha.getNome() : null,
@@ -867,6 +870,7 @@ public class CarteiraIdealService {
                         m.getPercentualIdeal(),
                         m.getTolerancia(),
                         m.getLimiteMaximo(),
+                        m.getPrecoMaximoCompra(),
                         m.getPrioridadeManual(),
                         m.getOrdem()))
                 .toList();

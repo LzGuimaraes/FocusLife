@@ -128,7 +128,7 @@ public class HistoricoService {
 
             if (ctx != null) {
                 linha.setCarteiraInvestimentoId(carteiraId);
-                linha.setContributionScore(ctx.contribution_score());
+                linha.setContributionScore(ctx.priority_score());
                 linha.setPercentualAtual(ctx.percentual_atual());
                 linha.setPercentualIdeal(ctx.percentual_ideal());
                 linha.setDeficit(ctx.deficit());

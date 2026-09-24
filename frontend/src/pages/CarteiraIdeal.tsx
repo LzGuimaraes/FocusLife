@@ -148,8 +148,10 @@ export default function CarteiraIdealPage() {
           setor_nome_posicao: a.setor_nome ?? null,
           tolerancia: numParaTexto(meta?.tolerancia ?? null),
           limite_maximo: numParaTexto(meta?.limite_maximo ?? null),
+          preco_maximo_compra: numParaTexto(meta?.preco_maximo_compra ?? null),
           percentual_atual: a.percentual_atual,
           valor_atual: a.valor_atual,
+          preco_atual: a.preco_atual,
         };
       });
       const semPosicao = metasExistentes
@@ -175,8 +177,10 @@ export default function CarteiraIdealPage() {
           setor_nome_posicao: null,
           tolerancia: "",
           limite_maximo: "",
+          preco_maximo_compra: numParaTexto(m.preco_maximo_compra ?? null),
           percentual_atual: null,
           valor_atual: null,
+          preco_atual: null,
         }));
 
       const metasCarregadas: MetaDraft[] = [...daCarteira, ...semPosicao];
@@ -675,6 +679,7 @@ function montarPayload(classes: ClasseDraft[], metas: MetaDraft[], estrategiaId:
       percentual_ideal: textoParaNum(m.percentual_ideal),
       tolerancia: textoParaNum(m.tolerancia),
       limite_maximo: m.limite_maximo.trim() === "" ? null : textoParaNum(m.limite_maximo),
+      preco_maximo_compra: m.preco_maximo_compra.trim() === "" ? null : textoParaNum(m.preco_maximo_compra),
       prioridade_manual: parseInt(m.prioridade_manual, 10) || 0,
       ordem: i,
     })),

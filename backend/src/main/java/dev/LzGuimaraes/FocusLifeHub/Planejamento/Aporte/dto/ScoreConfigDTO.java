@@ -41,6 +41,9 @@ public final class ScoreConfigDTO {
             @DecimalMin(value = "0.0", message = "O peso do momento não pode ser negativo")
             BigDecimal peso_momento,
 
+            @DecimalMin(value = "0.0", message = "O peso da oportunidade de preço não pode ser negativo")
+            BigDecimal peso_preco,
+
             /** Faixas da nota de momento → fator (0 / 0,25 / 0,50 / 0,75 / 1,00). */
             BigDecimal momento_faixa_1,
             BigDecimal momento_faixa_2,
@@ -55,7 +58,7 @@ public final class ScoreConfigDTO {
             /** TETO_ESTRITO | TETO_ATE_A_CLASSE. */
             String teto_ativo_modo,
 
-            /** Ordem das travas: BLOQUEIO,LIMITE,CLASSE,SUBCLASSE,SETOR,TETO_ATIVO,MOMENTO,SCORE. */
+            /** Ordem das travas: BLOQUEIO,LIMITE,PRECO,CLASSE,SUBCLASSE,SETOR,TETO_ATIVO,MOMENTO,SCORE. */
             String precedencia,
 
             EstrategiaAporte estrategia_aporte
@@ -68,6 +71,7 @@ public final class ScoreConfigDTO {
             BigDecimal peso_excesso,
             BigDecimal peso_prioridade,
             BigDecimal peso_momento,
+            BigDecimal peso_preco,
             BigDecimal peso_quality_efetivo,
             BigDecimal soma_pesos,
             BigDecimal momento_faixa_1,

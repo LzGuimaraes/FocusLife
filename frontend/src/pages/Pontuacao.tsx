@@ -29,12 +29,13 @@ interface PesosForm {
   EXCESSO: string;
   PRIORIDADE: string;
   MOMENTO: string;
+  PRECO: string;
 }
 
 export default function Pontuacao() {
   const navigate = useNavigate();
   const [config, setConfig] = useState<ScoreConfig | null>(null);
-  const [pesos, setPesos] = useState<PesosForm>({ QUALITY: "3", DEFICIT: "4", EXCESSO: "2", PRIORIDADE: "1", MOMENTO: "3" });
+  const [pesos, setPesos] = useState<PesosForm>({ QUALITY: "3", DEFICIT: "4", EXCESSO: "2", PRIORIDADE: "1", MOMENTO: "3", PRECO: "2" });
   const [estrategia, setEstrategia] = useState<ScoreConfig["estrategia_aporte"]>("DEFICIT_PROPORCIONAL");
   const [faixas, setFaixas] = useState({ f1: "25", f2: "50", f3: "75", f4: "90" });
   const [redistribuir, setRedistribuir] = useState(true);
@@ -71,6 +72,7 @@ export default function Pontuacao() {
       EXCESSO: String(cfg.peso_excesso),
       PRIORIDADE: String(cfg.peso_prioridade),
       MOMENTO: String(cfg.peso_momento),
+      PRECO: String(cfg.peso_preco),
     });
     setFaixas({
       f1: String(cfg.momento_faixa_1),
@@ -136,6 +138,7 @@ export default function Pontuacao() {
       peso_excesso: textoParaNum(pesos.EXCESSO),
       peso_prioridade: textoParaNum(pesos.PRIORIDADE),
       peso_momento: textoParaNum(pesos.MOMENTO),
+      peso_preco: textoParaNum(pesos.PRECO),
       momento_faixa_1: textoParaNum(faixas.f1),
       momento_faixa_2: textoParaNum(faixas.f2),
       momento_faixa_3: textoParaNum(faixas.f3),
@@ -147,7 +150,7 @@ export default function Pontuacao() {
       estrategia_aporte: estrategia,
     };
     if (payload.peso_quality + payload.peso_deficit + payload.peso_excesso
-        + payload.peso_prioridade + payload.peso_momento <= 0) {
+        + payload.peso_prioridade + payload.peso_momento + payload.peso_preco <= 0) {
       toast.error("Informe ao menos um peso maior que zero.");
       return;
     }
@@ -216,7 +219,7 @@ export default function Pontuacao() {
           </div>
 
           <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "10px 14px", marginBottom: "14px" }}>
-            <p style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", margin: "0 0 2px" }}>Contribution Score</p>
+            <p style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", margin: "0 0 2px" }}>Priority Score</p>
             <code style={{ fontSize: "12px", color: "#334155" }}>
               100 × ( {formula} ) ÷ soma dos pesos
             </code>
@@ -335,14 +338,15 @@ export default function Pontuacao() {
         {/* ── Como ler o resultado ── */}
         <div style={boxStyle}>
           <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", margin: "0 0 10px" }}>
-            Quality Score × Contribution Score
+            Quality Score × Priority Score
           </h3>
           <p style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, margin: "0 0 12px" }}>
             São duas coisas diferentes, e o sistema mantém as duas separadas:
           </p>
           <ul style={{ fontSize: "13px", color: "#475569", lineHeight: 1.7, margin: 0, paddingLeft: "18px" }}>
             <li><strong>Quality Score</strong> — qualidade do ativo: soma ponderada das notas que <em>você</em> deu nos checklists.</li>
-            <li><strong>Contribution Score</strong> — prioridade de aporte: combina qualidade, distância da meta, excesso e sua prioridade manual, com os pesos acima.</li>
+            <li><strong>Fórmula de prioridade</strong> — prioridade <em>entre os ativos elegíveis</em>: qualidade, déficit, excesso, momento, oportunidade de preço e sua prioridade manual, com os pesos acima.</li>
+            <li><strong>Elegibilidade</strong> — vem ANTES da fórmula: bloqueio, limite de concentração, preço máximo de compra e momento zero <em>descartam</em> o ativo, por melhor que seja a nota.</li>
           </ul>
           <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "12px", marginBottom: 0 }}>
             O sistema não escolhe ativos nem atribui notas: ele organiza, calcula e ordena a sua metodologia.

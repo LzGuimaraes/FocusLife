@@ -37,7 +37,19 @@ public enum TermoScore {
     MOMENTO("Momento / valuation",
             "Nota dos checklists de MOMENTO (é hora de aportar?). Entra como FATOR 0 a 1: 0 bloqueia, 1 prioriza. "
                     + "Não altera a qualidade do ativo.",
-            new BigDecimal("3"));
+            new BigDecimal("3")),
+
+    /**
+     * OPORTUNIDADE DE PREÇO — só existe para quem PASSOU pela elegibilidade.
+     *
+     * Mede quanto o preço atual está abaixo do PREÇO MÁXIMO DE COMPRA que o
+     * investidor definiu: (máximo − atual) / máximo, de 0 a 1. Sem preço máximo
+     * configurado, o termo sai da conta do ativo (não é penalidade) — do mesmo
+     * jeito que o termo de qualidade sai quando não há avaliação.
+     */
+    PRECO("Oportunidade de preço",
+            "Distância entre o preço atual e o seu preço máximo de compra. Só conta para ativos que já são elegíveis.",
+            new BigDecimal("2"));
 
     private final String label;
     private final String descricao;

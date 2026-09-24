@@ -54,6 +54,12 @@ public record MeusAtivosResponseDTO(
             BigDecimal tolerancia,
             /** Teto de concentração (%) do ativo (null = sem teto). */
             BigDecimal limite_maximo,
+            /**
+             * PREÇO MÁXIMO DE COMPRA definido na meta (null = sem regra de
+             * preço). Acima dele o ativo é descartado do aporte, por melhor que
+             * seja o Quality Score.
+             */
+            BigDecimal preco_maximo_compra,
             Integer prioridade_manual,
             Long subclasse_id,
             String subclasse_nome,

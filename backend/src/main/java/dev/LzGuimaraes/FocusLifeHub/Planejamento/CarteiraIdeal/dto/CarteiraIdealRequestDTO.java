@@ -132,6 +132,14 @@ public record CarteiraIdealRequestDTO(
             @DecimalMax(value = "100.0", message = "O limite máximo não pode passar de 100%")
             BigDecimal limite_maximo,
 
+            /**
+             * PREÇO MÁXIMO DE COMPRA (número absoluto). Regra de ELEGIBILIDADE:
+             * acima dele o ativo é descartado do aporte, independente do score.
+             * NULL = sem regra de preço para este ativo.
+             */
+            @DecimalMin(value = "0.0", message = "O preço máximo de compra não pode ser negativo")
+            BigDecimal preco_maximo_compra,
+
             Integer ordem
     ) {}
 }

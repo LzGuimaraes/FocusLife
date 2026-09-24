@@ -6,71 +6,37 @@ import java.util.UUID;
 
 import dev.LzGuimaraes.FocusLifeHub.Ativo.CategoriaInvestimento;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.Aporte.EstrategiaAporte;
+import dev.LzGuimaraes.FocusLifeHub.Planejamento.Aporte.StatusElegibilidade;
 
 /**
- * Ranking de prioridade de aporte (Módulos 6 e 9).
+ * Resposta do motor de aporte, com as QUATRO perguntas separadas (§26).
  *
- * Une as duas pontuações, que são coisas diferentes:
- *   • QUALITY SCORE       → qualidade do ativo (notas dos checklists do usuário)
- *   • CONTRIBUTION SCORE  → prioridade de aporte (qualidade + distância da meta
- *                           + excesso + prioridade manual, com os pesos que o
- *                           usuário configurou)
+ *   DÉFICIT       → quanto falta para a carteira desejada?      (classe/subclasse/setor)
+ *   ELEGIBILIDADE → esse ativo pode receber dinheiro agora?     (elegivel + motivos)
+ *   RANKING       → entre os que podem, qual vem primeiro?      (priority_score)
+ *   ALOCAÇÃO      → quanto cabe em cada um?                     (capacidade_aporte + sugestao_aporte)
  *
- * `peso_quality_aplicado` deixa explícito quando o termo de qualidade não
- * entrou na conta (ativo ainda sem avaliação): nesse caso o termo sai do
- * cálculo e o denominador é renormalizado, para não punir quem não avaliou.
+ * Um ativo com déficit enorme e Quality Score 98 continua no `itens[]` (para a
+ * tela explicar), mas chega com `elegivel = false`, `motivos_inelegibilidade`
+ * preenchidos e `sugestao_aporte = 0`: o déficit dele NÃO o torna comprável.
  */
 public final class RankingAportesDTO {
 
     private RankingAportesDTO() {}
 
-    /**
-     * Estado do ativo no motor de decisão (§9 do spec).
-     *
-     * SEM_AVALIACAO NÃO é "ruim": significa que falta avaliação configurada. O
-     * termo de qualidade simplesmente sai da conta (o peso é renormalizado).
-     */
-    public enum EstadoAtivo {
-        APROVADO("Aprovado", "Pode receber aporte normalmente."),
-        RESTRITO("Restrito", "Aporte reduzido pelo momento/valuation."),
-        NAO_APORTAR("Não aportar", "Bloqueado por critério eliminatório ou limite de concentração."),
-        SEM_AVALIACAO("Sem avaliação", "Sem checklist de qualidade/momento respondido.");
-
-        private final String label;
-        private final String descricao;
-
-        EstadoAtivo(String label, String descricao) {
-            this.label = label;
-            this.descricao = descricao;
-        }
-
-        public String getLabel() {
-            return label;
-        }
-
-        public String getDescricao() {
-            return descricao;
-        }
-    }
-
-    /** Status de equilíbrio de um nível (classe/subclasse) frente à tolerância (§18). */
-    public enum StatusNivel {
-        ABAIXO, EQUILIBRADO, ACIMA, SEM_ALVO
-    }
-
-    /** Alerta do motor (§31). O tipo permite filtrar na tela. */
+    /** Alerta do motor. O tipo permite filtrar/agrupar na tela. */
     public record Alerta(String tipo, String mensagem) {}
 
     /**
-     * Ação recomendada para o ativo (§23). MANTER ≠ APORTAR: um ativo pode ser
-     * excelente e continuar na carteira sem receber dinheiro agora (já está no
-     * alvo, ou o limite de concentração foi atingido).
+     * Ação recomendada para o ativo. MANTER ≠ APORTAR: um ativo pode ser bom e
+     * continuar na carteira sem receber dinheiro agora (já no alvo, ou
+     * descartado por preço/limite).
      */
     public enum AcaoAtivo {
         APORTAR("Aportar", "Recebe parte deste aporte."),
         MANTER("Manter", "Continue com o ativo, mas não aporte agora."),
-        NAO_APORTAR("Não aportar", "Bloqueado por critério/limite: o déficit continua existindo."),
-        AVALIAR("Avaliar", "Tem espaço estrutural: informe/calcule o aporte para ver quanto caberia.");
+        NAO_APORTAR("Não aportar", "Descartado na elegibilidade: não recebe neste momento."),
+        AVALIAR("Avaliar", "Sem avaliação cadastrada: informe para ele entrar no ranking.");
 
         private final String label;
         private final String descricao;
@@ -87,6 +53,11 @@ public final class RankingAportesDTO {
         public String getDescricao() {
             return descricao;
         }
+    }
+
+    /** Status de equilíbrio de um nível (classe/subclasse/setor) frente à tolerância. */
+    public enum StatusNivel {
+        ABAIXO, EQUILIBRADO, ACIMA, SEM_ALVO
     }
 
     /**
@@ -118,29 +89,45 @@ public final class RankingAportesDTO {
             Long setor_id,
             String setor_nome,
 
-            /* ── Qualidade (Módulo 5) ── */
+            /* ── Qualidade (checklists do usuário) ── */
             BigDecimal quality_score,
             boolean qualidade_avaliada,
             BigDecimal peso_quality_aplicado,
 
-            /* ── Momento / valuation (§10, §11, §12) ── */
+            /* ── Momento / valuation ── */
             BigDecimal momento_score,
             boolean momento_avaliado,
-            /** Fator 0 a 1 aplicado à prioridade de aporte (1 = neutro). */
+            /** Fator 0 a 1 aplicado ao Priority Score (1 = neutro). */
             BigDecimal fator_momento,
 
-            /* ── Elegibilidade (§8, §9, §19) ── */
-            EstadoAtivo estado,
-            /** Por que está bloqueado/reduzido (vazio quando aprovado). */
+            /* ── ELEGIBILIDADE (§2, §3, §17) ── */
+            /** false = descartado: NÃO participa do ranking nem do rateio. */
+            boolean elegivel,
+            StatusElegibilidade status,
+            /** Explicação de cada motivo de descarte (vazio quando elegível). */
+            List<String> motivos_inelegibilidade,
+            /** Critérios eliminatórios reprovados no checklist (texto pronto). */
             List<String> bloqueios,
             BigDecimal limite_maximo,
             /** true = atingiu o limite de concentração (não recebe mais). */
             boolean limite_atingido,
+            /** Quanto o ativo ainda pode receber (déficit + tolerância, respeitando o limite). */
+            BigDecimal capacidade_aporte,
 
-            /* ── Prioridade de aporte (Módulo 6) ── */
-            BigDecimal contribution_score,
+            /* ── PREÇO (§6, §7, §8) ── */
+            BigDecimal preco_atual,
+            /** Preço médio pago nas compras registradas — INFORMATIVO, não é regra. */
+            BigDecimal preco_medio,
+            /** Regra de compra: acima deste preço o ativo é descartado. */
+            BigDecimal preco_maximo_compra,
+            /** 0..1 = (máximo − atual) / máximo. Null = sem regra de preço para o ativo. */
+            BigDecimal oportunidade_preco,
 
-            /* ── Situação na carteira (Módulo 1) ── */
+            /* ── RANKING (§10) ── */
+            /** Priority Score (0–100): prioridade ENTRE os elegíveis. */
+            BigDecimal priority_score,
+
+            /* ── Situação na carteira ── */
             BigDecimal percentual_atual,
             BigDecimal percentual_ideal,
             BigDecimal valor_atual,
@@ -148,35 +135,29 @@ public final class RankingAportesDTO {
             BigDecimal deficit,
             BigDecimal excesso,
             BigDecimal tolerancia,
-            /** Quanto o ativo PODE receber (déficit + tolerância, respeitando o limite). */
-            BigDecimal teto,
             Integer prioridade_manual,
 
             /** Quanto deste aporte o ativo recebeu (null quando nenhum valor foi informado). */
             BigDecimal sugestao_aporte,
 
-            /** Explicação objetiva da decisão (§29). */
+            /** Explicação objetiva da decisão (§18) — por que recebeu, ou por que não. */
             String motivo,
 
             /** Quanto este item já recebeu de aporte nos últimos 30 dias (§24). */
             BigDecimal aportes_recentes,
             Integer aportes_recentes_qtd,
 
-            /**
-             * Cálculo aberto do Contribution Score (§34): a conta exata, com os
-             * valores normalizados e os pesos aplicados, para o usuário reproduzir.
-             */
+            /** Cálculo aberto do Priority Score: a conta exata, com os pesos aplicados. */
             String formula,
 
-            /** Ação (§23): aportar, manter, não aportar ou avaliar. */
+            /** Ação recomendada: aportar, manter, não aportar ou avaliar. */
             AcaoAtivo acao
     ) {}
 
-    /** Uma comparação de cenário (§33): mesmos dados, pesos de decisão diferentes. */
+    /** Uma comparação de cenário: mesmos dados, pesos de decisão diferentes. */
     public record CenarioDTO(
             String nome,
             String descricao,
-            /** Pesos usados neste cenário (rótulo legível). */
             String pesos,
             BigDecimal valor_alocado,
             BigDecimal valor_nao_alocado,
@@ -260,7 +241,10 @@ public final class RankingAportesDTO {
             Boolean rebalancear,
             /** TETO_ESTRITO | TETO_ATE_A_CLASSE (configuração vigente). */
             String teto_ativo_modo,
-            /** Explicação legível do valor não alocado (§32). */
+            /** Quantos ativos disputaram o aporte (elegíveis) e quantos foram descartados. */
+            Integer total_elegiveis,
+            Integer total_descartados,
+            /** Explicação legível do valor não alocado (§14). */
             String nao_alocado_explicacao,
             Boolean redistribuir,
             EstrategiaAporte estrategia_aporte,
@@ -268,15 +252,17 @@ public final class RankingAportesDTO {
             List<String> avisos,
             List<Alerta> alertas,
             /**
-             * Ordem em que o motor aplica as travas (§36). É FIXA e mostrada na
-             * tela de propósito: nenhuma regra escondida decide o aporte.
+             * Ordem em que o motor aplica as travas. O usuário pode reordenar:
+             * ela decide COMO o descarte é explicado (o status do ativo é a
+             * primeira trava violada nesta ordem). Nenhuma trava é desligada.
              */
             List<String> precedencia,
-            /** Cenários comparativos (§33) — só quando um valor de aporte foi informado. */
+            /** Cenários comparativos — só quando um valor de aporte foi informado. */
             List<CenarioDTO> cenarios,
-            /** Sugestões de redução (§19/§21) — vazio quando o rebalanceamento está desligado. */
+            /** Sugestões de redução — vazio quando o rebalanceamento está desligado. */
             List<RebalanceamentoDTO> rebalanceamento,
             List<ClasseAporteDTO> classes,
+            /** TODOS os ativos analisados: elegíveis e descartados (com o motivo). */
             List<Item> itens
     ) {}
 }

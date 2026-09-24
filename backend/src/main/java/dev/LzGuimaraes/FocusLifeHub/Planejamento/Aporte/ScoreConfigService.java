@@ -88,6 +88,9 @@ public class ScoreConfigService {
         if (dto.peso_momento() != null) {
             config.setPesoMomento(dto.peso_momento());
         }
+        if (dto.peso_preco() != null) {
+            config.setPesoPreco(dto.peso_preco());
+        }
         if (dto.momento_faixa_1() != null) {
             config.setMomentoFaixa1(dto.momento_faixa_1());
         }
@@ -157,6 +160,7 @@ public class ScoreConfigService {
                 config.getPesoExcesso(),
                 config.getPesoPrioridade(),
                 config.getPesoMomento(),
+                config.getPesoPreco(),
                 // α efetivo: é 0 quando o ativo não tem Quality Score (termo sai da conta).
                 config.getPesoQuality(),
                 config.somaPesos(),
@@ -179,7 +183,7 @@ public class ScoreConfigService {
      * inválida nunca desliga uma trava.
      */
     private String normalizarPrecedencia(String bruta) {
-        List<String> conhecidas = List.of("BLOQUEIO", "LIMITE", "CLASSE", "SUBCLASSE",
+        List<String> conhecidas = List.of("BLOQUEIO", "LIMITE", "PRECO", "CLASSE", "SUBCLASSE",
                 "SETOR", "TETO_ATIVO", "MOMENTO", "SCORE");
         List<String> ordem = new ArrayList<>();
         for (String parte : bruta.split(",")) {

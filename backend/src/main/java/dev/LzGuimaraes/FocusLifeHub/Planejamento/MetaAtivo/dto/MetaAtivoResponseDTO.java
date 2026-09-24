@@ -14,6 +14,7 @@ public record MetaAtivoResponseDTO(
         Long subclasse_id,
         String subclasse_nome,
         BigDecimal percentual_ideal,
+        BigDecimal preco_maximo_compra,
         Integer prioridade_manual,
         Integer ordem
 ) {}

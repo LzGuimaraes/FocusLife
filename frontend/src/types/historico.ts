@@ -6,7 +6,7 @@
 export interface PontoHistorico {
   data: string;
   quality_score: number | null;
-  contribution_score: number | null;
+  priority_score: number | null;
   percentual_atual: number | null;
   percentual_ideal: number | null;
   deficit: number | null;

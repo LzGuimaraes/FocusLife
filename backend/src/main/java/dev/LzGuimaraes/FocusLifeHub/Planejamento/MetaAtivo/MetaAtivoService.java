@@ -76,6 +76,7 @@ public class MetaAtivoService {
         meta.setClasse(dto.classe());
         meta.setSubclasse(resolverSubclasse(dto.classe(), dto.subclasse_id()));
         meta.setPercentualIdeal(calculator.percentualNormalizado(dto.percentual_ideal()));
+        meta.setPrecoMaximoCompra(dto.preco_maximo_compra());
         meta.setPrioridadeManual(prioridadeValida(dto.prioridade_manual()));
         meta.setOrdem(dto.ordem() == null ? 0 : dto.ordem());
 
@@ -104,6 +105,9 @@ public class MetaAtivoService {
         }
         if (dto.prioridade_manual() != null) {
             meta.setPrioridadeManual(prioridadeValida(dto.prioridade_manual()));
+        }
+        if (dto.preco_maximo_compra() != null) {
+            meta.setPrecoMaximoCompra(dto.preco_maximo_compra());
         }
         if (dto.ordem() != null) {
             meta.setOrdem(dto.ordem());
@@ -173,6 +177,7 @@ public class MetaAtivoService {
                 (meta.getSubclasse() != null) ? meta.getSubclasse().getId() : null,
                 (meta.getSubclasse() != null) ? meta.getSubclasse().getNome() : null,
                 meta.getPercentualIdeal(),
+                meta.getPrecoMaximoCompra(),
                 meta.getPrioridadeManual(),
                 meta.getOrdem());
     }

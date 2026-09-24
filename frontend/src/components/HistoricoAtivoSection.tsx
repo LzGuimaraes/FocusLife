@@ -100,7 +100,7 @@ export default function HistoricoAtivoSection({ ativoCadastroId, ativoId }: Prop
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "560px" }}>
                 <thead>
                   <tr style={{ background: "#f8fafc" }}>
-                    {["Data", "Quality", "Contribution", "% atual", "% ideal", "Déficit"].map((h, i) => (
+                    {["Data", "Quality", "Priority", "% atual", "% ideal", "Déficit"].map((h, i) => (
                       <th key={h} style={{ padding: "7px 10px", textAlign: i === 0 ? "left" : "right", fontSize: "10px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>{h}</th>
                     ))}
                   </tr>
@@ -110,7 +110,7 @@ export default function HistoricoAtivoSection({ ativoCadastroId, ativoId }: Prop
                     <tr key={p.data} style={{ borderTop: "1px solid #f1f5f9" }}>
                       <td style={{ padding: "7px 10px", fontWeight: 600, color: "#334155" }}>{formatarData(p.data)}</td>
                       <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 700, color: "#8b5cf6" }}>{fmtScore(p.quality_score)}</td>
-                      <td style={{ padding: "7px 10px", textAlign: "right", color: "#475569" }}>{fmtScore(p.contribution_score)}</td>
+                      <td style={{ padding: "7px 10px", textAlign: "right", color: "#475569" }}>{fmtScore(p.priority_score)}</td>
                       <td style={{ padding: "7px 10px", textAlign: "right", color: "#475569" }}>{p.percentual_atual != null ? `${p.percentual_atual.toFixed(2)}%` : "—"}</td>
                       <td style={{ padding: "7px 10px", textAlign: "right", color: "#475569" }}>{p.percentual_ideal != null ? `${p.percentual_ideal.toFixed(2)}%` : "—"}</td>
                       <td style={{ padding: "7px 10px", textAlign: "right", color: p.deficit ? "#1d4ed8" : "#cbd5e1" }}>

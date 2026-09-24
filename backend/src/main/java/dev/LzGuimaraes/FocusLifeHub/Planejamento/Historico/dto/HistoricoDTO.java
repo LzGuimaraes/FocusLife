@@ -21,7 +21,7 @@ public final class HistoricoDTO {
     public record Ponto(
             LocalDate data,
             BigDecimal quality_score,
-            BigDecimal contribution_score,
+            BigDecimal priority_score,
             BigDecimal percentual_atual,
             BigDecimal percentual_ideal,
             BigDecimal deficit,

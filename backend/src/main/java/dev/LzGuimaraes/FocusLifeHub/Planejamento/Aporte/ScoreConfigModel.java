@@ -54,6 +54,17 @@ public class ScoreConfigModel {
     @Column(name = "peso_momento", nullable = false, precision = 9, scale = 4)
     private BigDecimal pesoMomento = TermoScore.MOMENTO.getPesoPadrao();
 
+    /**
+     * Peso do termo OPORTUNIDADE DE PREÇO (0 desliga o termo).
+     *
+     * Só entra para ativos ELEGÍVEIS que tenham preço máximo de compra
+     * configurado: quanto mais o preço atual está abaixo do seu limite, mais
+     * oportunidade existe. Nunca compensa uma regra de compra violada — quem
+     * viola o preço máximo é descartado antes do ranking, não pontuado.
+     */
+    @Column(name = "peso_preco", nullable = false, precision = 9, scale = 4)
+    private BigDecimal pesoPreco = TermoScore.PRECO.getPesoPadrao();
+
     /* ── Faixas da NOTA DE MOMENTO → FATOR de aporte (0 a 1) ──
        até faixa1 → 0 | até faixa2 → 0,25 | até faixa3 → 0,50 | até faixa4 → 0,75
        acima da faixa4 → 1,00. Valores configuráveis pelo usuário. */
@@ -96,12 +107,12 @@ public class ScoreConfigModel {
     private String tetoAtivoModo = "TETO_ESTRITO";
 
     /**
-     * Ordem das travas (CSV): BLOQUEIO,LIMITE,CLASSE,SUBCLASSE,SETOR,TETO_ATIVO,
-     * MOMENTO,SCORE. Define como o motivo é explicado e a lista de precedência
-     * mostrada na tela.
+     * Ordem das travas (CSV): BLOQUEIO,LIMITE,PRECO,CLASSE,SUBCLASSE,SETOR,
+     * TETO_ATIVO,MOMENTO,SCORE. Define QUAL descarte aparece como status do
+     * ativo (a primeira trava violada nesta ordem) e como o motivo é explicado.
      */
     @Column(nullable = false, length = 300)
-    private String precedencia = "BLOQUEIO,LIMITE,CLASSE,SUBCLASSE,SETOR,TETO_ATIVO,MOMENTO,SCORE";
+    private String precedencia = "BLOQUEIO,LIMITE,PRECO,CLASSE,SUBCLASSE,SETOR,TETO_ATIVO,MOMENTO,SCORE";
 
     @Enumerated(EnumType.STRING)
     @Column(name = "estrategia_aporte", nullable = false, length = 30)
@@ -122,12 +133,22 @@ public class ScoreConfigModel {
 
     public BigDecimal pesoDe(TermoScore termo) {
         return switch (termo) {
-            case QUALITY -> pesoQuality;
-            case DEFICIT -> pesoDeficit;
-            case EXCESSO -> pesoExcesso;
-            case PRIORIDADE -> pesoPrioridade;
-            case MOMENTO -> pesoMomento;
+            case QUALITY -> nz(pesoQuality, TermoScore.QUALITY);
+            case DEFICIT -> nz(pesoDeficit, TermoScore.DEFICIT);
+            case EXCESSO -> nz(pesoExcesso, TermoScore.EXCESSO);
+            case PRIORIDADE -> nz(pesoPrioridade, TermoScore.PRIORIDADE);
+            case MOMENTO -> nz(pesoMomento, TermoScore.MOMENTO);
+            case PRECO -> nz(pesoPreco, TermoScore.PRECO);
         };
+    }
+
+    /**
+     * Pesos nulos vêm de configurações gravadas antes do termo existir
+     * (coluna nova): cai para o peso padrão em vez de 0, senão o termo novo
+     * entraria desligado para quem já usava o sistema.
+     */
+    private BigDecimal nz(BigDecimal valor, TermoScore termo) {
+        return (valor != null) ? valor : termo.getPesoPadrao();
     }
 
     public void definirPeso(TermoScore termo, BigDecimal valor) {
@@ -137,11 +158,17 @@ public class ScoreConfigModel {
             case EXCESSO -> setPesoExcesso(valor);
             case PRIORIDADE -> setPesoPrioridade(valor);
             case MOMENTO -> setPesoMomento(valor);
-        }
+            case PRECO -> setPesoPreco(valor);
+        };
     }
 
     /** Soma dos pesos — denominador da fórmula. */
     public BigDecimal somaPesos() {
-        return pesoQuality.add(pesoDeficit).add(pesoExcesso).add(pesoPrioridade).add(pesoMomento);
+        return pesoDe(TermoScore.QUALITY)
+                .add(pesoDe(TermoScore.DEFICIT))
+                .add(pesoDe(TermoScore.EXCESSO))
+                .add(pesoDe(TermoScore.PRIORIDADE))
+                .add(pesoDe(TermoScore.MOMENTO))
+                .add(pesoDe(TermoScore.PRECO));
     }
 }

@@ -62,10 +62,17 @@ export interface MetaDraft {
   tolerancia: string;
   /** Teto de concentração do ativo (%). */
   limite_maximo: string;
+  /**
+   * REGRA DE COMPRA: preço máximo por cota. Acima dele o ativo é DESCARTADO do
+   * aporte, por melhor que seja o Quality Score. Vazio = sem regra de preço.
+   */
+  preco_maximo_compra: string;
 
   /* ── Situação atual (informativo, vem das posições) ── */
   percentual_atual: number | null;
   valor_atual: number | null;
+  /** Preço atual da posição — só para avisar quando já passou do preço máximo. */
+  preco_atual: number | null;
 }
 
 export function novaMetaPlanejada(classe: CategoriaInvestimento): MetaDraft {
@@ -90,8 +97,10 @@ export function novaMetaPlanejada(classe: CategoriaInvestimento): MetaDraft {
     setor_nome_posicao: null,
     tolerancia: "",
     limite_maximo: "",
+    preco_maximo_compra: "",
     percentual_atual: null,
     valor_atual: null,
+    preco_atual: null,
   };
 }
 
@@ -261,6 +270,19 @@ export default function MetasEditor({
               title="Limite máximo de concentração (%): acima dele o ativo não recebe novos aportes."
               onChange={e => atualizar(m.key, { limite_maximo: apenasNumero(e.target.value) })}
               style={{ ...controlStyle, width: "100%", textAlign: "right", opacity: m.incluir ? 1 : 0.5 }} />
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={miniLabel}>Preço máximo de compra</label>
+            <input value={m.preco_maximo_compra} disabled={!m.incluir} inputMode="decimal" placeholder="sem regra de preço"
+              aria-label={`Preço máximo de compra de ${m.ticker}`}
+              title="Regra de compra: acima deste preço o ativo é DESCARTADO do aporte, por melhor que seja o Quality Score. Vazio = sem regra."
+              onChange={e => atualizar(m.key, { preco_maximo_compra: apenasNumero(e.target.value) })}
+              style={{ ...controlStyle, width: "100%", textAlign: "right", opacity: m.incluir ? 1 : 0.5 }} />
+            {m.preco_atual != null && m.preco_maximo_compra.trim() !== "" && textoParaNum(m.preco_maximo_compra) < m.preco_atual && (
+              <p style={{ fontSize: "11px", color: "#b91c1c", margin: "4px 0 0" }}>
+                ⛔ O preço atual ({fmtMoeda(m.preco_atual, moeda)}) já está acima deste limite: o ativo está descartado.
+              </p>
+            )}
           </div>
         </div>
 
@@ -511,6 +533,7 @@ export default function MetasEditor({
                 <th style={{ ...th, textAlign: "center" }}>Prioridade</th>
                 <th style={{ ...th, textAlign: "right" }}>±</th>
                 <th style={{ ...th, textAlign: "right" }}>máx %</th>
+                <th style={{ ...th, textAlign: "right" }} title="Regra de compra: acima deste preço o ativo é descartado do aporte">Preço máx. compra</th>
                 <th style={{ ...th, textAlign: "left" }}>Subclasse</th>
                 <th style={{ ...th, textAlign: "left" }}>Setor</th>
               </tr>
@@ -575,6 +598,13 @@ export default function MetasEditor({
                         title="Limite máximo de concentração (%): acima dele o ativo não recebe novos aportes."
                         onChange={e => atualizar(m.key, { limite_maximo: apenasNumero(e.target.value) })}
                         style={{ ...controlStyle, width: "58px", textAlign: "right", fontSize: "12px", opacity: m.incluir ? 1 : 0.5 }} />
+                    </td>
+                    <td style={{ ...td, textAlign: "right" }}>
+                      <input value={m.preco_maximo_compra} disabled={!m.incluir} inputMode="decimal" placeholder="sem regra"
+                        aria-label={`Preço máximo de compra de ${m.ticker}`}
+                        title="Regra de compra: acima deste preço o ativo é DESCARTADO do aporte, por melhor que seja o Quality Score."
+                        onChange={e => atualizar(m.key, { preco_maximo_compra: apenasNumero(e.target.value) })}
+                        style={{ ...controlStyle, width: "78px", textAlign: "right", fontSize: "12px", opacity: m.incluir ? 1 : 0.5 }} />
                     </td>
                     <td style={td}>
                       <select value={m.subclasse_nome} disabled={!m.incluir || subs.length === 0}

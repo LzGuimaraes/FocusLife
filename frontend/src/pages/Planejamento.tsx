@@ -52,7 +52,7 @@ const modulos: Modulo[] = [
   {
     icon: "⚙️",
     titulo: "Pontuação",
-    descricao: "Ajuste os pesos do Quality Score e do Contribution Score da sua metodologia.",
+    descricao: "Ajuste os pesos do Quality Score e do Priority Score da sua metodologia.",
     path: "/planejamento/pontuacao",
     cor: "#f59e0b",
     bg: "#fffbeb",

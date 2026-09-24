@@ -59,6 +59,8 @@ public record CarteiraIdealResponseDTO(
             BigDecimal percentual_ideal,
             BigDecimal tolerancia,
             BigDecimal limite_maximo,
+            /** Regra de compra: acima deste preço o ativo é descartado do aporte. */
+            BigDecimal preco_maximo_compra,
             Integer prioridade_manual,
             Integer ordem
     ) {}

@@ -118,41 +118,51 @@ public class ScoreCalculator {
     }
 
     /* ══════════════════════════════════════════════════════════════════
-       CONTRIBUTION SCORE (Módulo 6) — prioridade de aporte
+       PRIORITY SCORE (Módulo 6) — prioridade de aporte ENTRE OS ELEGÍVEIS
        ══════════════════════════════════════════════════════════════════ */
 
-    /** Pesos configurados pelo usuário (α, β, γ, δ, ε). */
-    public record TermosContribution(
+    /** Pesos configurados pelo usuário (α, β, γ, δ, ε, ζ). */
+    public record TermosPrioridade(
             BigDecimal quality,
             BigDecimal deficit,
             BigDecimal excesso,
             BigDecimal prioridade,
-            BigDecimal momento
+            BigDecimal momento,
+            BigDecimal preco
     ) {}
 
     /**
-     * Contribution Score (0–100) com os termos JÁ normalizados em 0..1:
+     * PRIORITY SCORE (0–100) com os termos JÁ normalizados em 0..1:
      *
-     *      C = 100 × (α·Q̂ + β·D̂ − γ·Ê + δ·P̂ + ε·M̂) / (α + β + γ + δ + ε)
+     *      P = 100 × (α·Q̂ + β·D̂ − γ·Ê + δ·P̂ + ε·M̂ + ζ·Ô) / (α + β + γ + δ + ε + ζ)
      *
-     * `qualityNormalizada` nula significa "ativo ainda sem avaliação": o termo
-     * de qualidade sai da conta e o denominador é renormalizado (α deixa de
-     * contar), para não punir o ativo por uma nota que não existe.
+     * Responde apenas: "entre os ativos que PODEM receber aporte agora, qual tem
+     * maior prioridade?". Quem decide se o ativo PODE receber é a fase de
+     * ELEGIBILIDADE — este score nunca reabilita um ativo descartado nem
+     * compensa uma regra de compra violada.
+     *
+     * Termo sem dado sai do numerador E do denominador (o peso dele deixa de
+     * contar), para não punir o ativo por uma informação que não existe:
+     *   • Q̂ nulo  → ativo ainda sem avaliação de qualidade;
+     *   • M̂ nulo  → ativo sem checklist de momento;
+     *   • Ô nulo  → ativo sem preço máximo de compra configurado.
      * `momentoNormalizado` é o FATOR de momento (0 a 1) do ativo.
      * O resultado é limitado ao intervalo [0, 100].
      */
-    public BigDecimal contributionScore(Double qualityNormalizada,
-                                        double deficitNormalizado,
-                                        double excessoNormalizado,
-                                        double prioridadeNormalizada,
-                                        Double momentoNormalizado,
-                                        TermosContribution pesos) {
+    public BigDecimal priorityScore(Double qualityNormalizada,
+                                    double deficitNormalizado,
+                                    double excessoNormalizado,
+                                    double prioridadeNormalizada,
+                                    Double momentoNormalizado,
+                                    Double oportunidadeNormalizada,
+                                    TermosPrioridade pesos) {
 
         BigDecimal pesoQuality = (qualityNormalizada != null) ? nz(pesos.quality()) : BigDecimal.ZERO;
         BigDecimal pesoDeficit = nz(pesos.deficit());
         BigDecimal pesoExcesso = nz(pesos.excesso());
         BigDecimal pesoPrioridade = nz(pesos.prioridade());
         BigDecimal pesoMomento = (momentoNormalizado != null) ? nz(pesos.momento()) : BigDecimal.ZERO;
+        BigDecimal pesoPreco = (oportunidadeNormalizada != null) ? nz(pesos.preco()) : BigDecimal.ZERO;
 
         BigDecimal numerador = BigDecimal.ZERO;
         if (qualityNormalizada != null) {
@@ -161,13 +171,16 @@ public class ScoreCalculator {
         if (momentoNormalizado != null) {
             numerador = numerador.add(pesoMomento.multiply(BigDecimal.valueOf(momentoNormalizado), MC), MC);
         }
+        if (oportunidadeNormalizada != null) {
+            numerador = numerador.add(pesoPreco.multiply(BigDecimal.valueOf(oportunidadeNormalizada), MC), MC);
+        }
         numerador = numerador
                 .add(pesoDeficit.multiply(BigDecimal.valueOf(deficitNormalizado), MC), MC)
                 .subtract(pesoExcesso.multiply(BigDecimal.valueOf(excessoNormalizado), MC), MC)
                 .add(pesoPrioridade.multiply(BigDecimal.valueOf(prioridadeNormalizada), MC), MC);
 
         BigDecimal denominador = pesoQuality.add(pesoDeficit).add(pesoExcesso)
-                .add(pesoPrioridade).add(pesoMomento);
+                .add(pesoPrioridade).add(pesoMomento).add(pesoPreco);
         if (denominador.compareTo(BigDecimal.ZERO) == 0) {
             return BigDecimal.ZERO.setScale(ESCALA, RoundingMode.HALF_UP);
         }

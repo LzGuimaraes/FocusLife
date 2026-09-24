@@ -65,6 +65,8 @@ export interface MetaIdeal {
   percentual_ideal: number;
   tolerancia: number;
   limite_maximo: number | null;
+  /** Regra de compra: acima deste preço o ativo é descartado do aporte. */
+  preco_maximo_compra: number | null;
   prioridade_manual: number;
   ordem: number;
 }
@@ -115,6 +117,8 @@ export interface MetaIdealPayload {
   percentual_ideal: number;
   tolerancia?: number;
   limite_maximo?: number | null;
+  /** Regra de compra: acima deste preço o ativo é descartado do aporte. */
+  preco_maximo_compra?: number | null;
   prioridade_manual: number;
   ordem: number;
 }
@@ -220,6 +224,8 @@ export interface MeuAtivo {
   percentual_ideal: number | null;
   tolerancia: number | null;
   limite_maximo: number | null;
+  /** Regra de compra vinda da meta (null = sem regra de preço). */
+  preco_maximo_compra: number | null;
   prioridade_manual: number | null;
   subclasse_id: number | null;
   subclasse_nome: string | null;
