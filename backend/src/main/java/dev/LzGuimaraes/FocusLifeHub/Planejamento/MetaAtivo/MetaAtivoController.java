@@ -36,18 +36,9 @@ public class MetaAtivoController {
         return ResponseEntity.ok(metaAtivoService.update(id, dto));
     }
 
-    /** Ajuste rápido da prioridade manual (0–10) — Módulo 7. */
-    @PutMapping("/{id}/prioridade")
-    public ResponseEntity<MetaAtivoResponseDTO> updatePrioridade(@PathVariable Long id,
-                                                                 @RequestBody PrioridadeRequest body) {
-        return ResponseEntity.ok(metaAtivoService.updatePrioridade(id, body != null ? body.prioridade_manual : null));
-    }
-
     @DeleteMapping("/delete/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         metaAtivoService.delete(id);
         return ResponseEntity.noContent().build();
     }
-
-    public static record PrioridadeRequest(Integer prioridade_manual) {}
 }

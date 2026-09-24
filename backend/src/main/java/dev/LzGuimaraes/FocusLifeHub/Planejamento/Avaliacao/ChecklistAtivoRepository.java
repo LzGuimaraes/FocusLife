@@ -42,5 +42,13 @@ public interface ChecklistAtivoRepository extends JpaRepository<ChecklistAtivoMo
     List<ChecklistAtivoModel> findByAtivoComPerguntas(@Param("userId") Long userId,
                                                       @Param("ativoId") Long ativoId);
 
+    @Query("""
+            select distinct c from ChecklistAtivoModel c
+            left join fetch c.perguntas
+            where c.user.id = :userId and c.subclasseSlug = :slug
+            """)
+    List<ChecklistAtivoModel> findBySubclasseComPerguntas(@Param("userId") Long userId,
+                                                          @Param("slug") String slug);
+
     long countByUserIdAndAtivoCadastroId(Long userId, UUID ativoCadastroId);
 }

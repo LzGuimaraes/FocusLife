@@ -26,13 +26,5 @@ public record MetaAtivoRequestDTO(
         @DecimalMax(value = "100.0", message = "O percentual ideal não pode passar de 100%")
         BigDecimal percentual_ideal,
 
-        @DecimalMin(value = "0", message = "A prioridade manual vai de 0 a 10")
-        @DecimalMax(value = "10", message = "A prioridade manual vai de 0 a 10")
-        Integer prioridade_manual,
-
-        /** Regra de compra: acima deste preço o ativo é descartado do aporte. */
-        @DecimalMin(value = "0.0", message = "O preço máximo de compra não pode ser negativo")
-        BigDecimal preco_maximo_compra,
-
         Integer ordem
 ) {}

@@ -122,10 +122,6 @@ public record CarteiraIdealRequestDTO(
             @DecimalMax(value = "100.0", message = "O percentual ideal não pode passar de 100%")
             BigDecimal percentual_ideal,
 
-            @DecimalMin(value = "0", message = "A prioridade manual vai de 0 a 10")
-            @DecimalMax(value = "10", message = "A prioridade manual vai de 0 a 10")
-            Integer prioridade_manual,
-
             /**
              * Faixa (em pontos percentuais SOBRE o % ideal do ativo) que ainda é
              * aceita como "no alvo" — e o teto do aporte do ativo.
@@ -138,14 +134,6 @@ public record CarteiraIdealRequestDTO(
             @DecimalMin(value = "0.0", message = "O limite máximo não pode ser negativo")
             @DecimalMax(value = "100.0", message = "O limite máximo não pode passar de 100%")
             BigDecimal limite_maximo,
-
-            /**
-             * PREÇO MÁXIMO DE COMPRA (número absoluto). Regra de ELEGIBILIDADE:
-             * acima dele o ativo é descartado do aporte, independente do score.
-             * NULL = sem regra de preço para este ativo.
-             */
-            @DecimalMin(value = "0.0", message = "O preço máximo de compra não pode ser negativo")
-            BigDecimal preco_maximo_compra,
 
             Integer ordem
     ) {}

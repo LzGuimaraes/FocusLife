@@ -14,7 +14,7 @@ public record MetaAtivoResponseDTO(
         Long subclasse_id,
         String subclasse_nome,
         BigDecimal percentual_ideal,
-        BigDecimal preco_maximo_compra,
-        Integer prioridade_manual,
+        // preço máximo de compra e prioridade manual saíram do modelo:
+        // a decisão de aporte agora usa só déficit + nota do checklist.
         Integer ordem
 ) {}

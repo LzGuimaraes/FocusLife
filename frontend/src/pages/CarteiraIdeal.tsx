@@ -20,7 +20,7 @@ import { catInfo, fmtPercentual, somaFechada, CATEGORIAS } from "../utils/percen
 import type {
   CarteiraIdeal, CarteiraIdealPayload, CarteiraResumo, Comparativo, Estrategia, MeusAtivos,
 } from "../types/planejamento";
-import type { SetorMercado } from "../types/setorMercado";
+
 
 /* ══════════════════════════════════════════════════════════════════════
    Tela da Carteira Ideal (Módulos 1, 7 e 10 - parte do comparativo).
@@ -55,8 +55,6 @@ export default function CarteiraIdealPage() {
   const [meusAtivos, setMeusAtivos] = useState<MeusAtivos | null>(null);
   const [avisos, setAvisos] = useState<string[]>(
     []);
-  /** Nomes do catálogo global de setores (sugestões do campo de setor). */
-  const [setoresCatalogo, setSetoresCatalogo] = useState<string[]>([]);
   /** Pendências aparecem logo abaixo do cabeçalho (e podem ser recolhidas). */
   const [alertasAbertos, setAlertasAbertos] = useState(true);
   /** Payload gravado no servidor: base para saber se há alteração não salva. */
@@ -72,12 +70,6 @@ export default function CarteiraIdealPage() {
     api.get("/estrategias/all?page=0&size=100")
       .then(r => setEstrategias(r.data.content ?? []))
       .catch(() => setEstrategias([]));
-
-    // Catálogo de setores: é uma tabela de REFERÊNCIA (não é dado do usuário),
-    // então é buscada uma vez por tela e serve para qualquer carteira.
-    api.get<SetorMercado[]>("/setores-mercado?somente_ativos=true")
-      .then(r => setSetoresCatalogo((r.data ?? []).map(s => s.nome)))
-      .catch(() => setSetoresCatalogo([]));
   }, []);
 
   /* ── Garante SEMPRE uma carteira válida selecionada ──
@@ -141,11 +133,11 @@ export default function CarteiraIdealPage() {
           key: novaChave(),
           ativo_cadastro_id: a.ativo_cadastro_id ?? "",
           ticker: a.ticker,
+          nome: a.nome ?? "",
           classe: a.classe,
           subclasse_nome: meta?.subclasse_nome ?? "",
           setor_nome: meta?.setor_nome ?? "",
           percentual_ideal: meta ? numParaTexto(meta.percentual_ideal) : "",
-          prioridade_manual: String(meta?.prioridade_manual ?? 0),
           incluir: meta != null,
           origem: "carteira",
           vinculado: a.vinculado,
@@ -158,10 +150,8 @@ export default function CarteiraIdealPage() {
           setor_nome_posicao: a.setor_nome ?? null,
           tolerancia: numParaTexto(meta?.tolerancia ?? null),
           limite_maximo: numParaTexto(meta?.limite_maximo ?? null),
-          preco_maximo_compra: numParaTexto(meta?.preco_maximo_compra ?? null),
           percentual_atual: a.percentual_atual,
           valor_atual: a.valor_atual,
-          preco_atual: a.preco_atual,
         };
       });
       const semPosicao = metasExistentes
@@ -170,11 +160,11 @@ export default function CarteiraIdealPage() {
           key: novaChave(),
           ativo_cadastro_id: m.ativo_cadastro_id as string,
           ticker: m.ticker ?? "",
+          nome: m.ticker ?? "",
           classe: m.classe,
           subclasse_nome: m.subclasse_nome ?? "",
           setor_nome: "",
           percentual_ideal: numParaTexto(m.percentual_ideal),
-          prioridade_manual: String(m.prioridade_manual ?? 0),
           incluir: true,
           origem: "planejado" as const,
           vinculado: true,
@@ -187,10 +177,8 @@ export default function CarteiraIdealPage() {
           setor_nome_posicao: null,
           tolerancia: "",
           limite_maximo: "",
-          preco_maximo_compra: numParaTexto(m.preco_maximo_compra ?? null),
           percentual_atual: null,
           valor_atual: null,
-          preco_atual: null,
         }));
 
       const metasCarregadas: MetaDraft[] = [...daCarteira, ...semPosicao];
@@ -236,10 +224,6 @@ export default function CarteiraIdealPage() {
     for (const m of metas.filter(x => x.incluir)) {
       if (!m.ativo_cadastro_id) return "Escolha o ativo de cada linha planejada (ou remova a linha).";
       if (m.percentual_ideal.trim() === "") return `Informe o % ideal de ${m.ticker || "cada ativo com meta"}.`;
-      const prioridade = parseInt(m.prioridade_manual, 10);
-      if (Number.isNaN(prioridade) || prioridade < 0 || prioridade > 10) {
-        return `A prioridade de ${m.ticker} deve ficar entre 0 e 10.`;
-      }
     }
     return null;
   };
@@ -302,17 +286,6 @@ export default function CarteiraIdealPage() {
       if (selecionada != null) carregar(selecionada);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Erro ao classificar a posição");
-    }
-  };
-
-  /* ── Classificação de posição num SETOR (chamada pelo MetasEditor) ── */
-  const atribuirSetor = async (ativoIds: number[], setorId: number | null) => {
-    try {
-      await api.post("/ativos/atribuir-setor", { ativo_ids: ativoIds, setor_id: setorId });
-      toast.success(setorId == null ? "Setor removido." : "Posição classificada no setor!");
-      if (selecionada != null) carregar(selecionada);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Erro ao classificar o setor");
     }
   };
 
@@ -575,12 +548,10 @@ export default function CarteiraIdealPage() {
               de qualquer edição — dá o contexto antes de mexer nos números. */}
           {comparativo && <DonutsAtualIdeal comparativo={comparativo} />}
 
-          <CarteiraIdealEditor classes={classes} onChange={setClasses} atualPorClasse={atualPorClasse}
-            setoresCatalogo={setoresCatalogo} />
+          <CarteiraIdealEditor classes={classes} onChange={setClasses} atualPorClasse={atualPorClasse} />
           <MetasEditor metas={metas} classes={classes} onChange={setMetas}
             onVincular={vincular}
             onAtribuirSubclasse={atribuirSubclasse}
-            onAtribuirSetor={atribuirSetor}
             moeda={meusAtivos?.moeda ?? "BRL"}
             valorTotal={meusAtivos?.valor_total ?? 0} />
         </div>
@@ -690,8 +661,6 @@ function montarPayload(classes: ClasseDraft[], metas: MetaDraft[], estrategiaId:
       percentual_ideal: textoParaNum(m.percentual_ideal),
       tolerancia: textoParaNum(m.tolerancia),
       limite_maximo: m.limite_maximo.trim() === "" ? null : textoParaNum(m.limite_maximo),
-      preco_maximo_compra: m.preco_maximo_compra.trim() === "" ? null : textoParaNum(m.preco_maximo_compra),
-      prioridade_manual: parseInt(m.prioridade_manual, 10) || 0,
       ordem: i,
     })),
   };

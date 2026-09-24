@@ -31,12 +31,16 @@ export interface MetaDraft {
   key: string;
   ativo_cadastro_id: string;
   ticker: string;
+  /**
+   * Nome como o usuário cadastrou a POSIÇÃO (ex.: "Petrobras PN"). É o que a
+   * tabela mostra abaixo do ticker: "PETR4" sozinho não diz nada a quem olha.
+   */
+  nome: string;
   classe: CategoriaInvestimento;
   subclasse_nome: string;
   /** Setor dentro da subclasse (nível opcional). */
   setor_nome: string;
   percentual_ideal: string;
-  prioridade_manual: string;
   /** Linha marcada participa do payload (as desmarcadas perdem a meta). */
   incluir: boolean;
   /** "carteira" = ativo que já existe; "planejado" = ativo que ainda vai comprar. */
@@ -62,17 +66,10 @@ export interface MetaDraft {
   tolerancia: string;
   /** Teto de concentração do ativo (%). */
   limite_maximo: string;
-  /**
-   * REGRA DE COMPRA: preço máximo por cota. Acima dele o ativo é DESCARTADO do
-   * aporte, por melhor que seja o Quality Score. Vazio = sem regra de preço.
-   */
-  preco_maximo_compra: string;
 
   /* ── Situação atual (informativo, vem das posições) ── */
   percentual_atual: number | null;
   valor_atual: number | null;
-  /** Preço atual da posição — só para avisar quando já passou do preço máximo. */
-  preco_atual: number | null;
 }
 
 export function novaMetaPlanejada(classe: CategoriaInvestimento): MetaDraft {
@@ -80,11 +77,11 @@ export function novaMetaPlanejada(classe: CategoriaInvestimento): MetaDraft {
     key: novaChave(),
     ativo_cadastro_id: "",
     ticker: "",
+    nome: "",
     classe,
     subclasse_nome: "",
     setor_nome: "",
     percentual_ideal: "",
-    prioridade_manual: "0",
     incluir: true,
     origem: "planejado",
     vinculado: true,
@@ -97,10 +94,8 @@ export function novaMetaPlanejada(classe: CategoriaInvestimento): MetaDraft {
     setor_nome_posicao: null,
     tolerancia: "",
     limite_maximo: "",
-    preco_maximo_compra: "",
     percentual_atual: null,
     valor_atual: null,
-    preco_atual: null,
   };
 }
 
@@ -114,18 +109,23 @@ interface Props {
   onVincular: (ativoIds: number[], ativoCadastroId: string) => void;
   /** Classifica posições sem ticker em uma subclasse da Carteira Ideal (null = remover). */
   onAtribuirSubclasse: (ativoIds: number[], subclasseId: number | null) => void;
-  /** Classifica posições em um SETOR da subclasse (null = remover). */
-  onAtribuirSetor: (ativoIds: number[], setorId: number | null) => void;
 }
 
 type Visual = "tabela" | "grade";
 
+/** Quantas linhas a tabela mostra antes do "ver mais". */
+const PAGINA_ATIVOS = 8;
+
 export default function MetasEditor({
-  metas, classes, moeda, valorTotal, onChange, onVincular, onAtribuirSubclasse, onAtribuirSetor,
+  metas, classes, moeda, valorTotal, onChange, onVincular, onAtribuirSubclasse,
 }: Props) {
   const [buscando, setBuscando] = useState<string | null>(null);
   const [visual, setVisual] = useState<Visual>("tabela");
   const [abaClasse, setAbaClasse] = useState<CategoriaInvestimento | null>(null);
+  /** Busca pela ação (ticker ou nome) — a lista de metas pode ser longa. */
+  const [busca, setBusca] = useState("");
+  /** A tabela mostra os 8 primeiros; o resto só no "ver mais". */
+  const [mostrarTodas, setMostrarTodas] = useState(false);
   /** O card de aviso de "sem ticker" começa aberto porque pede ação. */
   const [avisoAberto, setAvisoAberto] = useState(true);
 
@@ -152,15 +152,6 @@ export default function MetasEditor({
       ?? null;
   };
 
-  /** Setores de uma subclasse específica (nível opcional dentro dela). */
-  const setoresDaSubclasse = (classe: CategoriaInvestimento, subclasseNome: string) =>
-    subclassesDaClasse(classe).find(s => s.nome === subclasseNome)?.setores ?? [];
-
-  /** Todos os setores da classe (com o nome da subclasse), para a posição sem ticker. */
-  const setoresDaClasse = (classe: CategoriaInvestimento) =>
-    subclassesDaClasse(classe).flatMap(s => s.setores.map(st => ({
-      id: st.id ?? null, nome: st.nome, subclasse: s.nome, key: st.key,
-    }))).filter(st => st.id != null);
 
   const daCarteira = metas.filter(m => m.origem === "carteira");
   const planejados = metas.filter(m => m.origem === "planejado");
@@ -182,6 +173,16 @@ export default function MetasEditor({
   const semVinculoDaAba = semVinculo.filter(naAba);
   const classePadrao = classeAtiva ?? classes[0]?.classe ?? "ACOES";
 
+  /* ── Busca + paginação da tabela ──
+     O usuário acompanha poucos ativos por vez: a busca acha o que ele quer e a
+     lista abre com os 8 primeiros, para a tela não virar um paredão de linhas. */
+  const termoBusca = busca.trim().toLowerCase();
+  const filtradasDaAba = comVinculoDaAba.filter(m => termoBusca === ""
+    || m.ticker.toLowerCase().includes(termoBusca)
+    || m.nome.toLowerCase().includes(termoBusca)
+    || m.subclasse_nome.toLowerCase().includes(termoBusca));
+  const visiveisNaTabela = mostrarTodas ? filtradasDaAba : filtradasDaAba.slice(0, PAGINA_ATIVOS);
+
   /** Atalho: registrar a distribuição atual como alvo (um clique, zero digitação). */
   const usarDistribuicaoAtual = () => {
     onChange(metas.map(m => (m.origem === "carteira" && m.vinculado && m.percentual_atual != null
@@ -191,14 +192,13 @@ export default function MetasEditor({
 
   const limparAlvos = () =>
     onChange(metas.map(m => (m.origem === "carteira"
-      ? { ...m, incluir: false, percentual_ideal: "", prioridade_manual: "0", subclasse_nome: "" }
+      ? { ...m, incluir: false, percentual_ideal: "", subclasse_nome: "" }
       : m)));
 
   /** Card de um ativo da carteira (visual em grade). */
   const cartaoAtivo = (m: MetaDraft) => {
     const info = catInfo(m.classe);
     const subs = subclassesDaClasse(m.classe);
-    const setores = setoresDaSubclasse(m.classe, m.subclasse_nome);
     const temAlvo = m.percentual_ideal.trim() !== "";
     const valorIdeal = valorTotal * (textoParaNum(m.percentual_ideal) / 100);
     return (
@@ -213,6 +213,9 @@ export default function MetasEditor({
             onChange={e => atualizar(m.key, { incluir: e.target.checked })}
             style={{ width: "18px", height: "18px", accentColor: "#6366f1", cursor: "pointer" }} />
           <span style={{ fontSize: "15px", fontWeight: 800, color: "#0f172a" }}>{m.ticker}</span>
+          {m.nome.trim() !== "" && m.nome.trim() !== m.ticker.trim() && (
+            <span style={{ fontSize: "12.5px", color: "#64748b", fontWeight: 600 }}>{m.nome}</span>
+          )}
           <span style={chip(info.color, info.bg)}>{info.icon} {info.label}</span>
           <span style={{ ...numMedio, marginLeft: "auto", color: "#475569" }}>
             {fmtMoeda(m.valor_atual, moeda)}
@@ -246,15 +249,7 @@ export default function MetasEditor({
           </span>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
-          <div>
-            <label style={miniLabel}>Prioridade</label>
-            <input value={m.prioridade_manual} disabled={!m.incluir} inputMode="numeric"
-              aria-label={`Prioridade de ${m.ticker}`}
-              onChange={e => atualizar(m.key, { prioridade_manual: e.target.value.replace(/[^0-9]/g, "") })}
-              title="0 a 10 — desempata a ordem dos aportes"
-              style={{ ...controlStyle, width: "100%", textAlign: "right", opacity: m.incluir ? 1 : 0.5 }} />
-          </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px" }}>
           <div>
             <label style={miniLabel}>Tolerância ±</label>
             <input value={m.tolerancia} disabled={!m.incluir} inputMode="decimal" placeholder="0"
@@ -271,45 +266,17 @@ export default function MetasEditor({
               onChange={e => atualizar(m.key, { limite_maximo: apenasNumero(e.target.value) })}
               style={{ ...controlStyle, width: "100%", textAlign: "right", opacity: m.incluir ? 1 : 0.5 }} />
           </div>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label style={miniLabel}>Preço máximo de compra</label>
-            <input value={m.preco_maximo_compra} disabled={!m.incluir} inputMode="decimal" placeholder="sem regra de preço"
-              aria-label={`Preço máximo de compra de ${m.ticker}`}
-              title="Regra de compra: acima deste preço o ativo é DESCARTADO do aporte, por melhor que seja o Quality Score. Vazio = sem regra."
-              onChange={e => atualizar(m.key, { preco_maximo_compra: apenasNumero(e.target.value) })}
-              style={{ ...controlStyle, width: "100%", textAlign: "right", opacity: m.incluir ? 1 : 0.5 }} />
-            {m.preco_atual != null && m.preco_maximo_compra.trim() !== "" && textoParaNum(m.preco_maximo_compra) < m.preco_atual && (
-              <p style={{ fontSize: "11px", color: "#b91c1c", margin: "4px 0 0" }}>
-                ⛔ O preço atual ({fmtMoeda(m.preco_atual, moeda)}) já está acima deste limite: o ativo está descartado.
-              </p>
-            )}
-          </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-          <div>
-            <label style={miniLabel}>Subclasse</label>
-            <select value={m.subclasse_nome} disabled={!m.incluir || subs.length === 0}
-              aria-label={`Subclasse de ${m.ticker}`}
-              onChange={e => atualizar(m.key, { subclasse_nome: e.target.value, setor_nome: "" })}
-              style={{ ...controlStyle, width: "100%", opacity: (!m.incluir || subs.length === 0) ? 0.5 : 1 }}>
-              <option value="">—</option>
-              {subs.map(s => <option key={s.key} value={s.nome}>{s.nome || "(sem nome)"}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={miniLabel}>Setor</label>
-            <select value={m.setor_nome} disabled={!m.incluir || setores.length === 0}
-              aria-label={`Setor de ${m.ticker}`}
-              title={setores.length === 0
-                ? "Esta subclasse não tem setores cadastrados na Carteira Ideal"
-                : "Setor dentro da subclasse (opcional)"}
-              onChange={e => atualizar(m.key, { setor_nome: e.target.value })}
-              style={{ ...controlStyle, width: "100%", opacity: (!m.incluir || setores.length === 0) ? 0.5 : 1 }}>
-              <option value="">—</option>
-              {setores.map(st => <option key={st.key} value={st.nome}>{st.nome || "(sem nome)"}</option>)}
-            </select>
-          </div>
+        <div>
+          <label style={miniLabel}>Subclasse</label>
+          <select value={m.subclasse_nome} disabled={!m.incluir || subs.length === 0}
+            aria-label={`Subclasse de ${m.ticker}`}
+            onChange={e => atualizar(m.key, { subclasse_nome: e.target.value, setor_nome: "" })}
+            style={{ ...controlStyle, width: "100%", opacity: (!m.incluir || subs.length === 0) ? 0.5 : 1 }}>
+            <option value="">—</option>
+            {subs.map(s => <option key={s.key} value={s.nome}>{s.nome || "(sem nome)"}</option>)}
+          </select>
         </div>
       </article>
     );
@@ -412,24 +379,6 @@ export default function MetasEditor({
                       </button>
                     )}
 
-                    {setoresDaClasse(m.classe).length > 0 && (
-                      <div>
-                        <label style={miniLabel}>Setor (opcional)</label>
-                        <select value={m.setor_id ?? ""} aria-label={`Setor de ${m.ticker}`}
-                          title="Setor dentro da subclasse — define o teto do aporte deste nível"
-                          onChange={e => {
-                            const v = e.target.value;
-                            onAtribuirSetor(m.ativo_ids, v === "" ? null : Number(v));
-                          }}
-                          style={{ ...controlStyle, minWidth: "180px", fontSize: "12.5px" }}>
-                          <option value="">— sem setor —</option>
-                          {setoresDaClasse(m.classe).map(st => (
-                            <option key={st.key} value={st.id as number}>{st.subclasse} › {st.nome}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
                     {buscando === m.key ? (
                       <div style={{ minWidth: "220px", flex: "1 1 220px" }}>
                         <label style={miniLabel}>Vincular ao catálogo</label>
@@ -520,119 +469,112 @@ export default function MetasEditor({
 
       {/* ── Visual em TABELA (comparação numérica) ── */}
       {visual === "tabela" && comVinculoDaAba.length > 0 && (
-        <div style={{ overflowX: "auto", marginTop: "14px" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "800px" }}>
-            <thead>
-              <tr>
-                <th style={th}>Meta?</th>
-                <th style={{ ...th, textAlign: "left" }}>Ativo</th>
-                <th style={{ ...th, textAlign: "right" }}>Hoje</th>
-                <th style={{ ...th, textAlign: "right" }}>% atual</th>
-                <th style={{ ...th, textAlign: "right" }}>% ideal</th>
-                <th style={{ ...th, textAlign: "right" }}>Valor ideal</th>
-                <th style={{ ...th, textAlign: "center" }}>Prioridade</th>
-                <th style={{ ...th, textAlign: "right" }}>±</th>
-                <th style={{ ...th, textAlign: "right" }}>máx %</th>
-                <th style={{ ...th, textAlign: "right" }} title="Regra de compra: acima deste preço o ativo é descartado do aporte">Preço máx. compra</th>
-                <th style={{ ...th, textAlign: "left" }}>Subclasse</th>
-                <th style={{ ...th, textAlign: "left" }}>Setor</th>
-              </tr>
-            </thead>
-            <tbody>
-              {comVinculoDaAba.map(m => {
-                const info = catInfo(m.classe);
-                const valorIdeal = valorTotal * (textoParaNum(m.percentual_ideal) / 100);
-                const subs = subclassesDaClasse(m.classe);
-                const setores = setoresDaSubclasse(m.classe, m.subclasse_nome);
-                const temAlvo = m.percentual_ideal.trim() !== "";
-                return (
-                  <tr key={m.key} style={{ borderTop: "1px solid #f1f5f9", opacity: m.incluir ? 1 : 0.55 }}>
-                    <td style={{ ...td, textAlign: "center" }}>
-                      <input type="checkbox" checked={m.incluir}
-                        aria-label={`Definir meta para ${m.ticker}`}
-                        onChange={e => atualizar(m.key, { incluir: e.target.checked })}
-                        style={{ width: "17px", height: "17px", accentColor: "#6366f1", cursor: "pointer" }} />
-                    </td>
-                    <td style={{ ...td, fontWeight: 700, color: "#0f172a" }}>
-                      {m.ticker}
-                      <span style={{ ...chip(info.color, info.bg), marginLeft: "8px" }}>
-                        {info.icon} {info.label}
-                      </span>
-                    </td>
-                    <td style={{ ...td, textAlign: "right", color: "#475569", whiteSpace: "nowrap" }}>
-                      {fmtMoeda(m.valor_atual, moeda)}
-                    </td>
-                    <td style={{ ...td, textAlign: "right", color: "#475569" }}>
-                      {m.percentual_atual != null ? fmtPercentual(m.percentual_atual) : "—"}
-                    </td>
-                    <td style={{ ...td, textAlign: "right" }}>
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                        <input value={m.percentual_ideal} disabled={!m.incluir} inputMode="decimal"
-                          placeholder={m.percentual_atual != null ? m.percentual_atual.toFixed(2).replace(".", ",") : "0,00"}
-                          aria-label={`Percentual ideal de ${m.ticker}`}
-                          onChange={e => atualizar(m.key, { percentual_ideal: apenasNumero(e.target.value) })}
-                          style={{ ...controlStyle, width: "80px", textAlign: "right", opacity: m.incluir ? 1 : 0.5 }} />
-                        <span style={{ fontSize: "12px", color: "#64748b" }}>%</span>
-                      </div>
-                    </td>
-                    <td style={{ ...td, textAlign: "right", fontWeight: 600, whiteSpace: "nowrap", color: m.incluir && temAlvo ? "#4338ca" : "#cbd5e1" }}>
-                      {m.incluir && temAlvo ? fmtMoeda(valorIdeal, moeda) : "—"}
-                    </td>
-                    <td style={{ ...td, textAlign: "center" }}>
-                      <input value={m.prioridade_manual} disabled={!m.incluir} inputMode="numeric"
-                        aria-label={`Prioridade de ${m.ticker}`}
-                        onChange={e => atualizar(m.key, { prioridade_manual: e.target.value.replace(/[^0-9]/g, "") })}
-                        title="0 a 10 — desempata a ordem dos aportes"
-                        style={{ ...controlStyle, width: "60px", textAlign: "right", opacity: m.incluir ? 1 : 0.5 }} />
-                    </td>
-                    <td style={{ ...td, textAlign: "right" }}>
-                      <input value={m.tolerancia} disabled={!m.incluir} inputMode="decimal" placeholder="0"
-                        aria-label={`Tolerância de ${m.ticker}`}
-                        title="Tolerância em pontos percentuais: dentro dela o ativo conta como no alvo — e é o que dá espaço ao aporte quando a meta já foi atingida."
-                        onChange={e => atualizar(m.key, { tolerancia: apenasNumero(e.target.value) })}
-                        style={{ ...controlStyle, width: "58px", textAlign: "right", fontSize: "12px", opacity: m.incluir ? 1 : 0.5 }} />
-                    </td>
-                    <td style={{ ...td, textAlign: "right" }}>
-                      <input value={m.limite_maximo} disabled={!m.incluir} inputMode="decimal" placeholder="—"
-                        aria-label={`Limite máximo de ${m.ticker}`}
-                        title="Limite máximo de concentração (%): acima dele o ativo não recebe novos aportes."
-                        onChange={e => atualizar(m.key, { limite_maximo: apenasNumero(e.target.value) })}
-                        style={{ ...controlStyle, width: "58px", textAlign: "right", fontSize: "12px", opacity: m.incluir ? 1 : 0.5 }} />
-                    </td>
-                    <td style={{ ...td, textAlign: "right" }}>
-                      <input value={m.preco_maximo_compra} disabled={!m.incluir} inputMode="decimal" placeholder="sem regra"
-                        aria-label={`Preço máximo de compra de ${m.ticker}`}
-                        title="Regra de compra: acima deste preço o ativo é DESCARTADO do aporte, por melhor que seja o Quality Score."
-                        onChange={e => atualizar(m.key, { preco_maximo_compra: apenasNumero(e.target.value) })}
-                        style={{ ...controlStyle, width: "78px", textAlign: "right", fontSize: "12px", opacity: m.incluir ? 1 : 0.5 }} />
-                    </td>
-                    <td style={td}>
-                      <select value={m.subclasse_nome} disabled={!m.incluir || subs.length === 0}
-                        aria-label={`Subclasse de ${m.ticker}`}
-                        onChange={e => atualizar(m.key, { subclasse_nome: e.target.value, setor_nome: "" })}
-                        style={{ ...controlStyle, minWidth: "120px", opacity: (!m.incluir || subs.length === 0) ? 0.5 : 1 }}>
-                        <option value="">—</option>
-                        {subs.map(s => <option key={s.key} value={s.nome}>{s.nome || "(sem nome)"}</option>)}
-                      </select>
-                    </td>
-                    <td style={td}>
-                      <select value={m.setor_nome} disabled={!m.incluir || setores.length === 0}
-                        aria-label={`Setor de ${m.ticker}`}
-                        title={setores.length === 0
-                          ? "Esta subclasse não tem setores cadastrados na Carteira Ideal"
-                          : "Setor dentro da subclasse (opcional)"}
-                        onChange={e => atualizar(m.key, { setor_nome: e.target.value })}
-                        style={{ ...controlStyle, minWidth: "110px", opacity: (!m.incluir || setores.length === 0) ? 0.5 : 1 }}>
-                        <option value="">—</option>
-                        {setores.map(st => <option key={st.key} value={st.nome}>{st.nome || "(sem nome)"}</option>)}
-                      </select>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* ── Busca + paginação: a lista pode ser longa e o essencial cabe em 8 linhas ── */}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginTop: "14px" }}>
+            <input value={busca} onChange={e => { setBusca(e.target.value); setMostrarTodas(false); }}
+              placeholder="🔍 Buscar pela ação (ticker ou nome)" aria-label="Buscar ativo nas metas"
+              style={{ ...controlStyle, minWidth: "240px", flex: "1 1 240px", maxWidth: "360px" }} />
+            <span style={{ fontSize: "12px", color: "#64748b" }}>
+              {filtradasDaAba.length} ativo(s)
+              {termoBusca !== "" && ` para "${busca.trim()}"`}
+              {filtradasDaAba.length > PAGINA_ATIVOS && !mostrarTodas && ` · mostrando ${PAGINA_ATIVOS}`}
+            </span>
+            {filtradasDaAba.length > PAGINA_ATIVOS && (
+              <button type="button" onClick={() => setMostrarTodas(v => !v)}
+                style={{ ...linkBtnStyle, borderStyle: "solid", borderColor: "#c7d2fe", color: "#4338ca", background: "white" }}>
+                {mostrarTodas ? "ver menos" : `ver mais (${filtradasDaAba.length - PAGINA_ATIVOS} restantes)`}
+              </button>
+            )}
+          </div>
+
+          <div style={{ overflowX: "auto", marginTop: "10px" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "620px" }}>
+              <thead>
+                <tr>
+                  <th style={th}>Meta?</th>
+                  <th style={{ ...th, textAlign: "left" }}>Ativo</th>
+                  <th style={{ ...th, textAlign: "right" }}>Hoje</th>
+                  <th style={{ ...th, textAlign: "right" }}>% atual</th>
+                  <th style={{ ...th, textAlign: "right" }}>% ideal</th>
+                  <th style={{ ...th, textAlign: "right" }}>Valor ideal</th>
+                  <th style={{ ...th, textAlign: "right" }}>±</th>
+                  <th style={{ ...th, textAlign: "left" }}>Subclasse</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visiveisNaTabela.map(m => {
+                  const info = catInfo(m.classe);
+                  const valorIdeal = valorTotal * (textoParaNum(m.percentual_ideal) / 100);
+                  const subs = subclassesDaClasse(m.classe);
+                  const temAlvo = m.percentual_ideal.trim() !== "";
+                  return (
+                    <tr key={m.key} style={{ borderTop: "1px solid #f1f5f9", opacity: m.incluir ? 1 : 0.55 }}>
+                      <td style={{ ...td, textAlign: "center" }}>
+                        <input type="checkbox" checked={m.incluir}
+                          aria-label={`Definir meta para ${m.ticker}`}
+                          onChange={e => atualizar(m.key, { incluir: e.target.checked })}
+                          style={{ width: "17px", height: "17px", accentColor: "#6366f1", cursor: "pointer" }} />
+                      </td>
+                      <td style={{ ...td, color: "#0f172a" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                          <span style={{ fontWeight: 800 }}>{m.ticker}</span>
+                          <span style={chip(info.color, info.bg)}>{info.icon} {info.label}</span>
+                        </div>
+                        {m.nome.trim() !== "" && m.nome.trim() !== m.ticker.trim() && (
+                          <span style={{ display: "block", fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                            {m.nome}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ ...td, textAlign: "right", color: "#475569", whiteSpace: "nowrap" }}>
+                        {fmtMoeda(m.valor_atual, moeda)}
+                      </td>
+                      <td style={{ ...td, textAlign: "right", color: "#475569" }}>
+                        {m.percentual_atual != null ? fmtPercentual(m.percentual_atual) : "—"}
+                      </td>
+                      <td style={{ ...td, textAlign: "right" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                          <input value={m.percentual_ideal} disabled={!m.incluir} inputMode="decimal"
+                            placeholder={m.percentual_atual != null ? m.percentual_atual.toFixed(2).replace(".", ",") : "0,00"}
+                            aria-label={`Percentual ideal de ${m.ticker}`}
+                            onChange={e => atualizar(m.key, { percentual_ideal: apenasNumero(e.target.value) })}
+                            style={{ ...controlStyle, width: "80px", textAlign: "right", opacity: m.incluir ? 1 : 0.5 }} />
+                          <span style={{ fontSize: "12px", color: "#64748b" }}>%</span>
+                        </div>
+                      </td>
+                      <td style={{ ...td, textAlign: "right", fontWeight: 600, whiteSpace: "nowrap", color: m.incluir && temAlvo ? "#4338ca" : "#cbd5e1" }}>
+                        {m.incluir && temAlvo ? fmtMoeda(valorIdeal, moeda) : "—"}
+                      </td>
+                      <td style={{ ...td, textAlign: "right" }}>
+                        <input value={m.tolerancia} disabled={!m.incluir} inputMode="decimal" placeholder="0"
+                          aria-label={`Tolerância de ${m.ticker}`}
+                          title="Tolerância em pontos percentuais: dentro dela o ativo conta como no alvo."
+                          onChange={e => atualizar(m.key, { tolerancia: apenasNumero(e.target.value) })}
+                          style={{ ...controlStyle, width: "58px", textAlign: "right", fontSize: "12px", opacity: m.incluir ? 1 : 0.5 }} />
+                      </td>
+                      <td style={td}>
+                        <select value={m.subclasse_nome} disabled={!m.incluir || subs.length === 0}
+                          aria-label={`Subclasse de ${m.ticker}`}
+                          onChange={e => atualizar(m.key, { subclasse_nome: e.target.value, setor_nome: "" })}
+                          style={{ ...controlStyle, minWidth: "120px", opacity: (!m.incluir || subs.length === 0) ? 0.5 : 1 }}>
+                          <option value="">—</option>
+                          {subs.map(s => <option key={s.key} value={s.nome}>{s.nome || "(sem nome)"}</option>)}
+                        </select>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {filtradasDaAba.length === 0 && (
+            <p style={{ fontSize: "13px", color: "#94a3b8", margin: "14px 0 0" }}>
+              Nenhum ativo encontrado para "{busca.trim()}".
+            </p>
+          )}
+        </>
       )}
 
       {/* ── Visual em GRADE (alvos maiores, melhor no celular) ── */}
@@ -697,7 +639,7 @@ export default function MetasEditor({
                     </div>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr auto", gap: "10px", alignItems: "flex-end" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "10px", alignItems: "flex-end" }}>
                     <div>
                       <label style={miniLabel}>% ideal</label>
                       <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
@@ -707,12 +649,6 @@ export default function MetasEditor({
                           style={{ ...controlStyle, width: "100%", textAlign: "right", fontWeight: 700 }} />
                         <span style={{ fontSize: "13px", color: "#94a3b8" }}>%</span>
                       </div>
-                    </div>
-                    <div>
-                      <label style={miniLabel}>Prioridade</label>
-                      <input value={m.prioridade_manual} inputMode="numeric" aria-label="Prioridade"
-                        onChange={e => atualizar(m.key, { prioridade_manual: e.target.value.replace(/[^0-9]/g, "") })}
-                        style={{ ...controlStyle, width: "100%", textAlign: "right" }} />
                     </div>
                     <button type="button" aria-label="Remover ativo planejado"
                       onClick={() => onChange(metas.filter(x => x.key !== m.key))}

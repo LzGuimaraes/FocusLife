@@ -33,6 +33,9 @@ public final class ChecklistAtivoDTO {
             /** Quando informado, o checklist nasce com as perguntas do modelo (snapshot). */
             Long modelo_id,
 
+            /** Subclasse dona do checklist padrão (nome normalizado, ver NotasSubclasseService). */
+            String subclasse_slug,
+
             /** QUALIDADE (padrão) ou MOMENTO — eixos independentes do motor de decisão. */
             TipoChecklist tipo,
 

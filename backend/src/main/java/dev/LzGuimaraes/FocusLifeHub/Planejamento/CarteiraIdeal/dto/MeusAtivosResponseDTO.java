@@ -32,6 +32,12 @@ public record MeusAtivosResponseDTO(
             boolean vinculado,
             /** Nome do ativo no catálogo quando vinculado; senão, o nome da posição. */
             String ticker,
+            /**
+             * Nome como o usuário cadastrou a POSIÇÃO (ex.: "Petrobras PN").
+             * Existe para a tela ter o que exibir além do código do ticker: sem
+             * isso, uma linha como "PETR4" não diz nada a quem olha a tabela.
+             */
+            String nome,
             /** Posições agrupadas nesta linha (permite vincular todas de uma vez). */
             List<Long> ativo_ids,
 
@@ -54,18 +60,8 @@ public record MeusAtivosResponseDTO(
             BigDecimal tolerancia,
             /** Teto de concentração (%) do ativo (null = sem teto). */
             BigDecimal limite_maximo,
-            /**
-             * PREÇO MÁXIMO DE COMPRA definido na meta (null = sem regra de
-             * preço). Acima dele o ativo é descartado do aporte, por melhor que
-             * seja o Quality Score.
-             */
-            BigDecimal preco_maximo_compra,
-            Integer prioridade_manual,
             Long subclasse_id,
-            String subclasse_nome,
-            /** Setor dentro da subclasse (nível opcional). */
-            Long setor_id,
-            String setor_nome
+            String subclasse_nome
     ) {
 
         public boolean possuiMeta() {

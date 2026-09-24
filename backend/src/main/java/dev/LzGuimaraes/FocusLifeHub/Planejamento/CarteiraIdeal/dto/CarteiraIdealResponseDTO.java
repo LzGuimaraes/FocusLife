@@ -40,8 +40,6 @@ public record CarteiraIdealResponseDTO(
 
     public record SetorIdealResponseDTO(
             Long id,
-            /** Setor do catálogo global (null só em dado antigo sem vínculo). */
-            Long setor_mercado_id,
             String nome,
             BigDecimal percentual_ideal,
             BigDecimal tolerancia,
@@ -61,9 +59,6 @@ public record CarteiraIdealResponseDTO(
             BigDecimal percentual_ideal,
             BigDecimal tolerancia,
             BigDecimal limite_maximo,
-            /** Regra de compra: acima deste preço o ativo é descartado do aporte. */
-            BigDecimal preco_maximo_compra,
-            Integer prioridade_manual,
             Integer ordem
     ) {}
 }

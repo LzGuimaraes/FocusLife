@@ -67,9 +67,6 @@ export interface MetaIdeal {
   percentual_ideal: number;
   tolerancia: number;
   limite_maximo: number | null;
-  /** Regra de compra: acima deste preço o ativo é descartado do aporte. */
-  preco_maximo_compra: number | null;
-  prioridade_manual: number;
   ordem: number;
 }
 
@@ -121,9 +118,6 @@ export interface MetaIdealPayload {
   percentual_ideal: number;
   tolerancia?: number;
   limite_maximo?: number | null;
-  /** Regra de compra: acima deste preço o ativo é descartado do aporte. */
-  preco_maximo_compra?: number | null;
-  prioridade_manual: number;
   ordem: number;
 }
 
@@ -173,7 +167,6 @@ export interface AtivoComparativo {
   valor_atual: number;
   deficit: number;
   excesso: number;
-  prioridade_manual: number;
   /**
    * false = o ativo está na carteira mas ainda não tem meta individual.
    * O comparativo mostra a carteira real, não só o que já foi planejado.
@@ -231,6 +224,8 @@ export interface MeuAtivo {
   /** false = posição sem vínculo (renda fixa, ou ativo que ficou sem catálogo). */
   vinculado: boolean;
   ticker: string;
+  /** Nome como o usuário cadastrou a posição (ex.: "Petrobras PN"). */
+  nome: string;
   /** Posições agrupadas nesta linha (permite vincular todas de uma vez). */
   ativo_ids: number[];
   /** Catálogo com o MESMO nome — permite vincular com um clique. */
@@ -245,9 +240,6 @@ export interface MeuAtivo {
   percentual_ideal: number | null;
   tolerancia: number | null;
   limite_maximo: number | null;
-  /** Regra de compra vinda da meta (null = sem regra de preço). */
-  preco_maximo_compra: number | null;
-  prioridade_manual: number | null;
   subclasse_id: number | null;
   subclasse_nome: string | null;
   setor_id: number | null;

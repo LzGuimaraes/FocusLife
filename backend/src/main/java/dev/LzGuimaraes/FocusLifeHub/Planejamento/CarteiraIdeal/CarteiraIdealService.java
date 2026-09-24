@@ -35,8 +35,6 @@ import dev.LzGuimaraes.FocusLifeHub.Planejamento.Estrategia.EstrategiaService;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.MetaAtivo.MetaAtivoModel;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.MetaAtivo.MetaAtivoRepository;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.comum.CarteiraLookup;
-import dev.LzGuimaraes.FocusLifeHub.SetorMercado.SetorMercadoModel;
-import dev.LzGuimaraes.FocusLifeHub.SetorMercado.SetorMercadoService;
 
 /**
  * Carteira Ideal (Módulo 1) + comparativo com a carteira real (Módulo 10).
@@ -59,8 +57,6 @@ public class CarteiraIdealService {
     private final EstrategiaService estrategiaService;
     private final CarteiraLookup carteiraLookup;
     private final PercentualCalculator calculator;
-    /** Catálogo global de setores: todo setor da carteira aponta para ele (V32). */
-    private final SetorMercadoService setorMercadoService;
 
     public CarteiraIdealService(CarteiraIdealClasseRepository classeRepository,
                                 CarteiraIdealSubclasseRepository subclasseRepository,
@@ -70,8 +66,7 @@ public class CarteiraIdealService {
                                 AtivoRepository ativoRepository,
                                 EstrategiaService estrategiaService,
                                 CarteiraLookup carteiraLookup,
-                                PercentualCalculator calculator,
-                                SetorMercadoService setorMercadoService) {
+                                PercentualCalculator calculator) {
         this.classeRepository = classeRepository;
         this.subclasseRepository = subclasseRepository;
         this.setorRepository = setorRepository;
@@ -81,7 +76,6 @@ public class CarteiraIdealService {
         this.estrategiaService = estrategiaService;
         this.carteiraLookup = carteiraLookup;
         this.calculator = calculator;
-        this.setorMercadoService = setorMercadoService;
     }
 
     /* ══════════════════════════════════════════════════════════════════
@@ -221,14 +215,6 @@ public class CarteiraIdealService {
                 for (CarteiraIdealRequestDTO.SetorIdealRequestDTO st : setoresDe(s)) {
                     CarteiraIdealSetorModel setor = new CarteiraIdealSetorModel();
                     setor.setNome(st.nome().trim());
-                    // V32: todo setor da carteira aponta para o CATÁLOGO global. Se a
-                    // tela já mandou o id, usa; senão resolve (ou cria) pelo nome — é
-                    // assim que o setor digitado aqui passa a existir para as outras
-                    // carteiras e para a classificação manual no banco.
-                    SetorMercadoModel catalogoSetor = (st.setor_mercado_id() != null)
-                            ? setorMercadoService.exigir(st.setor_mercado_id())
-                            : setorMercadoService.criarOuObter(st.nome(), null);
-                    setor.setSetorMercado(catalogoSetor);
                     setor.setPercentualIdeal(calculator.percentualNormalizado(st.percentual_ideal()));
                     setor.setTolerancia(toleranciaDe(st.tolerancia()));
                     setor.setLimiteMaximo(st.limite_maximo());
@@ -272,9 +258,6 @@ public class CarteiraIdealService {
             meta.setPercentualIdeal(calculator.percentualNormalizado(m.percentual_ideal()));
             meta.setTolerancia(toleranciaDe(m.tolerancia()));
             meta.setLimiteMaximo(m.limite_maximo());
-            // Regra de compra do investidor (NULL = sem regra de preço).
-            meta.setPrecoMaximoCompra(m.preco_maximo_compra());
-            meta.setPrioridadeManual(m.prioridade_manual() == null ? 0 : m.prioridade_manual());
             meta.setOrdem(m.ordem() == null ? ordemMeta : m.ordem());
             metaAtivoRepository.save(meta);
             ordemMeta++;
@@ -309,62 +292,7 @@ public class CarteiraIdealService {
             carteira.setEstrategia(null);
         }
 
-        // ── O setor SOBE para o catálogo do ticker (V32) ──
-        // O setor da carteira é um balde com % alvo; o setor do TICKER é a
-        // identidade que sobrevive à carteira. Classificar aqui já classifica o
-        // ativo em qualquer outra carteira — e no mesmo campo que o cadastro
-        // manual do catálogo (banco/script) usa.
-        propagarSetorParaCatalogo(carteiraId);
-
         return get(carteiraId);
-    }
-
-    /**
-     * Grava no TICKER (`ativo_cadastro.setor_mercado_id`) o setor em que ele foi
-     * classificado nesta carteira, quando o ticker ainda não tem setor.
-     *
-     * NÃO sobrescreve classificação existente: o catálogo é a referência
-     * (mantida manualmente no banco) e a carteira é um alvo — quando os dois
-     * divergem, o aviso do comparativo mostra a diferença em vez de o sistema
-     * escolher sozinho.
-     *
-     * @return quantos tickers foram classificados agora
-     */
-    private int propagarSetorParaCatalogo(Long carteiraId) {
-        Map<UUID, AtivoCadastroModel> tickerPorId = new LinkedHashMap<>();
-        Map<UUID, SetorMercadoModel> setorPorTicker = new LinkedHashMap<>();
-
-        for (MetaAtivoModel meta : metaAtivoRepository
-                .findByCarteiraInvestimentoIdOrderByOrdemAscIdAsc(carteiraId)) {
-            if (meta.getAtivoCadastro() != null && meta.getSetor() != null
-                    && meta.getSetor().getSetorMercado() != null) {
-                UUID id = meta.getAtivoCadastro().getId();
-                tickerPorId.putIfAbsent(id, meta.getAtivoCadastro());
-                setorPorTicker.putIfAbsent(id, meta.getSetor().getSetorMercado());
-            }
-        }
-        for (AtivoModel posicao : ativoRepository.findByCarteiraInvestimentoId(carteiraId)) {
-            if (posicao.getAtivoCadastro() != null && posicao.getSetor() != null
-                    && posicao.getSetor().getSetorMercado() != null) {
-                UUID id = posicao.getAtivoCadastro().getId();
-                tickerPorId.putIfAbsent(id, posicao.getAtivoCadastro());
-                setorPorTicker.putIfAbsent(id, posicao.getSetor().getSetorMercado());
-            }
-        }
-
-        int alterados = 0;
-        for (Map.Entry<UUID, SetorMercadoModel> entrada : setorPorTicker.entrySet()) {
-            AtivoCadastroModel ticker = tickerPorId.get(entrada.getKey());
-            if (ticker == null || ticker.getSetorMercado() != null) {
-                continue;
-            }
-            ticker.setSetorMercado(entrada.getValue());
-            alterados++;
-        }
-        if (alterados > 0) {
-            ativoCadastroRepository.flush();
-        }
-        return alterados;
     }
 
     /* ══════════════════════════════════════════════════════════════════
@@ -448,23 +376,6 @@ public class CarteiraIdealService {
                 // uma subclasse de 60% aparecia como 60% do patrimônio inteiro e o
                 // déficit dela ficava inflado, estragando o rateio do aporte.
                 double vSubIdeal = valorIdeal(sub.getPercentualIdeal(), vIdeal);
-                List<ComparativoResponseDTO.SetorComparativoDTO> setorDtos = new ArrayList<>();
-                for (CarteiraIdealSetorModel st : setoresPorSubclasse.getOrDefault(sub.getId(), List.of())) {
-                    double vSetorAtual = valorPorSetor.getOrDefault(st.getId(), 0d);
-                    double alvoSetor = vSubIdeal * st.getPercentualIdeal().doubleValue() / 100d;
-                    setorDtos.add(new ComparativoResponseDTO.SetorComparativoDTO(
-                            st.getId(),
-                            (st.getSetorMercado() != null) ? st.getSetorMercado().getId() : null,
-                            st.getNome(),
-                            st.getPercentualIdeal(),
-                            calculator.percentual(vSetorAtual, vSubAtual),
-                            calculator.moeda(alvoSetor),
-                            calculator.moeda(vSetorAtual),
-                            calculator.moeda(Math.max(0d, alvoSetor - vSetorAtual)),
-                            calculator.moeda(Math.max(0d, vSetorAtual - alvoSetor)),
-                            st.getTolerancia(),
-                            st.getLimiteMaximo()));
-                }
                 subDtos.add(new ComparativoResponseDTO.SubclasseComparativoDTO(
                         sub.getId(),
                         sub.getNome(),
@@ -475,8 +386,7 @@ public class CarteiraIdealService {
                         calculator.moeda(Math.max(0d, vSubIdeal - vSubAtual)),
                         calculator.moeda(Math.max(0d, vSubAtual - vSubIdeal)),
                         sub.getTolerancia(),
-                        sub.getLimiteMaximo(),
-                        setorDtos));
+                        sub.getLimiteMaximo()));
             }
 
             List<ComparativoResponseDTO.AtivoComparativoDTO> ativosDtos = new ArrayList<>();
@@ -494,7 +404,6 @@ public class CarteiraIdealService {
                         cadastroId,
                         nomePorTicker.getOrDefault(cadastroId, meta.getAtivoCadastro().getNome()),
                         (meta.getSubclasse() != null) ? meta.getSubclasse().getId() : null,
-                        (meta.getSetor() != null) ? meta.getSetor().getId() : null,
                         meta.getPercentualIdeal(),
                         calculator.percentual(vAtivoAtual, total),
                         calculator.moeda(vAtivoIdeal),
@@ -503,7 +412,6 @@ public class CarteiraIdealService {
                         calculator.moeda(Math.max(0d, vAtivoAtual - vAtivoIdeal)),
                         meta.getTolerancia(),
                         meta.getLimiteMaximo(),
-                        meta.getPrioridadeManual(),
                         true));
             }
 
@@ -519,7 +427,6 @@ public class CarteiraIdealService {
                         cadastroId,
                         nomePorTicker.get(cadastroId),
                         null,
-                        null,
                         BigDecimal.ZERO.setScale(PercentualCalculator.ESCALA_PERCENTUAL),
                         calculator.percentual(vAtivoAtual, total),
                         calculator.moeda(0d),
@@ -528,7 +435,6 @@ public class CarteiraIdealService {
                         calculator.moeda(vAtivoAtual),
                         null,
                         null,
-                        0,
                         false));
             }
             ativosSemMeta += (int) ativosDtos.stream().filter(a -> !a.possui_meta()).count();
@@ -595,6 +501,7 @@ public class CarteiraIdealService {
             Acumulado acumulado = porGrupo.computeIfAbsent(chave, k -> new Acumulado(
                     catalogoId,
                     (posicao.getAtivoCadastro() != null) ? posicao.getAtivoCadastro().getNome() : posicao.getNome(),
+                    posicao.getNome(),
                     (posicao.getCategoriaInvestimento() != null)
                             ? posicao.getCategoriaInvestimento()
                             : CategoriaInvestimento.OUTROS,
@@ -634,14 +541,12 @@ public class CarteiraIdealService {
                     // própria posição (renda fixa sem ticker, atribuída na V26).
                     CarteiraIdealSubclasseModel subclasseLinha =
                             (meta != null && meta.getSubclasse() != null) ? meta.getSubclasse() : acumulado.subclasse;
-                    // O setor segue a mesma regra (V28).
-                    CarteiraIdealSetorModel setorLinha =
-                            (meta != null && meta.getSetor() != null) ? meta.getSetor() : acumulado.setor;
 
                     return new MeusAtivosResponseDTO.MeuAtivoDTO(
                             acumulado.catalogoId,
                             acumulado.catalogoId != null,
                             acumulado.nome,
+                            acumulado.nomePosicao,
                             List.copyOf(acumulado.ativoIds),
                             (sugestao != null) ? sugestao.getId() : null,
                             (sugestao != null) ? sugestao.getNome() : null,
@@ -655,12 +560,8 @@ public class CarteiraIdealService {
                             (meta != null) ? meta.getPercentualIdeal() : null,
                             (meta != null) ? meta.getTolerancia() : null,
                             (meta != null) ? meta.getLimiteMaximo() : null,
-                            (meta != null) ? meta.getPrecoMaximoCompra() : null,
-                            (meta != null) ? meta.getPrioridadeManual() : null,
                             (subclasseLinha != null) ? subclasseLinha.getId() : null,
-                            (subclasseLinha != null) ? subclasseLinha.getNome() : null,
-                            (setorLinha != null) ? setorLinha.getId() : null,
-                            (setorLinha != null) ? setorLinha.getNome() : null);
+                            (subclasseLinha != null) ? subclasseLinha.getNome() : null);
                 })
                 .sorted(Comparator.comparing(MeusAtivosResponseDTO.MeuAtivoDTO::vinculado).reversed()
                         .thenComparing(MeusAtivosResponseDTO.MeuAtivoDTO::valor_atual, Comparator.reverseOrder()))
@@ -722,6 +623,7 @@ public class CarteiraIdealService {
     private static final class Acumulado {
         private final UUID catalogoId;
         private final String nome;
+        private final String nomePosicao;
         private final CategoriaInvestimento classe;
         private final Float precoAtual;
         private final List<Long> ativoIds = new ArrayList<>();
@@ -730,9 +632,11 @@ public class CarteiraIdealService {
         private float quantidade;
         private double valor;
 
-        private Acumulado(UUID catalogoId, String nome, CategoriaInvestimento classe, Float precoAtual) {
+        private Acumulado(UUID catalogoId, String nome, String nomePosicao,
+                          CategoriaInvestimento classe, Float precoAtual) {
             this.catalogoId = catalogoId;
             this.nome = nome;
+            this.nomePosicao = nomePosicao;
             this.classe = classe;
             this.precoAtual = precoAtual;
         }
@@ -919,9 +823,7 @@ public class CarteiraIdealService {
                                         s.getTolerancia(), s.getLimiteMaximo(), s.getOrdem(),
                                         setoresPorSubclasse.getOrDefault(s.getId(), List.of()).stream()
                                                 .map(st -> new CarteiraIdealResponseDTO.SetorIdealResponseDTO(
-                                                        st.getId(),
-                                                        (st.getSetorMercado() != null) ? st.getSetorMercado().getId() : null,
-                                                        st.getNome(), st.getPercentualIdeal(),
+                                                        st.getId(), st.getNome(), st.getPercentualIdeal(),
                                                         st.getTolerancia(), st.getLimiteMaximo(), st.getOrdem()))
                                                 .toList()))
                                 .toList()))
@@ -942,8 +844,6 @@ public class CarteiraIdealService {
                         m.getPercentualIdeal(),
                         m.getTolerancia(),
                         m.getLimiteMaximo(),
-                        m.getPrecoMaximoCompra(),
-                        m.getPrioridadeManual(),
                         m.getOrdem()))
                 .toList();
     }
@@ -974,33 +874,11 @@ public class CarteiraIdealService {
                         (a, b) -> a));
 
         for (CarteiraIdealClasseModel classe : classes) {
-            BigDecimal somaSub = subsPorClasse.getOrDefault(classe.getId(), List.of()).stream()
-                    .map(CarteiraIdealSubclasseModel::getPercentualIdeal)
-                    .filter(java.util.Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            // O percentual da SUBCLASSE é uma fatia da CLASSE (a soma fecha em
-            // 100% da classe, não em 100% da carteira). Comparar com o percentual
-            // da classe acusava erro em TODA classe com alvo menor que 100%.
-            if (!subsPorClasse.getOrDefault(classe.getId(), List.of()).isEmpty()
-                    && somaSub.subtract(CEM).abs().compareTo(TOLERANCIA) > 0) {
-                avisos.add("As subclasses de " + classe.getClasse() + " somam " + formatar(somaSub)
-                        + "% da classe (o esperado é 100% dela).");
-            }
-        }
-
-        for (Map.Entry<CategoriaInvestimento, List<MetaAtivoModel>> entry : metasPorClasse.entrySet()) {
-            BigDecimal somaMetas = entry.getValue().stream()
-                    .map(MetaAtivoModel::getPercentualIdeal)
-                    .filter(java.util.Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            CarteiraIdealClasseModel classe = idealPorClasse.get(entry.getKey());
-            if (classe == null) {
-                avisos.add("Existem metas de ativos na classe " + entry.getKey()
-                        + ", mas essa classe não está na Carteira Ideal.");
-            } else if (somaMetas.compareTo(classe.getPercentualIdeal()) > 0) {
-                avisos.add("As metas de " + entry.getKey() + " somam " + formatar(somaMetas)
-                        + "%, acima dos " + formatar(classe.getPercentualIdeal()) + "% da classe.");
-            }
+            // A soma das SUBCLASSEs e a soma das METAS de uma classe param de virar
+            // aviso de propósito: as duas são configurações do usuário, não erro —
+            // e aparecer "as metas de Ações somam 45,06%" no meio da tela de metas
+            // só poluía a visão de quem estava montando a carteira.
+            subsPorClasse.getOrDefault(classe.getId(), List.of());
         }
 
         if (ativosSemMeta > 0) {

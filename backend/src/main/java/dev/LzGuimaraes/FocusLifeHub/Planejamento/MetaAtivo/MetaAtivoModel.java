@@ -54,21 +54,6 @@ public class MetaAtivoModel {
     @Column(name = "limite_maximo", precision = 9, scale = 4)
     private BigDecimal limiteMaximo;
 
-    /**
-     * PREÇO MÁXIMO DE COMPRA — regra de ELEGIBILIDADE definida pelo investidor.
-     *
-     * Acima deste preço o ativo é DESCARTADO do ranking de aporte (não recebe
-     * dinheiro novo), por melhor que seja o Quality Score dele. NULL = o
-     * investidor não definiu regra de preço para este ativo: ele concorre
-     * normalmente. É um número absoluto (preço por cota/ação).
-     */
-    @Column(name = "preco_maximo_compra", precision = 14, scale = 2)
-    private BigDecimal precoMaximoCompra;
-
-    /** Prioridade manual de aporte definida pelo usuário (0 a 10). */
-    @Column(name = "prioridade_manual", nullable = false)
-    private Integer prioridadeManual = 0;
-
     @Column(nullable = false)
     private Integer ordem = 0;
 

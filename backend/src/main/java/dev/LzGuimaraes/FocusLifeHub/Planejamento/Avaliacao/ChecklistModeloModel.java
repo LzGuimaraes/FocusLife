@@ -45,6 +45,14 @@ public class ChecklistModeloModel {
     @Column(nullable = false, length = 120)
     private String nome;
 
+    /**
+     * SUBCLASSE a que este checklist padrão pertence (nome normalizado). É o que
+     * permite UM conjunto de perguntas por subclasse ("Financeiro", "Bens
+     * Industriais") em vez de um por empresa.
+     */
+    @Column(name = "subclasse_slug", length = 120)
+    private String subclasseSlug;
+
     @Column(length = 1000)
     private String descricao;
 

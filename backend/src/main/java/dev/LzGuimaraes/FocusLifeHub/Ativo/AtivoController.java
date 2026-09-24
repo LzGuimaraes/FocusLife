@@ -102,6 +102,7 @@ public class AtivoController {
         return ResponseEntity.ok(Map.of("classificadas", classificadas));
     }
 
+
     // Admin-only: bulk update prices for ativos
     @PostMapping("/admin/update-prices")
     public ResponseEntity<Void> bulkUpdatePrices(@RequestBody List<AtivoPriceUpdate> updates) {

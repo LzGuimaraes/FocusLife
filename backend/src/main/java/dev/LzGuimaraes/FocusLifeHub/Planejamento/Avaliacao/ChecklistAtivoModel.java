@@ -53,6 +53,13 @@ public class ChecklistAtivoModel {
     @Column(name = "modelo_origem_id")
     private Long modeloOrigemId;
 
+    /**
+     * SUBCLASSE de onde este checklist veio (nome normalizado) — a página de
+     * notas responde por subclasse: um conjunto de perguntas, uma nota por ativo.
+     */
+    @Column(name = "subclasse_slug", length = 120)
+    private String subclasseSlug;
+
     /** Nome do checklist (ex.: "Fundamentos"). Snapshot — não muda com o modelo. */
     @Column(nullable = false, length = 120)
     private String nome;

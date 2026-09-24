@@ -1,40 +1,25 @@
 package dev.LzGuimaraes.FocusLifeHub.Planejamento.Aporte;
 
 /**
- * VEREDITO de elegibilidade de um ativo para receber aporte (§17 do spec).
+ * VEREDITO de elegibilidade: "esse ativo PODE receber dinheiro agora?".
  *
- * É a resposta para "esse ativo PODE receber dinheiro agora?" — pergunta
- * diferente de "quanto falta para ele?" (déficit) e de "entre os que podem,
- * qual vem primeiro?" (Priority Score).
+ * Conceito separado do déficit (quanto falta) e da NOTA do checklist (entre os
+ * que podem, qual vem primeiro). Depois da simplificação existem quatro motivos
+ * de descarte — todos estruturais, nenhum depende de preço:
  *
- * O rótulo é usado direto na tela: o usuário precisa entender o descarte sem
- * abrir o código.
+ *   • o nível (classe/subclasse) não tem déficit;
+ *   • o ativo já está no próprio teto (déficit + tolerância);
+ *   • o limite de concentração da meta foi atingido;
+ *   • o checklist reprovou um critério ELIMINATÓRIO.
  */
 public enum StatusElegibilidade {
 
     ELEGIVEL("Elegível", "Pode receber aporte neste momento."),
-
-    SEM_AVALIACAO("Sem avaliação",
-            "Ainda sem checklist de qualidade/momento. NÃO é descartado: os termos "
-                    + "sem dado apenas saem da conta do Priority Score."),
-
-    PRECO_ACIMA_DO_LIMITE("Preço acima do limite",
-            "O preço atual superou o preço máximo de compra definido para este ativo."),
-
-    CRITERIO_ELIMINATORIO("Critério eliminatório",
-            "Um critério do checklist marcado como eliminatório foi reprovado."),
-
-    LIMITE_ATINGIDO("Limite de concentração",
-            "O ativo já chegou ao limite máximo de concentração definido na meta."),
-
-    MOMENTO_ZERO("Momento zero",
-            "O fator de momento ficou em 0 (não é hora de comprar, segundo o seu checklist de momento)."),
-
-    CLASSE_SEM_CAPACIDADE("Classe sem capacidade",
-            "A classe/subclasse/setor deste ativo não tem déficit (está no alvo ou acima dele)."),
-
-    SEM_CAPACIDADE("Sem capacidade",
-            "O ativo já está no próprio alvo (déficit + tolerância): não há espaço para mais aporte.");
+    SEM_AVALIACAO("Sem avaliação", "Ainda sem nota do checklist: participa do aporte, mas sem nota para a ordem."),
+    CRITERIO_ELIMINATORIO("Critério eliminatório", "O checklist reprovou um critério eliminatório deste ativo."),
+    LIMITE_ATINGIDO("Limite atingido", "Já atingiu o limite máximo de concentração definido na meta."),
+    CLASSE_SEM_CAPACIDADE("Nível sem capacidade", "A classe (ou a subclasse) deste ativo não tem déficit."),
+    SEM_CAPACIDADE("Sem capacidade", "O ativo já está no próprio alvo (déficit + tolerância).");
 
     private final String label;
     private final String descricao;
@@ -50,10 +35,5 @@ public enum StatusElegibilidade {
 
     public String getDescricao() {
         return descricao;
-    }
-
-    /** true = o ativo é descartado do ranking e não recebe aporte. */
-    public boolean elimina() {
-        return this != ELEGIVEL && this != SEM_AVALIACAO;
     }
 }

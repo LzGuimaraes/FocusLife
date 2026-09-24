@@ -128,12 +128,11 @@ public class HistoricoService {
 
             if (ctx != null) {
                 linha.setCarteiraInvestimentoId(carteiraId);
-                linha.setContributionScore(ctx.priority_score());
+                linha.setContributionScore(ctx.nota());
                 linha.setPercentualAtual(ctx.percentual_atual());
                 linha.setPercentualIdeal(ctx.percentual_ideal());
                 linha.setDeficit(ctx.deficit());
                 linha.setExcesso(ctx.excesso());
-                linha.setPrioridadeManual(ctx.prioridade_manual());
                 linha.setValorCarteiraTotal(valorTotal);
             }
 
@@ -282,8 +281,7 @@ public class HistoricoService {
         return new HistoricoDTO.Ponto(
                 linha.getDataReferencia(),
                 linha.getQualityScore(),
-                linha.getContributionScore(),
-                linha.getPercentualAtual(),
+                linha.getContributionScore(),                linha.getPercentualAtual(),
                 linha.getPercentualIdeal(),
                 linha.getDeficit(),
                 linha.getExcesso(),

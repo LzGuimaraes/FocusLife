@@ -165,6 +165,10 @@ public class ChecklistAtivoService {
 
         ChecklistAtivoModel checklist = new ChecklistAtivoModel();
         checklist.setUser(user);
+        // De qual SUBCLASSE este checklist veio: é o que a página de notas usa para
+        // saber o que já foi respondido (o motor só consome a nota consolidada).
+        checklist.setSubclasseSlug((dto.subclasse_slug() != null && !dto.subclasse_slug().isBlank())
+                ? dto.subclasse_slug().trim() : null);
         aplicarAncora(checklist, dto.ativo_cadastro_id(), dto.ativo_id());
         checklist.setPeso((dto.peso() != null) ? dto.peso() : BigDecimal.ONE);
         checklist.setOrdem((dto.ordem() != null) ? dto.ordem() : proximaOrdem(userId, dto));
@@ -434,6 +438,11 @@ public class ChecklistAtivoService {
     /* ══════════════════════════════════════════════════════════════════
        Helpers
        ══════════════════════════════════════════════════════════════════ */
+
+    /** Score (0–100) de um checklist JÁ CARREGADO — usado pela página de notas. */
+    public BigDecimal scoreDoChecklist(ChecklistAtivoModel checklist) {
+        return scoreDe(ordenar(checklist));
+    }
 
     private ChecklistAtivoModel exigirDoUsuario(Long id) {
         return checklistRepository.findByIdAndUserId(id, contextoUsuario.id())

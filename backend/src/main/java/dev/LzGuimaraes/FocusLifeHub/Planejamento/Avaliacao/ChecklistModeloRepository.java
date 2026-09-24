@@ -14,6 +14,18 @@ public interface ChecklistModeloRepository extends JpaRepository<ChecklistModelo
     Optional<ChecklistModeloModel> findByIdAndUserId(Long id, Long userId);
 
     /**
+     * Checklist padrão de uma SUBCLASSE (um por usuário): a página de notas usa
+     * este modelo para desenhar as colunas e para criar o checklist de cada ativo.
+     */
+    @Query("""
+            select distinct m from ChecklistModeloModel m
+            left join fetch m.perguntas
+            where m.user.id = :userId and m.subclasseSlug = :slug
+            """)
+    Optional<ChecklistModeloModel> findBySubclasseComPerguntas(@Param("userId") Long userId,
+                                                              @Param("slug") String slug);
+
+    /**
      * Modelos do usuário com as perguntas já carregadas (uma query só).
      * A listagem monta a página em memória a partir daqui: evita N+1 e evita
      * combinar paginação com fetch join de coleção.

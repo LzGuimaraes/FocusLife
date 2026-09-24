@@ -125,11 +125,6 @@ function FragmentoClasse({ c, nome, negrito, cor, diferenca, moeda, infoLabel }:
           <tr key={`ativo-${a.ativo_cadastro_id}`}>
             <td style={{ ...tdStyle, paddingLeft: "30px", color: "#475569" }}>
               {a.ticker}
-              {a.prioridade_manual > 0 && (
-                <span style={{ marginLeft: "6px", fontSize: "10px", fontWeight: 700, color: "#6366f1", background: "#eef2ff", padding: "1px 6px", borderRadius: "9999px" }}>
-                  P{a.prioridade_manual}
-                </span>
-              )}
               {semMeta && (
                 <span title="Você tem este ativo, mas ainda não definiu meta — ele conta como excesso da classe"
                   style={{ marginLeft: "6px", fontSize: "10px", fontWeight: 700, color: "#b45309", background: "#fef3c7", padding: "1px 6px", borderRadius: "9999px" }}>

@@ -57,23 +57,6 @@ public record ComparativoResponseDTO(
             BigDecimal deficit,
             BigDecimal excesso,
             BigDecimal tolerancia,
-            BigDecimal limite_maximo,
-            /** Setores desta subclasse (opcional). O % do setor é fatia da SUBCLASSE. */
-            List<SetorComparativoDTO> setores
-    ) {}
-
-    public record SetorComparativoDTO(
-            Long id,
-            /** Setor do catálogo global (identidade estável, V32). */
-            Long setor_mercado_id,
-            String nome,
-            BigDecimal percentual_ideal,
-            BigDecimal percentual_atual,
-            BigDecimal valor_ideal,
-            BigDecimal valor_atual,
-            BigDecimal deficit,
-            BigDecimal excesso,
-            BigDecimal tolerancia,
             BigDecimal limite_maximo
     ) {}
 
@@ -82,7 +65,6 @@ public record ComparativoResponseDTO(
             UUID ativo_cadastro_id,
             String ticker,
             Long subclasse_id,
-            Long setor_id,
             BigDecimal percentual_ideal,
             BigDecimal percentual_atual,
             BigDecimal valor_ideal,
@@ -93,7 +75,6 @@ public record ComparativoResponseDTO(
             BigDecimal tolerancia,
             /** Teto de concentração (%) do ativo. */
             BigDecimal limite_maximo,
-            Integer prioridade_manual,
             /**
              * false = o ativo está na carteira do usuário mas ainda NÃO tem meta
              * individual. Nesse caso percentual_ideal é 0 e o valor entra como

@@ -16,7 +16,7 @@ import CarteiraIdeal from "./pages/CarteiraIdeal";
 import AvaliacaoAtivos from "./pages/AvaliacaoAtivos";
 import AvaliacaoAtivoDetalhe from "./pages/AvaliacaoAtivoDetalhe";
 import ChecklistModelos from "./pages/ChecklistModelos";
-import Pontuacao from "./pages/Pontuacao";
+import NotasSubclasse from "./pages/NotasSubclasse";
 import ProximosAportes from "./pages/ProximosAportes";
 import Tarefas from "./pages/Tarefas";
 import Materias from "./pages/Materias";
@@ -47,8 +47,8 @@ export default function App() {
           <Route path="/planejamento/carteira-ideal/:carteiraId" element={<PrivateRoute><CarteiraIdeal /></PrivateRoute>} />
           <Route path="/avaliacao" element={<PrivateRoute><AvaliacaoAtivos /></PrivateRoute>} />
           <Route path="/avaliacao/modelos" element={<PrivateRoute><ChecklistModelos /></PrivateRoute>} />
+          <Route path="/avaliacao/notas" element={<PrivateRoute><NotasSubclasse /></PrivateRoute>} />
           <Route path="/avaliacao/:ref" element={<PrivateRoute><AvaliacaoAtivoDetalhe /></PrivateRoute>} />
-          <Route path="/planejamento/pontuacao" element={<PrivateRoute><Pontuacao /></PrivateRoute>} />
           <Route path="/planejamento/aportes" element={<PrivateRoute><ProximosAportes /></PrivateRoute>} />
           <Route path="/tarefas" element={<PrivateRoute><Tarefas /></PrivateRoute>} />
           <Route path="/materias" element={<PrivateRoute><Materias /></PrivateRoute>} />

@@ -18,9 +18,9 @@ const ABAS: Aba[] = [
   { id: "visao", label: "Visão geral", icon: "📐", path: "/planejamento" },
   { id: "carteira-ideal", label: "Carteira Ideal", icon: "🎯", path: "/planejamento/carteira-ideal" },
   { id: "avaliacao", label: "Avaliação", icon: "✅", path: "/avaliacao" },
+  { id: "notas", label: "Notas por subclasse", icon: "📝", path: "/avaliacao/notas" },
   { id: "modelos", label: "Modelos", icon: "🗂️", path: "/avaliacao/modelos" },
   { id: "aportes", label: "Próximos Aportes", icon: "💸", path: "/planejamento/aportes" },
-  { id: "pontuacao", label: "Pontuação", icon: "⚙️", path: "/planejamento/pontuacao" },
 ];
 
 export default function PlanejamentoNav({ ativo }: { ativo?: string }) {
