@@ -14,6 +14,4 @@ public interface AtivoCadastroRepository extends JpaRepository<AtivoCadastroMode
 
     /** Quantos tickers do catálogo estão classificados neste setor. */
     long countBySetorMercadoId(Long setorMercadoId);
-
-    List<AtivoCadastroModel> findBySetorMercadoId(Long setorMercadoId);
 }

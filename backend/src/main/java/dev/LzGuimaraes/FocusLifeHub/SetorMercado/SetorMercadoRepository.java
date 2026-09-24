@@ -11,7 +11,6 @@ public interface SetorMercadoRepository extends JpaRepository<SetorMercadoModel,
 
     List<SetorMercadoModel> findByAtivoTrueOrderByNomeAsc();
 
+    /** Chave de REUSO do catálogo: nome normalizado ("Bancos" = "bancos"). */
     Optional<SetorMercadoModel> findBySlug(String slug);
-
-    Optional<SetorMercadoModel> findByNomeIgnoreCase(String nome);
 }

@@ -136,16 +136,6 @@ public class PrecoService {
         return new IndicePrecoMedio(porCatalogo, porPosicao);
     }
 
-    /** Preço atual da posição (cotação do catálogo manda), em 2 casas. */
-    @Transactional(readOnly = true)
-    public BigDecimal precoAtual(AtivoModel posicao) {
-        Float preco = calculator.precoAtual(posicao);
-        if (preco == null) {
-            return null;
-        }
-        return BigDecimal.valueOf(preco).setScale(2, RoundingMode.HALF_UP);
-    }
-
     /**
      * OPORTUNIDADE DE PREÇO (0 a 1):
      *

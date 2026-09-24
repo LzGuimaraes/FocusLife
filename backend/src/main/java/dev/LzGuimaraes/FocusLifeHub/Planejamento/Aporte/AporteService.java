@@ -679,9 +679,6 @@ public class AporteService {
      */
     private record SetorAnalise(
             Long id,
-            Long setorMercadoId,
-            String nome,
-            BigDecimal deficit,
             BigDecimal qualidadeMedia,
             BigDecimal momentoMedio,
             BigDecimal oportunidadeMedia,
@@ -709,8 +706,6 @@ public class AporteService {
 
         // 1) Necessidade do setor: mesma conta do rateio (alvo COM tolerância).
         Map<Long, double[]> nivel = new LinkedHashMap<>();      // [deficit, excesso]
-        Map<Long, String> nome = new LinkedHashMap<>();
-        Map<Long, Long> doCatalogo = new LinkedHashMap<>();
         for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
             for (ComparativoResponseDTO.SubclasseComparativoDTO s : c.subclasses()) {
                 double valorIdealSub = nz(s.valor_ideal());
@@ -722,8 +717,6 @@ public class AporteService {
                     double atual = nz(st.valor_atual());
                     nivel.put(st.id(), new double[]{
                             Math.max(0d, alvo - atual), Math.max(0d, atual - alvo)});
-                    nome.put(st.id(), st.nome());
-                    doCatalogo.put(st.id(), st.setor_mercado_id());
                 }
             }
         }
@@ -786,9 +779,6 @@ public class AporteService {
 
             analises.put(id, new SetorAnalise(
                     id,
-                    doCatalogo.get(id),
-                    nome.getOrDefault(id, ""),
-                    moeda(n[0]),
                     (qualidade != null) ? percentualDeNota(qualidade.doubleValue()) : null,
                     (momento != null) ? momento : null,
                     (oportunidade != null) ? oportunidade : null,
