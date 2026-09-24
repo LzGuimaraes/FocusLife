@@ -73,9 +73,10 @@ public class AporteService {
 
         // A REFERÊNCIA do cálculo é o patrimônio DEPOIS do aporte: o alvo de cada
         // classe/ativo é um % do total, então o dinheiro novo aumenta o alvo — e é
-        // essa diferença que o aporte preenche. Sem isso, uma carteira cujas metas
-        // espelham o que já existe nunca tem déficit e o aporte fica sem destino.
-        ComparativoResponseDTO referencia = comReferenciaDoAporte(comparativo, valorAporte);
+        // essa diferença que o aporte preenche. Os valores ATUAIS não são tocados
+        // aqui: o aporte só chega ao ativo na distribuição (valorFinal) —
+        // ver `ReferenciaAporte`.
+        ComparativoResponseDTO referencia = ReferenciaAporte.comAporte(comparativo, valorAporte);
 
         List<AporteCandidato> calculados = candidatos(meus, referencia, nz(comparativo.valor_total()), notas);
 
@@ -154,103 +155,6 @@ public class AporteService {
                 itens);
     }
 
-    /* ══════════════════════════════════════════════════════════════════
-       REFERÊNCIA DO APORTE
-       ══════════════════════════════════════════════════════════════════ */
-
-    /**
-     * Comparativo com os alvos do patrimônio DEPOIS do aporte (hoje + aporte).
-     *
-     * O QUE MUDA: `valor_total` e todos os `valor_ideal` passam a ser do total novo
-     * (o alvo de 45% de uma carteira que vai a R$ 31.006 é R$ 13.953, não R$ 9.453),
-     * e o `percentual_atual` passa a ser "como o ativo/classe ficaria se o dinheiro
-     * novo entrasse" (valor atual ÷ total novo). Assim um ativo sem dinheiro novo
-     * aparece ABAIXO do alvo — que é a verdade do plano para quem vai aportar.
-     *
-     * O QUE NÃO MUDA: os valores atuais em R$ (é dinheiro que já existe), o
-     * percentual de SUBCLASSE (fatia da classe, não do patrimônio) e o ideal de
-     * cada nível. Também não muda nada quando não há aporte informado.
-     */
-    private ComparativoResponseDTO comReferenciaDoAporte(ComparativoResponseDTO c, BigDecimal aporte) {
-        if (c == null || aporte == null || aporte.signum() <= 0) {
-            return c;
-        }
-        BigDecimal total = moeda(nz(c.valor_total()) + aporte.doubleValue());
-
-        List<ComparativoResponseDTO.ClasseComparativoDTO> classes = new ArrayList<>();
-        for (ComparativoResponseDTO.ClasseComparativoDTO cl : c.classes()) {
-            BigDecimal vIdealClasse = valorDe(cl.percentual_ideal(), total);
-            BigDecimal vAtualClasse = valorDe(cl.valor_atual());
-
-            List<ComparativoResponseDTO.SubclasseComparativoDTO> subs = cl.subclasses().stream()
-                    .map(s -> {
-                        BigDecimal vIdealSub = fatia(s.percentual_ideal(), vIdealClasse);
-                        BigDecimal vAtualSub = valorDe(s.valor_atual());
-                        return new ComparativoResponseDTO.SubclasseComparativoDTO(
-                                s.id(), s.nome(), s.percentual_ideal(), s.percentual_atual(),
-                                vIdealSub, vAtualSub,
-                                sobraPositiva(vIdealSub, vAtualSub), sobraPositiva(vAtualSub, vIdealSub),
-                                s.tolerancia(), s.limite_maximo());
-                    })
-                    .toList();
-
-            List<ComparativoResponseDTO.AtivoComparativoDTO> ativos = cl.ativos().stream()
-                    .map(a -> {
-                        BigDecimal vIdealAtivo = valorDe(a.percentual_ideal(), total);
-                        BigDecimal vAtualAtivo = valorDe(a.valor_atual());
-                        return new ComparativoResponseDTO.AtivoComparativoDTO(
-                                a.meta_id(), a.ativo_cadastro_id(), a.ticker(), a.subclasse_id(),
-                                a.percentual_ideal(), percentualDe(vAtualAtivo, total),
-                                vIdealAtivo, vAtualAtivo,
-                                sobraPositiva(vIdealAtivo, vAtualAtivo), sobraPositiva(vAtualAtivo, vIdealAtivo),
-                                a.tolerancia(), a.limite_maximo(), a.possui_meta());
-                    })
-                    .toList();
-
-            classes.add(new ComparativoResponseDTO.ClasseComparativoDTO(
-                    cl.classe(), cl.percentual_ideal(), percentualDe(vAtualClasse, total),
-                    vIdealClasse, vAtualClasse,
-                    sobraPositiva(vIdealClasse, vAtualClasse), sobraPositiva(vAtualClasse, vIdealClasse),
-                    cl.tolerancia(), cl.limite_maximo(), subs, ativos));
-        }
-
-        return new ComparativoResponseDTO(c.carteira_id(), c.moeda(), total,
-                c.soma_percentuais_ideal(), classes, c.avisos());
-    }
-
-    /** Alvo em R$ de um percentual do patrimônio (mesma escala de moeda). */
-    private BigDecimal valorDe(BigDecimal percentual, BigDecimal total) {
-        if (percentual == null || total == null) {
-            return moeda(0d);
-        }
-        return moeda(percentual.doubleValue() / 100d * total.doubleValue());
-    }
-
-    /** Fatia de um valor-base (percentual de subclasse é fatia da CLASSE). */
-    private BigDecimal fatia(BigDecimal percentual, BigDecimal base) {
-        if (percentual == null || base == null) {
-            return moeda(0d);
-        }
-        return moeda(percentual.doubleValue() / 100d * base.doubleValue());
-    }
-
-    private BigDecimal percentualDe(BigDecimal valor, BigDecimal total) {
-        if (valor == null || total == null || total.signum() <= 0) {
-            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
-        }
-        return BigDecimal.valueOf(valor.doubleValue() / total.doubleValue() * 100d)
-                .setScale(4, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal valorDe(BigDecimal valor) {
-        return moeda(valor != null ? valor.doubleValue() : 0d);
-    }
-
-    /** max(0, a − b), como no comparativo. */
-    private BigDecimal sobraPositiva(BigDecimal a, BigDecimal b) {
-        BigDecimal diferenca = a.subtract(b);
-        return (diferenca.signum() > 0) ? diferenca : moeda(0d);
-    }
 
     /* ══════════════════════════════════════════════════════════════════
        NOTAS DO CHECKLIST
@@ -302,35 +206,40 @@ public class AporteService {
        ══════════════════════════════════════════════════════════════════ */
 
     private List<AporteCandidato> candidatos(MeusAtivosResponseDTO meus, ComparativoResponseDTO comparativo,
-                                             double totalHoje, Notas notas) {
-        double total = nz(comparativo.valor_total());
-        double tol = AlocacaoService.tolerancia(total);
-        // O percentual ATUAL do item também é projetado para o patrimônio de
-        // DEPOIS do aporte (6.000 em 37.500 = 16%, não 21,82% de 27.500): senão a
-        // coluna "atual" diria uma coisa e o déficit, calculado no total novo,
-        // diria outra.
-        double fatorProjecao = (totalHoje > 0d && total > 0d) ? totalHoje / total : 1d;
+                                             double patrimonioAtual, Notas notas) {
+        // `comparativo` aqui já é a referência (alvos sobre o patrimônio PROJETADO).
+        double patrimonioProjetado = nz(comparativo.valor_total());
+        double tol = AlocacaoService.tolerancia(patrimonioProjetado);
 
         List<AporteCandidato> lista = new ArrayList<>();
         for (MeusAtivosResponseDTO.MeuAtivoDTO a : meus.ativos()) {
             boolean temMeta = a.meta_id() != null;
-            double vAtual = nz(a.valor_atual());
-            double vIdeal = temMeta ? valorIdealDe(a.percentual_ideal(), total) : 0d;
-            double deficit = (temMeta && vIdeal - vAtual > tol) ? vIdeal - vAtual : 0d;
-            double excesso = (temMeta && vAtual - vIdeal > tol) ? vAtual - vIdeal : 0d;
+
+            // As três grandezas do ativo, com os nomes da regra:
+            //   valorAtual        = o que existe HOJE (o aporte não entra aqui)
+            //   valorAlvoProjetado= percentualIdeal × R
+            //   deficit           = max(0, alvo − atual)
+            double valorAtual = nz(a.valor_atual());
+            double valorAlvoProjetado = temMeta ? valorIdealDe(a.percentual_ideal(), patrimonioProjetado) : 0d;
+            double deficit = (temMeta && valorAlvoProjetado - valorAtual > tol)
+                    ? valorAlvoProjetado - valorAtual : 0d;
+            double excesso = (temMeta && valorAtual - valorAlvoProjetado > tol)
+                    ? valorAtual - valorAlvoProjetado : 0d;
 
             Nota nota = notas.de(a.ativo_cadastro_id(), a.ativo_ids());
             BigDecimal tolerancia = (a.tolerancia() != null) ? a.tolerancia() : BigDecimal.ZERO;
 
-            // CAPACIDADE = déficit + tolerância, limitada pelo teto de concentração.
+            // CAPACIDADE = déficit puro (`valorAlvoProjetado − valorAtual`), limitada
+            // pelo teto de concentração. A TOLERÂNCIA não entra: ela só classifica
+            // ABAIXO/EQUILIBRADO/ACIMA na tela.
             // Posição SEM meta própria herda a capacidade do bucket (subclasse/classe)
             // — é o que faz a renda fixa participar.
             double capacidade = temMeta
-                    ? capacidadeDoAtivo(vIdeal, tolerancia, vAtual, total, a.limite_maximo())
-                    : capacidadeHerdada(a, comparativo, total);
+                    ? capacidadeDoAtivo(valorAlvoProjetado, valorAtual, patrimonioProjetado, a.limite_maximo())
+                    : capacidadeHerdada(a, comparativo, patrimonioProjetado);
             BigDecimal capacidadeMoeda = alocacaoService.moeda(capacidade);
 
-            boolean limiteAtingido = limiteAtingido(vAtual, total, a.limite_maximo());
+            boolean limiteAtingido = limiteAtingido(valorAtual, patrimonioProjetado, a.limite_maximo());
             boolean semAvaliacao = nota == null || !nota.avaliada();
             boolean nivelSemCapacidade = temMeta
                     ? !temDeficitNoNivel(a, comparativo, tol)
@@ -352,20 +261,27 @@ public class AporteService {
                     (nota != null) ? nota.bloqueios() : List.of(),
                     veredito.elegivel(), veredito.status(), veredito.motivos(),
                     a.limite_maximo(), limiteAtingido, capacidadeMoeda,
-                    moeda(nz(a.percentual_atual()) * fatorProjecao), a.percentual_ideal(),
-                    moeda(vAtual), moeda(vIdeal),
+                    // percentualAtualProjetado = valorAtual ÷ R — o MESMO valor atual
+                    // de sempre (o aporte ainda não foi distribuído). É por isso que
+                    // ele CAI quando o aporte é informado.
+                    ReferenciaAporte.percentualAtualProjetado(moeda(valorAtual), comparativo.valor_total()),
+                    a.percentual_ideal(),
+                    moeda(valorAtual), moeda(valorAlvoProjetado),
                     moeda(deficit), moeda(excesso), tolerancia,
                     a.preco_atual()));
         }
         return lista;
     }
 
-    /** Teto do ativo: ideal% × total − atual, limitado pelo teto de concentração. */
-    private double capacidadeDoAtivo(double vIdeal, BigDecimal tolerancia, double vAtual, double total,
-                                     BigDecimal limite) {
-        double teto = Math.max(0d, vIdeal - vAtual);
+    /**
+     * Teto do ativo: {@code valorAlvoProjetado − valorAtual} (déficit puro),
+     * limitado pelo teto de concentração (% do patrimônio projetado − atual).
+     */
+    private double capacidadeDoAtivo(double valorAlvoProjetado, double valorAtual,
+                                     double patrimonioProjetado, BigDecimal limite) {
+        double teto = Math.max(0d, valorAlvoProjetado - valorAtual);
         if (limite != null && limite.signum() > 0) {
-            double tetoLimite = Math.max(0d, limite.doubleValue() / 100d * total - vAtual);
+            double tetoLimite = Math.max(0d, limite.doubleValue() / 100d * patrimonioProjetado - valorAtual);
             teto = Math.min(teto, tetoLimite);
         }
         return teto;
@@ -373,7 +289,7 @@ public class AporteService {
 
     /** Capacidade herdada por posição sem meta: a da subclasse dela ou, na falta, a da classe. */
     private double capacidadeHerdada(MeusAtivosResponseDTO.MeuAtivoDTO a, ComparativoResponseDTO comparativo,
-                                     double total) {
+                                     double patrimonioProjetado) {
         for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
             if (c.classe() != a.classe()) {
                 continue;
@@ -386,17 +302,18 @@ public class AporteService {
                 }
             }
             return alocacaoService
-                    .deficit(c.percentual_ideal(), c.percentual_atual(), total)
+                    .deficit(c.percentual_ideal(), c.percentual_atual(), patrimonioProjetado)
                     .doubleValue();
         }
         return 0d;
     }
 
-    private boolean limiteAtingido(double vAtual, double total, BigDecimal limite) {
-        if (limite == null || limite.signum() <= 0 || total <= 0d) {
+    /** Limite atingido: o % do ativo sobre o patrimônio PROJETADO alcançou o teto. */
+    private boolean limiteAtingido(double valorAtual, double patrimonioProjetado, BigDecimal limite) {
+        if (limite == null || limite.signum() <= 0 || patrimonioProjetado <= 0d) {
             return false;
         }
-        return vAtual / total * 100d >= limite.doubleValue();
+        return valorAtual / patrimonioProjetado * 100d >= limite.doubleValue();
     }
 
     /**
@@ -447,9 +364,13 @@ public class AporteService {
                 .doubleValue() > tol;
     }
 
-    /** Valor devido de um item: % ideal × total (0 quando o item não tem meta). */
-    private double valorIdealDe(BigDecimal percentualIdeal, double total) {
-        return (percentualIdeal != null) ? percentualIdeal.doubleValue() / 100d * total : 0d;
+    /**
+     * Alvo do item: {@code percentualIdeal × patrimonioProjetado}
+     * (0 quando o item não tem meta própria).
+     */
+    private double valorIdealDe(BigDecimal percentualIdeal, double patrimonioProjetado) {
+        return ReferenciaAporte.valorAlvoProjetado(percentualIdeal,
+                BigDecimal.valueOf(patrimonioProjetado)).doubleValue();
     }
 
     /* ══════════════════════════════════════════════════════════════════
