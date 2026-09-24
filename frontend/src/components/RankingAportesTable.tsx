@@ -46,6 +46,9 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
             <div>
               Aporte de <strong>{fmtMoeda(ranking.valor_aporte, moeda)}</strong>
             </div>
+            <div title="Margem operacional: o quanto o ativo pode passar da meta antes de ser considerado cheio">
+              Margem: <strong>{fmtPercentual(ranking.margem_percentual)}</strong>
+            </div>
             <div>
               Alocado: <strong style={{ color: "#047857" }}>{fmtMoeda(ranking.valor_alocado ?? 0, moeda)}</strong>
               {(ranking.valor_nao_alocado ?? 0) > 0 && (
@@ -103,7 +106,7 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
             <thead>
               <tr style={{ background: "#f8fafc" }}>
                 {["#", "Ativo", "Classe", "Nota", "Status", "Ação",
-                  comSugestao ? "Atual (após)" : "Atual", "Ideal (após)", "Déficit", "Capacidade"]
+                  comSugestao ? "Atual (após)" : "Atual", "Meta (após)", "Déficit", "Limite", "Capacidade"]
                   .map(h => <th key={h} style={{ ...th, textAlign: ["#", "Ativo", "Classe", "Status", "Ação"].includes(h) ? "left" : "right" }}
                     title={h.includes("(após)") ? "Percentual considerando o aporte informado (o alvo cresce com o patrimônio final)" : undefined}>{h}</th>)}
                 {comSugestao && <th style={{ ...th, textAlign: "right" }}>Aporte</th>}
@@ -144,6 +147,17 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
                     <td style={{ ...td, textAlign: "right", color: i.deficit > 0 ? "#1d4ed8" : "#cbd5e1" }}>
                       {fmtMoeda(i.deficit, moeda)}
                     </td>
+                    {/* LIMITE = min(meta × (1+margem), limite cadastrado). É dele que sai
+                        a CAPACIDADE — a meta sozinha não bloqueia ninguém. */}
+                    <td style={{ ...td, textAlign: "right", color: "#475569" }}
+                      title="Limite operacional: meta + margem (ou o limite cadastrado, se for menor)">
+                      {i.limite_percentual != null
+                        ? fmtPercentual(i.limite_percentual)
+                        : <span style={{ color: "#cbd5e1" }} title="Posição sem meta própria: ela herda o alvo da subclasse/classe">—</span>}
+                      {i.limite_em_reais != null && (
+                        <div style={{ fontSize: "10.5px", color: "#94a3b8" }}>{fmtMoeda(i.limite_em_reais, moeda)}</div>
+                      )}
+                    </td>
                     <td style={{ ...td, textAlign: "right", color: "#475569" }}>{fmtMoeda(i.capacidade_aporte, moeda)}</td>
                     {comSugestao && (
                       <td style={{ ...td, textAlign: "right", fontWeight: 800, color: (i.sugestao_aporte ?? 0) > 0 ? "#047857" : "#cbd5e1" }}>
@@ -171,13 +185,14 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
           </h4>
           <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 10px" }}>
             Estas posições <strong>não recebem aporte</strong> enquanto a regra não for atendida — mesmo com nota alta.
-            O déficit continua existindo na carteira.
+            Estar na meta NÃO descarta: o que descarta é critério eliminatório, falta de espaço até o
+            <strong> limite operacional</strong> ou a classe fora da Carteira Ideal.
           </p>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "760px", fontSize: "13px" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "800px", fontSize: "13px" }}>
               <thead>
                 <tr style={{ background: "#fef2f2" }}>
-                  {["Ativo", "Classe", "Nota", "Déficit", "Motivo"]
+                  {["Ativo", "Classe", "Nota", "Atual (após)", "Limite", "Capacidade", "Motivo"]
                     .map(h => <th key={h} style={{ ...th, textAlign: ["Ativo", "Classe", "Motivo"].includes(h) ? "left" : "right" }}>{h}</th>)}
                 </tr>
               </thead>
@@ -196,7 +211,11 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
                           ? <span style={{ ...scorePill, color: scoreColor(i.nota), background: scoreBg(i.nota) }}>{fmtScore(i.nota)}</span>
                           : <span style={{ fontSize: "11px", color: "#b45309" }}>sem nota</span>}
                       </td>
-                      <td style={{ ...td, textAlign: "right", color: "#475569" }}>{fmtMoeda(i.deficit, moeda)}</td>
+                      <td style={{ ...td, textAlign: "right", color: "#475569" }}>{fmtPercentual(i.percentual_atual)}</td>
+                      <td style={{ ...td, textAlign: "right", color: "#b45309" }}>
+                        {i.limite_percentual != null ? fmtPercentual(i.limite_percentual) : "—"}
+                      </td>
+                      <td style={{ ...td, textAlign: "right", color: "#cbd5e1" }}>{fmtMoeda(i.capacidade_aporte, moeda)}</td>
                       <td style={{ ...td, maxWidth: "440px" }}>
                         <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 9px", borderRadius: "9999px", whiteSpace: "nowrap",
                           color: statusCor(i.status), background: statusBg(i.status), marginRight: "8px" }}>
@@ -220,13 +239,16 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
       <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "14px", marginBottom: 0 }}>
         A ordem do aporte é a <strong>nota do checklist</strong> (por subclasse, uma nota por ativo) ·
         A compra é em <strong>cotas inteiras</strong> (ação, FII e ETF) pelo preço atual — o valor de cada
-        ativo é arredondado para baixo e o que não fecha uma cota vira troco do próximo aporte ·
-        Ninguém recebe mais do que falta: o que sobra fica não alocado.
+        ativo é arredondado para baixo e o que não fecha uma cota volta para o pool do aporte ·
+        Ninguém recebe mais do que o espaço até o <strong>limite operacional</strong>
+        (meta + margem de <strong>{fmtPercentual(ranking.margem_percentual)}</strong>, ou o limite cadastrado
+        quando for menor); o que sobra depois disso fica não alocado.
         {ranking.valor_total_com_aporte != null && (
           <> Os alvos são calculados sobre o patrimônio <strong>depois</strong> do aporte
             ({fmtMoeda(ranking.valor_total, ranking.moeda)} + {fmtMoeda(ranking.valor_aporte ?? 0, ranking.moeda)} ={" "}
             {fmtMoeda(ranking.valor_total_com_aporte, ranking.moeda)}), então os percentuais da tabela
-            já mostram onde cada ativo ficaria sem o dinheiro novo.</>
+            já mostram onde cada ativo ficaria sem o dinheiro novo — e é por isso que um ativo
+            <strong> na meta</strong> continua candidato.</>
         )}
       </p>
     </div>
@@ -247,10 +269,11 @@ function AportePorClasse({ ranking }: { ranking: RankingAportes }) {
   return (
     <div style={{ marginBottom: "16px" }}>
       <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", margin: "0 0 4px" }}>
-        Déficit por classe — classes e subclasses
+        Onde entra o dinheiro — classe e subclasse
       </h4>
       <p style={{ fontSize: "11.5px", color: "#64748b", margin: "0 0 10px" }}>
-        A classe define o quanto; a nota do checklist decide quem entra dentro dela
+        O orçamento de cada nível é a <strong>capacidade elegível</strong> (o que os ativos dela absorvem),
+        limitada pelo limite máximo cadastrado quando existir. O déficit é só informativo: ele não reserva dinheiro.
         {ranking.valor_total_com_aporte != null && (
           <> · os alvos já contam o aporte (patrimônio final de {fmtMoeda(ranking.valor_total_com_aporte, moeda)})</>
         )}
@@ -272,9 +295,15 @@ function AportePorClasse({ ranking }: { ranking: RankingAportes }) {
               </div>
               <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "5px" }}>
                 {fmtPercentual(c.percentual_atual)} → {fmtPercentual(c.percentual_ideal)}
+                {c.limite_operacional_percentual != null && (
+                  <> · limite {fmtPercentual(c.limite_operacional_percentual)}</>
+                )}
                 {noAlvo
-                  ? <span style={{ color: "#b45309" }}> · acima do alvo em {fmtMoeda(c.excesso, moeda)}</span>
-                  : <span style={{ color: "#1d4ed8" }}> · falta {fmtMoeda(c.deficit, moeda)}</span>}
+                  ? <span style={{ color: "#b45309" }}> · acima da meta em {fmtMoeda(c.excesso, moeda)}</span>
+                  : <span style={{ color: "#1d4ed8" }}> · falta {fmtMoeda(c.deficit, moeda)} até a meta</span>}
+              </div>
+              <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>
+                capacidade elegível dos ativos: <strong style={{ color: "#475569" }}>{fmtMoeda(c.capacidade_elegivel, moeda)}</strong>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "9px" }}>
@@ -315,7 +344,8 @@ function AportePorClasse({ ranking }: { ranking: RankingAportes }) {
    ══════════════════════════════════════════════════════════════════════ */
 
 function exportarPlano(ranking: RankingAportes) {
-  const linhas: string[] = ["ativo;classe;subclasse;nota;deficit;capacidade;sugestao;acao;motivo"];
+  const linhas: string[] = ["ativo;classe;subclasse;nota;atual;meta;deficit;limite;limite_operacional;"
+    + "capacidade;sugestao;final;acao;motivo"];
   for (const i of ranking.itens) {
     const valor = i.elegivel && (i.sugestao_aporte ?? 0) > 0 ? i.sugestao_aporte : null;
     linhas.push([
@@ -323,9 +353,14 @@ function exportarPlano(ranking: RankingAportes) {
       csv(catInfo(i.classe).label),
       csv(i.subclasse_nome ?? ""),
       i.nota != null ? String(i.nota).replace(".", ",") : "",
-      String(i.deficit ?? 0).replace(".", ","),
-      String(i.capacidade_aporte ?? 0).replace(".", ","),
+      num(i.valor_atual),
+      num(i.percentual_ideal),
+      num(i.deficit),
+      num(i.limite_percentual),
+      num(i.limite_operacional_percentual),
+      num(i.capacidade_aporte),
       valor != null ? String(valor).replace(".", ",") : "",
+      num((i.valor_atual ?? 0) + (valor ?? 0)),
       acaoLabel(i.acao),
       csv(i.motivo ?? i.motivos_inelegibilidade.join(" ")),
     ].join(";"));
@@ -340,6 +375,10 @@ function exportarPlano(ranking: RankingAportes) {
 }
 
 const csv = (v: string) => `"${v.replace(/"/g, '""')}"`;
+
+/** Número do CSV em pt-BR (vazio quando não existe). */
+const num = (v: number | null | undefined) =>
+  v == null ? "" : String(v).replace(".", ",");
 
 /* ── Rótulos e cores ── */
 
@@ -359,8 +398,7 @@ const statusLabel = (s: StatusElegibilidade): string => ({
   SEM_AVALIACAO: "sem nota",
   CRITERIO_ELIMINATORIO: "critério eliminatório",
   LIMITE_ATINGIDO: "limite atingido",
-  CLASSE_SEM_CAPACIDADE: "nível sem déficit",
-  SEM_CAPACIDADE: "no alvo",
+  SEM_CAPACIDADE: "sem espaço no limite",
 }[s] ?? s);
 
 const statusCor = (s: StatusElegibilidade): string => ({
@@ -368,7 +406,6 @@ const statusCor = (s: StatusElegibilidade): string => ({
   SEM_AVALIACAO: "#b45309",
   CRITERIO_ELIMINATORIO: "#b91c1c",
   LIMITE_ATINGIDO: "#b45309",
-  CLASSE_SEM_CAPACIDADE: "#64748b",
   SEM_CAPACIDADE: "#64748b",
 }[s] ?? "#64748b");
 
@@ -377,7 +414,6 @@ const statusBg = (s: StatusElegibilidade): string => ({
   SEM_AVALIACAO: "#fffbeb",
   CRITERIO_ELIMINATORIO: "#fef2f2",
   LIMITE_ATINGIDO: "#fffbeb",
-  CLASSE_SEM_CAPACIDADE: "#f1f5f9",
   SEM_CAPACIDADE: "#f1f5f9",
 }[s] ?? "#f1f5f9");
 

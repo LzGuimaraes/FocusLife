@@ -17,15 +17,23 @@ import dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.dto.ComparativoRe
  *   aporte               = A   → o dinheiro novo, informado pelo usuário
  *   patrimonioProjetado  = R = T + A  → referência dos ALVOS
  *
- * E, para cada nível (classe, subclasse ou ativo):
+ * E, para cada nível (classe, subclasse ou ativo), DUAS grandezas diferentes:
  *
  *   valorAtual                = valor que existe HOJE (nunca soma o aporte)
  *   percentualIdeal           = meta do usuário (nunca recalculada da carteira)
- *   valorAlvoProjetado        = percentualIdeal × R
- *   deficit                   = max(0, valorAlvoProjetado − valorAtual)
- *   capacidade                = deficit (limitado pelo teto de concentração)
+ *   valorAlvoProjetado        = percentualIdeal × R        (a META em reais)
+ *   deficitAteMeta            = max(0, valorAlvoProjetado − valorAtual)
+ *   limiteOperacional         = percentualIdeal × (1 + margem)
+ *   limitePercentual          = min(limiteOperacional, limite cadastrado)
+ *   limiteEmReais             = limitePercentual × R
+ *   capacidade                = max(0, limiteEmReais − valorAtual)
  *   percentualAtualProjetado  = valorAtual ÷ R     ← CAI quando o aporte entra e
  *                                                    o ativo ainda não recebeu
+ *
+ * `deficitAteMeta` e `capacidade` NÃO são a mesma coisa e não devem ser
+ * misturados: a meta informa o espaço DESEJÁVEL, a capacidade informa o MÁXIMO
+ * que o ativo pode receber antes de furar o limite. É por isso que um ativo
+ * exatamente NA meta continua podendo receber (a meta dele cresce com R).
  *
  * O que é PROIBIDO (era o que produzia "Atual = Ideal · Déficit R$ 0,00" com o
  * aporte informado):
@@ -46,7 +54,117 @@ public final class ReferenciaAporte {
     private static final int ESCALA_MOEDA = 2;
     private static final int ESCALA_PERCENTUAL = 4;
 
+    /**
+     * MARGEM OPERACIONAL padrão, RELATIVA à meta: 5% de folga sobre o percentual
+     * ideal. Com meta de 5% o limite fica 5,25% — nunca "5% + 5 pontos".
+     * Configurável entre 3% e 5% pelo usuário (`AporteConfigService`).
+     */
+    public static final double MARGEM_PADRAO = 5.0d;
+    public static final double MARGEM_MINIMA = 3.0d;
+    public static final double MARGEM_MAXIMA = 5.0d;
+
     private ReferenciaAporte() {}
+
+    /**
+     * LIMITE OPERACIONAL de um nível — tudo o que decide a CAPACIDADE dele.
+     *
+     * É o coração da nova separação: a META em reais (`alvoEmReais`) é a
+     * referência desejável; o LIMITE (`limiteEmReais`) é o máximo permitido.
+     * Os dois são diferentes de propósito, e `capacidade` sai do LIMITE — não do
+     * déficit. Sem isso, um ativo exatamente na meta nunca mais receberia.
+     *
+     * @param metaPercentual             meta do usuário (% do patrimônio projetado)
+     * @param limiteCadastradoPercentual limite explícito do usuário (null = não há)
+     * @param valorAtual                 valor que existe HOJE (nunca soma o aporte)
+     * @param patrimonioProjetado        R = T + A, referência dos alvos
+     * @param margemPercentual           margem RELATIVA à meta (ex.: 5 → 5% de folga)
+     */
+    public record Limite(
+            BigDecimal metaPercentual,
+            BigDecimal limiteCadastradoPercentual,
+            BigDecimal limiteOperacionalPercentual,
+            /** min(limite operacional, limite cadastrado) — o que realmente vale. */
+            BigDecimal limitePercentual,
+            /** meta × R (a meta em reais). */
+            BigDecimal alvoEmReais,
+            /** limite final × R. */
+            BigDecimal limiteEmReais,
+            /** max(0, alvoEmReais − valorAtual) — o espaço DESEJÁVEL. */
+            BigDecimal deficitAteMeta,
+            /** max(0, limiteEmReais − valorAtual) — o MÁXIMO que pode receber. */
+            BigDecimal capacidade
+    ) {
+        public boolean semCapacidade() {
+            return capacidade.signum() <= 0;
+        }
+
+        /** true = a capacidade está limitada pelo limite CADASTRADO, não pela margem. */
+        public boolean limitadaPeloCadastro() {
+            return limitePercentual != null && limiteCadastradoPercentual != null
+                    && limiteCadastradoPercentual.signum() > 0
+                    && limitePercentual.compareTo(limiteCadastradoPercentual) == 0;
+        }
+    }
+
+    /** Limite operacional de um nível a partir da META do usuário. */
+    public static Limite limite(BigDecimal metaPercentual, BigDecimal limiteCadastradoPercentual,
+                                BigDecimal valorAtual, BigDecimal patrimonioProjetado,
+                                double margemPercentual) {
+        BigDecimal operacional = limiteOperacionalPercentual(metaPercentual, margemPercentual);
+        BigDecimal finalPct = (limiteCadastradoPercentual != null && limiteCadastradoPercentual.signum() > 0)
+                ? operacional.min(limiteCadastradoPercentual)
+                : operacional;
+        BigDecimal alvo = valorAlvoProjetado(metaPercentual, patrimonioProjetado);
+        BigDecimal limiteReais = percentualEmReais(finalPct, patrimonioProjetado);
+        return new Limite(metaPercentual, limiteCadastradoPercentual, operacional, finalPct,
+                alvo, limiteReais, deficit(alvo, valorAtual), deficit(limiteReais, valorAtual));
+    }
+
+    public static Limite limite(BigDecimal metaPercentual, BigDecimal valorAtual,
+                                BigDecimal patrimonioProjetado, double margemPercentual) {
+        return limite(metaPercentual, null, valorAtual, patrimonioProjetado, margemPercentual);
+    }
+
+    /**
+     * Limite de uma posição SEM meta própria: ela herda o ALVO (em R$) do bucket
+     * a que pertence — a subclasse quando existe, senão a classe. O limite
+     * operacional é esse alvo com a mesma margem aplicada.
+     *
+     * `metaPercentual` fica null porque não existe meta própria: o que existe é
+     * um alvo emprestado. Quem rateia é que divide o espaço do bucket entre as
+     * posições que o herdam (senão cada uma receberia o bucket inteiro).
+     */
+    public static Limite herdado(BigDecimal alvoEmReais, BigDecimal valorAtual, double margemPercentual) {
+        BigDecimal alvo = moeda(nz(alvoEmReais));
+        BigDecimal limiteReais = comMargem(alvo, margemPercentual);
+        return new Limite(null, null, null, null,
+                alvo, limiteReais, deficit(alvo, valorAtual), deficit(limiteReais, valorAtual));
+    }
+
+    /** Aplica a margem (em %) sobre um valor: {@code valor × (1 + margem/100)}. */
+    public static BigDecimal comMargem(BigDecimal valor, double margemPercentual) {
+        return moeda(nz(valor) * (1d + margemPercentual / 100d));
+    }
+
+    /** Valor em reais de um percentual do patrimônio: {@code percentual × R}. */
+    public static BigDecimal percentualEmReais(BigDecimal percentual, BigDecimal patrimonioProjetado) {
+        return valorAlvoProjetado(percentual, patrimonioProjetado);
+    }
+
+    /**
+     * Limite operacional em PERCENTUAL: {@code percentualIdeal × (1 + margem)}.
+     *
+     * A margem é RELATIVA: meta 5% com margem 5% dá 5,25% — não 10%. Aplicar a
+     * margem como soma de pontos percentuais transformaria 5% de meta em 10% de
+     * limite, dobrando a concentração permitida.
+     */
+    public static BigDecimal limiteOperacionalPercentual(BigDecimal percentualIdeal, double margemPercentual) {
+        if (percentualIdeal == null || percentualIdeal.signum() <= 0) {
+            return BigDecimal.ZERO.setScale(ESCALA_PERCENTUAL, RoundingMode.HALF_UP);
+        }
+        return BigDecimal.valueOf(percentualIdeal.doubleValue() * (1d + margemPercentual / 100d))
+                .setScale(ESCALA_PERCENTUAL, RoundingMode.HALF_UP);
+    }
 
     /** As três grandezas da referência, explícitas. */
     public record Fatores(BigDecimal patrimonioAtual, BigDecimal aporte, BigDecimal patrimonioProjetado) {

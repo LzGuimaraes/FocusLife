@@ -15,7 +15,6 @@ import type { RankingAportes } from "../types/aporte";
 import { boxStyle, controlStyle, miniLabel } from "../components/FormStyles";
 import { apenasNumero, textoParaNum } from "../utils/numeros";
 import { fmtMoeda } from "../utils/percentual";
-
 /* ══════════════════════════════════════════════════════════════════════
    Próximos Aportes (Módulos 7, 8 e 9 — Fase 5).
 
@@ -35,6 +34,26 @@ export default function ProximosAportes() {
   const [calculando, setCalculando] = useState(false);
   const [registrando, setRegistrando] = useState(false);
   const [versaoHistorico, setVersaoHistorico] = useState(0);
+  /** Margem operacional do motor (relativa à meta): 3% a 5%. */
+  const [margem, setMargem] = useState<number | null>(null);
+
+  useEffect(() => {
+    api.get("/aportes/config")
+      .then(r => setMargem(Number(r.data.margem_percentual)))
+      .catch(() => setMargem(null));
+  }, []);
+
+  /** Salva a margem e recalcula: ela muda o LIMITE de todos os ativos. */
+  const salvarMargem = async (novo: number) => {
+    setMargem(novo);
+    try {
+      await api.put("/aportes/config", { margem_percentual: novo });
+      toast.success(`Margem operacional: ${String(novo).replace(".", ",")}% (limite do ativo = meta + ${String(novo).replace(".", ",")}%)`);
+      if (carteiraId != null) carregar(carteiraId, valor);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Erro ao salvar a margem operacional");
+    }
+  };
 
   useEffect(() => {
     api.get("/carteiras-investimento/all?page=0&size=100")
@@ -125,7 +144,7 @@ export default function ProximosAportes() {
     <Layout>
       <PlanejamentoNav ativo="aportes" />
       <PageHeader icon="💸" title="Próximos Aportes"
-        subtitle="Déficit de cada classe e, dentro dela, a nota do checklist"
+        subtitle="Onde falta, quem pode receber e quanto cabe até o limite"
         actionLabel="Dar as notas" onAction={() => navigate("/avaliacao/notas")} />
 
       {/* ── Controles ── */}
@@ -166,6 +185,21 @@ export default function ProximosAportes() {
             </p>
           </div>
         )}
+        <div style={{ marginLeft: top ? undefined : "auto" }}>
+          <label style={miniLabel}>Margem operacional</label>
+          <select value={margem ?? 5} aria-label="Margem operacional do motor de aporte"
+            onChange={e => salvarMargem(Number(e.target.value))}
+            title="O quanto um ativo pode passar da meta antes de o motor considerá-lo cheio (relativo à meta)"
+            style={{ ...controlStyle, minWidth: "130px" }}>
+            {[3, 4, 5].map(m => (
+              <option key={m} value={m}>{m}% sobre a meta</option>
+            ))}
+          </select>
+          <p style={{ fontSize: "10.5px", color: "#94a3b8", margin: "4px 0 0", maxWidth: "220px" }}>
+            Meta de 5% com margem de {margem ?? 5}% → limite de
+            {" "}{(((margem ?? 5) / 100) + 1) * 5}%. Estar na meta não bloqueia o aporte.
+          </p>
+        </div>
       </div>
 
       {calculando ? (

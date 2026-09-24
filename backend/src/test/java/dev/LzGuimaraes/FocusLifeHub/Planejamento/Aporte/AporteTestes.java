@@ -11,8 +11,16 @@ import dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.dto.ComparativoRe
  * Construtores de cenário para os testes do motor de aporte.
  *
  * Os objetos são montados "à mão" (sem banco) com os mesmos campos que o
- * `AporteService` produz: o candidato carrega a CAPACIDADE (déficit do ativo
- * limitado pelo teto) e a classe carrega o alvo JÁ PROJETADO (percentualIdeal × R).
+ * `AporteService` produz. Depois da refatoração, a regra do candidato é:
+ *
+ *     alvo        = meta × R                      (o DESEJÁVEL)
+ *     limite      = min(meta × (1+margem), cadastrado)   (o PERMITIDO)
+ *     capacidade  = max(0, limiteEmReais − valorAtual)
+ *
+ * Ou seja: a capacidade NÃO é o déficit. Use {@link #comMeta} quando o teste
+ * quiser essa matemática completa (é o construtor que prova o caso "ativo na
+ * meta continua candidato") e {@link #candidato} quando só interessar o número
+ * final da capacidade.
  */
 final class AporteTestes {
 
@@ -20,39 +28,77 @@ final class AporteTestes {
 
     /* ── Candidatos ── */
 
-    /** Candidato elegível numa classe, sem subclasse. */
+    /**
+     * Candidato elegível numa classe, sem subclasse.
+     *
+     * @param limiteEmReais teto em R$ do ativo (é dele que sai a CAPACIDADE, não
+     *                      do alvo da meta)
+     */
     static AporteCandidato candidato(CategoriaInvestimento classe, String nome, Integer nota,
-                                     double valorAtual, double valorAlvo, Double preco) {
-        return candidato(classe, nome, nota, valorAtual, valorAlvo, preco, null, null, true);
+                                     double valorAtual, double limiteEmReais, Double preco) {
+        return candidato(classe, nome, nota, valorAtual, limiteEmReais, preco, null, null, true);
     }
 
     /** Candidato numa SUBCLASSE. */
     static AporteCandidato candidatoNaSubclasse(CategoriaInvestimento classe, String nome, Integer nota,
-                                                double valorAtual, double valorAlvo, Double preco,
+                                                double valorAtual, double limiteEmReais, Double preco,
                                                 long subclasseId, String subclasseNome) {
-        return candidato(classe, nome, nota, valorAtual, valorAlvo, preco, subclasseId, subclasseNome, true);
+        return candidato(classe, nome, nota, valorAtual, limiteEmReais, preco, subclasseId, subclasseNome, true);
     }
 
-    /** Candidato DESCARTADO (ex.: já está no próprio teto): capacidade 0 e não elegível. */
+    /** Candidato DESCARTADO (ex.: já está no limite): capacidade 0 e não elegível. */
     static AporteCandidato candidatoSemCapacidade(CategoriaInvestimento classe, String nome, Integer nota,
                                                   double valorAtual) {
         return candidato(classe, nome, nota, valorAtual, valorAtual, 1.0, null, null, false);
     }
 
+    /**
+     * Candidato montado com a MESMA matemática do `AporteService`:
+     * meta × R (alvo), meta × (1+margem) (limite operacional, reduzido pelo
+     * limite cadastrado quando ele for menor) e capacidade até o limite.
+     */
+    static AporteCandidato comMeta(CategoriaInvestimento classe, String nome, Integer nota,
+                                   double percentualIdeal, double valorAtual, double patrimonioProjetado,
+                                   double margem, BigDecimal limiteCadastrado, Double preco) {
+        ReferenciaAporte.Limite limite = ReferenciaAporte.limite(
+                BigDecimal.valueOf(percentualIdeal), limiteCadastrado,
+                BigDecimal.valueOf(valorAtual), BigDecimal.valueOf(patrimonioProjetado), margem);
+        boolean elegivel = limite.capacidade().signum() > 0;
+        return new AporteCandidato(
+                null, 1L, nome, true, null, null, classe,
+                (nota != null) ? BigDecimal.valueOf(nota) : null,
+                nota != null, 5, 5, List.of(),
+                elegivel,
+                elegivel ? StatusElegibilidade.ELEGIVEL : StatusElegibilidade.SEM_CAPACIDADE,
+                elegivel ? List.of() : List.of("Sem capacidade: não há espaço até o limite operacional."),
+                limiteCadastrado, !elegivel,
+                limite.limiteOperacionalPercentual(), limite.limitePercentual(), limite.limiteEmReais(),
+                limite.capacidade(),
+                ReferenciaAporte.percentualAtualProjetado(BigDecimal.valueOf(valorAtual),
+                        BigDecimal.valueOf(patrimonioProjetado)),
+                BigDecimal.valueOf(percentualIdeal),
+                ReferenciaAporte.moeda(valorAtual), limite.alvoEmReais(),
+                limite.deficitAteMeta(), ReferenciaAporte.moeda(Math.max(0d, valorAtual - limite.alvoEmReais().doubleValue())),
+                BigDecimal.ZERO,
+                (preco != null) ? BigDecimal.valueOf(preco) : null);
+    }
+
     private static AporteCandidato candidato(CategoriaInvestimento classe, String nome, Integer nota,
-                                             double valorAtual, double valorAlvo, Double preco,
+                                             double valorAtual, double limiteEmReais, Double preco,
                                              Long subclasseId, String subclasseNome, boolean elegivel) {
-        double capacidade = Math.max(0d, valorAlvo - valorAtual);
+        double capacidade = Math.max(0d, limiteEmReais - valorAtual);
         return new AporteCandidato(
                 null, 1L, nome, true, subclasseId, subclasseNome, classe,
                 (nota != null) ? BigDecimal.valueOf(nota) : null,
                 nota != null, 5, 5, List.of(),
                 elegivel,
                 elegivel ? StatusElegibilidade.ELEGIVEL : StatusElegibilidade.SEM_CAPACIDADE,
-                elegivel ? List.of() : List.of("Sem capacidade: O ativo já está no próprio alvo."),
-                null, false, ReferenciaAporte.moeda(capacidade),
+                elegivel ? List.of() : List.of("Sem capacidade: não há espaço até o limite operacional."),
+                null, !elegivel,
+                BigDecimal.ZERO, BigDecimal.ZERO, ReferenciaAporte.moeda(limiteEmReais),
+                ReferenciaAporte.moeda(capacidade),
                 BigDecimal.ZERO, BigDecimal.ZERO,
-                ReferenciaAporte.moeda(valorAtual), ReferenciaAporte.moeda(valorAlvo),
+                ReferenciaAporte.moeda(valorAtual), ReferenciaAporte.moeda(limiteEmReais),
                 ReferenciaAporte.moeda(capacidade), BigDecimal.ZERO, BigDecimal.ZERO,
                 (preco != null) ? BigDecimal.valueOf(preco) : null);
     }
@@ -69,6 +115,22 @@ final class AporteTestes {
                                                              double patrimonioProjetado,
                                                              double valorAtual, double valorAlvo) {
         return classe(classe, patrimonioProjetado, valorAtual, valorAlvo, List.of());
+    }
+
+    /**
+     * Classe com LIMITE MÁXIMO cadastrado — o único teto que a classe impõe
+     * (§15: déficit de classe não é reserva).
+     */
+    static ComparativoResponseDTO.ClasseComparativoDTO classeComLimite(CategoriaInvestimento classe,
+                                                                       double patrimonioProjetado,
+                                                                       double valorAtual, double valorAlvo,
+                                                                       double limiteMaximoPercentual) {
+        ComparativoResponseDTO.ClasseComparativoDTO base =
+                classe(classe, patrimonioProjetado, valorAtual, valorAlvo, List.of());
+        return new ComparativoResponseDTO.ClasseComparativoDTO(
+                base.classe(), base.percentual_ideal(), base.percentual_atual(),
+                base.valor_ideal(), base.valor_atual(), base.deficit(), base.excesso(),
+                base.tolerancia(), BigDecimal.valueOf(limiteMaximoPercentual), base.subclasses(), base.ativos());
     }
 
     static ComparativoResponseDTO.ClasseComparativoDTO classe(CategoriaInvestimento classe,

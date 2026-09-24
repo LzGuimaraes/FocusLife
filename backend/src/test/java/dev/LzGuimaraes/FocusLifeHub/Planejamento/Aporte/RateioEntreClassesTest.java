@@ -173,18 +173,36 @@ class RateioEntreClassesTest {
     }
 
     @Test
-    @DisplayName("7. o orçamento de uma classe nunca supera o déficit dela")
-    void orcamentoNuncaSuperaODeficit() {
-        // Déficit de R$ 100 na classe, ativo com espaço de R$ 900: só R$ 100 entram.
+    @DisplayName("7. o orçamento de uma classe nunca supera o LIMITE cadastrado dela")
+    void orcamentoNuncaSuperaOLimiteDaClasse() {
+        // Limite explícito de 1% de R$ 28.500 = R$ 285,00; o ativo comporta R$ 900.
+        // O que limita a classe é o LIMITE dela (não o déficit, não a capacidade).
         OrcamentoAporte orcamento = alocacao.ratear(
                 AporteTestes.ordenar(List.of(
                         AporteTestes.candidato(CategoriaInvestimento.ACOES, "A", 90, 0.0, 900.0, 1.0))),
                 AporteTestes.comparativo(28500, List.of(
-                        AporteTestes.classe(CategoriaInvestimento.ACOES, 28500, 0, 100.0))),
+                        AporteTestes.classeComLimite(CategoriaInvestimento.ACOES, 28500, 0, 900.0, 1.0))),
                 APORTE);
 
-        assertThat(orcamento.porClasse().get(CategoriaInvestimento.ACOES)).isEqualByComparingTo("100.00");
-        assertThat(orcamento.alocado()).isEqualByComparingTo("100.00");
+        assertThat(orcamento.porClasse().get(CategoriaInvestimento.ACOES)).isEqualByComparingTo("285.00");
+        assertThat(orcamento.alocado()).isEqualByComparingTo("285.00");
+    }
+
+    @Test
+    @DisplayName("7b. a CLASSE acima da meta não zera os ativos dela (déficit não é trava)")
+    void classeSemDeficitNaoZeraOsAtivos() {
+        // Classe com alvo JÁ atingido (déficit 0) e sem limite máximo cadastrado.
+        // Pela regra antiga, `deficitClasse.isEmpty()` encerrava o rateio e devolvia
+        // nulo — o ativo nunca recebia, mesmo tendo espaço até o limite operacional.
+        OrcamentoAporte orcamento = alocacao.ratear(
+                AporteTestes.ordenar(List.of(
+                        AporteTestes.candidato(CategoriaInvestimento.ACOES, "A", 90, 1000.0, 1500.0, 1.0))),
+                AporteTestes.comparativo(28500, List.of(
+                        AporteTestes.classe(CategoriaInvestimento.ACOES, 28500, 1000.0, 1000.0))),
+                APORTE);
+
+        assertThat(orcamento.alocado()).isEqualByComparingTo("500.00");
+        assertThat(orcamento.porClasse().get(CategoriaInvestimento.ACOES)).isEqualByComparingTo("500.00");
     }
 
     @Test

@@ -73,6 +73,12 @@ public final class RankingAportesDTO {
             boolean avaliada,
             int perguntas,
             int respondidas,
+            /**
+             * PESO no rateio: a própria NOTA. Sem nota, o motor rateia pelo
+             * ESPAÇO (capacidade) do ativo — nunca pela ausência de avaliação como
+             * se fosse exclusão.
+             */
+            BigDecimal peso,
             /** Critérios eliminatórios reprovados no checklist (texto pronto). */
             List<String> bloqueios,
 
@@ -80,9 +86,20 @@ public final class RankingAportesDTO {
             boolean elegivel,
             StatusElegibilidade status,
             List<String> motivos_inelegibilidade,
+            /** Limite de concentração CADASTRADO pelo usuário (null = não há). */
             BigDecimal limite_maximo,
             boolean limite_atingido,
-            /** Quanto o ativo ainda pode receber (déficit + tolerância, respeitando o limite). */
+            /** Limite OPERACIONAL em % = meta × (1 + margem). Ex.: meta 5% → 5,25%. */
+            BigDecimal limite_operacional_percentual,
+            /** Limite que realmente vale = min(operacional, cadastrado). */
+            BigDecimal limite_percentual,
+            /** Limite final em reais = `limite_percentual × R`. */
+            BigDecimal limite_em_reais,
+            /**
+             * Quanto ainda cabe NELE até o limite — o teto do aporte do ativo.
+             * NÃO é o déficit: um ativo exatamente na meta continua com capacidade
+             * porque o alvo dele cresce com o patrimônio projetado.
+             */
             BigDecimal capacidade_aporte,
 
             /* ── Situação na carteira ── */
@@ -92,6 +109,7 @@ public final class RankingAportesDTO {
             BigDecimal valor_ideal,
             BigDecimal deficit,
             BigDecimal excesso,
+            /** Tolerância (p.p.) da meta: ela só ROTULA o nível, não dá orçamento. */
             BigDecimal tolerancia,
 
             /** Quanto deste aporte o item recebeu (null quando nenhum valor foi informado). */
@@ -112,8 +130,9 @@ public final class RankingAportesDTO {
     /**
      * Onde o dinheiro entra: a CLASSE (e a subclasse) abaixo do alvo.
      *
-     * A prioridade é decidida no nível da classe/subclasse — o ativo entra
-     * depois, como destino dentro do orçamento já aprovado pela classe.
+     * O ORÇAMENTO de cada nível é limitado pela CAPACIDADE ELEGÍVEL (o que os
+     * ativos dele absorvem) e, quando houver, pelo limite máximo cadastrado. O
+     * DÉFICIT do nível é informativo: ele não reserva dinheiro.
      */
     public record ClasseAporteDTO(
             CategoriaInvestimento classe,
@@ -125,8 +144,12 @@ public final class RankingAportesDTO {
             BigDecimal excesso,
             BigDecimal tolerancia,
             BigDecimal limite_maximo,
+            /** Limite operacional da classe = meta × (1 + margem). */
+            BigDecimal limite_operacional_percentual,
+            /** Soma das capacidades dos ativos ELEGÍVEIS da classe. */
+            BigDecimal capacidade_elegivel,
             StatusNivel status,
-            /** Quanto deste aporte a classe recebe (0 = já está no alvo ou acima). */
+            /** Quanto deste aporte a classe recebe (0 = nada entrou aqui). */
             BigDecimal sugerido,
             String motivo,
             List<SubclasseAporteDTO> subclasses
@@ -143,6 +166,9 @@ public final class RankingAportesDTO {
             BigDecimal excesso,
             BigDecimal tolerancia,
             BigDecimal limite_maximo,
+            /** Limite operacional em % DO PATRIMÔNIO (o % da subclasse é fatia da classe). */
+            BigDecimal limite_operacional_percentual,
+            BigDecimal capacidade_elegivel,
             StatusNivel status,
             BigDecimal sugerido,
             String motivo
@@ -160,6 +186,8 @@ public final class RankingAportesDTO {
              * depois de investir o total muda e o alvo (% do total) cresce junto.
              */
             BigDecimal valor_total_com_aporte,
+            /** Margem operacional usada no cálculo (%, relativa à meta). */
+            BigDecimal margem_percentual,
             BigDecimal valor_alocado,
             BigDecimal valor_nao_alocado,
             /** Quantos ativos podem receber e quantos foram descartados. */

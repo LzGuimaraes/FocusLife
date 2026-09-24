@@ -91,13 +91,19 @@ export default function DonutAporte({ ranking }: { ranking: RankingAportes }) {
   }, [ranking.valor_aporte, ranking.carteira_id]);
 
   if (grupos.length === 0 || alocado <= 0) {
+    const informou = ranking.valor_aporte != null && ranking.valor_aporte > 0;
     return (
       <div style={card}>
         <h3 style={{ fontSize: 16, fontWeight: 800, color: "#0f172a", margin: 0 }}>Onde o aporte entra</h3>
         <p style={{ fontSize: 12.5, color: "#64748b", margin: "6px 0 0" }}>
-          Nenhum valor foi alocado neste aporte — não há classe abaixo do alvo com ativo elegível.
-          {ranking.valor_aporte != null && ranking.valor_aporte > 0 && (
-            <> O valor informado foi {fmtMoeda(ranking.valor_aporte, moeda)}.</>
+          {informou
+            ? <>Nada foi alocado neste aporte. Não é “classe sem déficit”: os ativos elegíveis já estão no
+              limite operacional (meta + margem) ou não há ativo elegível — veja o motivo de cada um na
+              tabela abaixo.</>
+            : <>Informe quanto você pretende aportar para ver a distribuição.</>}
+          {informou && (
+            <> O valor informado foi {fmtMoeda(ranking.valor_aporte, moeda)}
+              {ranking.nao_alocado_explicacao ? ` — ${ranking.nao_alocado_explicacao}` : "."}</>
           )}
         </p>
       </div>

@@ -121,16 +121,22 @@ class AlocacaoAporteTest {
     }
 
     @Test
-    @DisplayName("sem nenhum déficit, o aporte não é distribuído (ratear devolve nulo)")
-    void semDeficitNadaEhAlocado() {
-        ComparativoResponseDTO semDeficit = classeUnica("100.00",
+    @DisplayName("sem nenhuma capacidade o aporte não é distribuído (alocado 0, não alocado = aporte)")
+    void semCapacidadeNadaEhAlocado() {
+        ComparativoResponseDTO semEspaco = classeUnica("100.00",
                 new BigDecimal("37500.00"), new BigDecimal("37500.00"));
 
-        assertThat(alocacao.ratear(
+        // Ninguém absorve: o aporte volta inteiro como não alocado. O rateio NÃO
+        // devolve nulo (o valor foi informado e a resposta tem de dizer o que
+        // aconteceu com ele).
+        OrcamentoAporte nada = alocacao.ratear(
                 List.of(candidato("CHEIO", 90, new BigDecimal("18750.00"), new BigDecimal("18750.00"), "1000.00")),
-                semDeficit, APORTE)).isNull();
+                semEspaco, APORTE);
+        assertThat(nada).isNotNull();
+        assertThat(nada.alocado()).isEqualByComparingTo("0.00");
+        assertThat(APORTE.subtract(nada.alocado())).isEqualByComparingTo(APORTE);
 
-        // E o mesmo vale para aporte zero: nada é inventado.
+        // Com aporte zero (ou nulo) não há o que distribuir: aí sim é nulo.
         assertThat(alocacao.ratear(
                 List.of(candidato("UM", 90, new BigDecimal("6000.00"), new BigDecimal("18750.00"), "1000.00")),
                 classeUnica("100.00", new BigDecimal("12000.00"), new BigDecimal("37500.00")),
@@ -213,17 +219,22 @@ class AlocacaoAporteTest {
         return new ComparativoResponseDTO(1L, "BRL", patrimonio, ideal, List.of(classe), List.of());
     }
 
+    /**
+     * Candidato com a capacidade JÁ resolvida: {@code limiteEmReais − valorAtual}.
+     * O nome `valorAlvo` do parâmetro é histórico — o que o motor usa é o TETO.
+     */
     private static AporteCandidato candidato(String nome, Integer nota, BigDecimal valorAtual,
-                                             BigDecimal valorAlvo, String preco) {
-        double capacidade = Math.max(0d, valorAlvo.doubleValue() - valorAtual.doubleValue());
+                                             BigDecimal limiteEmReais, String preco) {
+        double capacidade = Math.max(0d, limiteEmReais.doubleValue() - valorAtual.doubleValue());
         return new AporteCandidato(
                 null, 1L, nome, true, null, null, CategoriaInvestimento.ACOES,
                 (nota != null) ? BigDecimal.valueOf(nota) : null,
                 nota != null, 5, 5, List.of(),
                 true, StatusElegibilidade.ELEGIVEL, List.of(),
-                null, false, ReferenciaAporte.moeda(capacidade),
+                null, false, BigDecimal.ZERO, BigDecimal.ZERO, limiteEmReais,
+                ReferenciaAporte.moeda(capacidade),
                 BigDecimal.ZERO, BigDecimal.ZERO,
-                valorAtual, valorAlvo,
+                valorAtual, limiteEmReais,
                 ReferenciaAporte.moeda(capacidade), BigDecimal.ZERO, BigDecimal.ZERO,
                 (preco != null) ? new BigDecimal(preco) : null);
     }

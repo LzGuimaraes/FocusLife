@@ -26,16 +26,26 @@ import dev.LzGuimaraes.FocusLifeHub.Planejamento.comum.CarteiraLookup;
 /**
  * RANKING DE APORTE — o motor de decisão, na versão curta.
  *
- *   DÉFICIT       quanto falta para a Carteira Ideal (classe e subclasse);
- *   ELEGIBILIDADE esse ativo PODE receber agora (déficit do nível, teto próprio,
- *                 limite de concentração e critério eliminatório do checklist);
- *   NOTA          entre os que podem, qual vem primeiro — a NOTA DO CHECKLIST,
- *                 que o usuário dá por subclasse (uma página, uma nota por ativo);
- *   ALOCAÇÃO      quanto cabe em cada um, com teto no déficit.
+ * O motor responde a TRÊS perguntas diferentes e não as mistura:
  *
- * Não existe mais: pesos configuráveis, termos de score, cenários, rebalanceamento,
- * precedência de travas, preço (bloqueio ou oportunidade), momento nem prioridade
- * manual. A decisão inteira é "onde falta" + "quem tem a melhor nota".
+ *   PERGUNTA 1  posso investir neste ativo?   → ELEGIBILIDADE (checklist, limite)
+ *   PERGUNTA 2  quanto posso investir nele?   → CAPACIDADE (até o limite)
+ *   PERGUNTA 3  quem deve receber mais?       → NOTA do checklist (peso)
+ *
+ * E uma quarta, que é consequência: quanto falta para a carteira desejada?
+ * → DÉFICIT da classe/subclasse, que organiza o ORÇAMENTO (mas não veta ativo).
+ *
+ * A regra fundamental:
+ *
+ *     META não é bloqueio. NOTA não é bloqueio. DÉFICIT não é bloqueio.
+ *
+ * O que bloqueia: uma regra real de inelegibilidade (critério eliminatório,
+ * limite atingido, classe fora da Carteira Ideal) ou a inexistência de espaço
+ * até o LIMITE OPERACIONAL (meta + margem).
+ *
+ * Não existe mais: pesos configuráveis, termos de score, cenários,
+ * rebalanceamento, precedência de travas, preço (bloqueio ou oportunidade),
+ * momento nem prioridade manual.
  */
 @Service
 public class AporteService {
@@ -44,17 +54,20 @@ public class AporteService {
     private final ChecklistAtivoService checklistService;
     private final AlocacaoService alocacaoService;
     private final ElegibilidadeService elegibilidadeService;
+    private final AporteConfigService configService;
     private final CarteiraLookup carteiraLookup;
 
     public AporteService(CarteiraIdealService carteiraIdealService,
                          ChecklistAtivoService checklistService,
                          AlocacaoService alocacaoService,
                          ElegibilidadeService elegibilidadeService,
+                         AporteConfigService configService,
                          CarteiraLookup carteiraLookup) {
         this.carteiraIdealService = carteiraIdealService;
         this.checklistService = checklistService;
         this.alocacaoService = alocacaoService;
         this.elegibilidadeService = elegibilidadeService;
+        this.configService = configService;
         this.carteiraLookup = carteiraLookup;
     }
 
@@ -78,7 +91,11 @@ public class AporteService {
         // ver `ReferenciaAporte`.
         ComparativoResponseDTO referencia = ReferenciaAporte.comAporte(comparativo, valorAporte);
 
-        List<AporteCandidato> calculados = candidatos(meus, referencia, nz(comparativo.valor_total()), notas);
+        // Margem operacional do usuário (3% a 5%): o limite de cada ativo é
+        // `meta × (1 + margem)`. Vem da config dele e vale para todas as carteiras.
+        double margem = configService.margemPercentual();
+
+        List<AporteCandidato> calculados = candidatos(meus, referencia, margem, notas);
 
         // Elegível primeiro (o descartado NÃO concorre), depois NOTA do checklist,
         // depois nome. É toda a ordenação que existe.
@@ -112,12 +129,16 @@ public class AporteService {
                     c.avaliada(),
                     c.perguntas(),
                     c.respondidas(),
+                    c.nota(),
                     c.bloqueios(),
                     c.elegivel(),
                     c.status(),
                     c.motivos(),
                     c.limiteMaximo(),
                     c.limiteAtingido(),
+                    c.limiteOperacionalPercentual(),
+                    c.limitePercentual(),
+                    c.limiteEmReais(),
                     c.capacidade(),
                     c.percentualAtual(),
                     c.percentualIdeal(),
@@ -143,6 +164,7 @@ public class AporteService {
                 comparativo.valor_total(),
                 (valorAporte != null) ? valorAporte : null,
                 (valorAporte != null && valorAporte.signum() > 0) ? referencia.valor_total() : null,
+                moeda(margem),
                 alocado,
                 naoAlocado,
                 totalElegiveis,
@@ -150,7 +172,7 @@ public class AporteService {
                 explicacaoNaoAlocado(naoAlocado, calculados, orcamento),
                 avisos(referencia, calculados, itens),
                 alertas(calculados, itens, naoAlocado),
-                classesDto(referencia, calculados, (orcamento != null) ? orcamento.porClasse() : Map.of(),
+                classesDto(referencia, calculados, margem, (orcamento != null) ? orcamento.porClasse() : Map.of(),
                         (orcamento != null) ? orcamento.porSubclasse() : Map.of()),
                 itens);
     }
@@ -202,53 +224,90 @@ public class AporteService {
     }
 
     /* ══════════════════════════════════════════════════════════════════
-       CANDIDATOS (situação + elegibilidade + capacidade)
+       CANDIDATOS — PERGUNTA 1 (posso?) e PERGUNTA 2 (quanto?)
        ══════════════════════════════════════════════════════════════════ */
 
+    /**
+     * Fatos por CANDIDATO, na ordem da regra:
+     *
+     *   1. valorAtual (o aporte NUNCA entra aqui);
+     *   2. alvo projetado = meta × R  → espaço DESEJÁVEL (`deficit`);
+     *   3. limite = min(meta × (1+margem), limite cadastrado) × R
+     *                                → espaço PERMITIDO (`capacidade`);
+     *   4. elegibilidade (checklist + limite + capacidade);
+     *   5. nota do checklist — PESO, nunca permissão.
+     *
+     * O ponto que muda tudo: a CAPACIDADE sai do LIMITE, não da meta. Um ativo
+     * exatamente na meta hoje tem `deficit` ≈ 0 mas `capacidade` > 0, porque o
+     * alvo dele cresceu para `meta × R`. É por isso que ele continua candidato
+     * depois de um aporte grande — antes, `capacidade = deficit` descartava a
+     * carteira inteira e o dinheiro ficava parado.
+     *
+     * A CLASSE e a SUBCLASSE NÃO entram aqui: elas organizam o ORÇAMENTO (quem
+     * reparte é o `AlocacaoService`) e um nível sem espaço simplesmente não
+     * recebe — ele não zera os ativos dele (§9, §15, §16).
+     */
     private List<AporteCandidato> candidatos(MeusAtivosResponseDTO meus, ComparativoResponseDTO comparativo,
-                                             double patrimonioAtual, Notas notas) {
-        // `comparativo` aqui já é a referência (alvos sobre o patrimônio PROJETADO).
-        double patrimonioProjetado = nz(comparativo.valor_total());
-        double tol = AlocacaoService.tolerancia(patrimonioProjetado);
+                                             double margemPercentual, Notas notas) {
+        // `comparativo` aqui já é a referência: alvos e percentuais sobre R = T + A.
+        BigDecimal r = comparativo.valor_total();
+        double tol = AlocacaoService.tolerancia(nz(r));
+        Heranca heranca = heranca(meus, comparativo, margemPercentual);
 
         List<AporteCandidato> lista = new ArrayList<>();
         for (MeusAtivosResponseDTO.MeuAtivoDTO a : meus.ativos()) {
             boolean temMeta = a.meta_id() != null;
-
-            // As três grandezas do ativo, com os nomes da regra:
-            //   valorAtual        = o que existe HOJE (o aporte não entra aqui)
-            //   valorAlvoProjetado= percentualIdeal × R
-            //   deficit           = max(0, alvo − atual)
             double valorAtual = nz(a.valor_atual());
-            double valorAlvoProjetado = temMeta ? valorIdealDe(a.percentual_ideal(), patrimonioProjetado) : 0d;
-            double deficit = (temMeta && valorAlvoProjetado - valorAtual > tol)
-                    ? valorAlvoProjetado - valorAtual : 0d;
-            double excesso = (temMeta && valorAtual - valorAlvoProjetado > tol)
-                    ? valorAtual - valorAlvoProjetado : 0d;
-
             Nota nota = notas.de(a.ativo_cadastro_id(), a.ativo_ids());
             BigDecimal tolerancia = (a.tolerancia() != null) ? a.tolerancia() : BigDecimal.ZERO;
 
-            // CAPACIDADE = déficit puro (`valorAlvoProjetado − valorAtual`), limitada
-            // pelo teto de concentração. A TOLERÂNCIA não entra: ela só classifica
-            // ABAIXO/EQUILIBRADO/ACIMA na tela.
-            // Posição SEM meta própria herda a capacidade do bucket (subclasse/classe)
-            // — é o que faz a renda fixa participar.
-            double capacidade = temMeta
-                    ? capacidadeDoAtivo(valorAlvoProjetado, valorAtual, patrimonioProjetado, a.limite_maximo())
-                    : capacidadeHerdada(a, comparativo, patrimonioProjetado);
-            BigDecimal capacidadeMoeda = alocacaoService.moeda(capacidade);
+            // ── LIMITE OPERACIONAL e CAPACIDADE (pergunta 2) ──
+            BigDecimal alvoProjetado;
+            BigDecimal limiteOperacionalPct;
+            BigDecimal limitePct;
+            BigDecimal limiteReais;
+            BigDecimal deficit;
+            BigDecimal excesso;
+            double capacidadeBruta;
 
-            boolean limiteAtingido = limiteAtingido(valorAtual, patrimonioProjetado, a.limite_maximo());
-            boolean semAvaliacao = nota == null || !nota.avaliada();
-            boolean nivelSemCapacidade = temMeta
-                    ? !temDeficitNoNivel(a, comparativo, tol)
-                    : classeSemCapacidade(a.classe(), comparativo, tol);
+            if (temMeta) {
+                ReferenciaAporte.Limite limite = ReferenciaAporte.limite(
+                        a.percentual_ideal(), a.limite_maximo(), a.valor_atual(), r, margemPercentual);
+                alvoProjetado = limite.alvoEmReais();
+                limiteOperacionalPct = limite.limiteOperacionalPercentual();
+                limitePct = limite.limitePercentual();
+                limiteReais = limite.limiteEmReais();
+                deficit = limite.deficitAteMeta();
+                excesso = ReferenciaAporte.moeda(Math.max(0d, valorAtual - nz(alvoProjetado) - tol));
+                capacidadeBruta = limite.capacidade().doubleValue();
+            } else {
+                // Sem meta própria: herda o ALVO do bucket (subclasse ou classe) — é
+                // o que faz a renda fixa participar. Não existe limite percentual
+                // DELE (a meta não é dele), e a capacidade é a fatia dele no espaço
+                // herdado.
+                alvoProjetado = ReferenciaAporte.moeda(0d);
+                limiteOperacionalPct = null;
+                limitePct = null;
+                limiteReais = null;
+                deficit = ReferenciaAporte.moeda(0d);
+                excesso = ReferenciaAporte.moeda(0d);
+                capacidadeBruta = heranca.de(a);
+            }
+
+            // Piso de ruído: abaixo dele não há "capacidade" de verdade (metas com 4
+            // casas erram centavos, e o rateio usa o mesmo piso). Sem isto, um ativo
+            // apareceria ELEGÍVEL e nunca receberia nada.
+            double capacidade = (capacidadeBruta > tol) ? capacidadeBruta : 0d;
+            BigDecimal percentualProjetado = ReferenciaAporte.percentualAtualProjetado(moeda(valorAtual), r);
+            boolean limiteAtingido = limitePct != null && limitePct.signum() > 0
+                    && percentualProjetado.doubleValue() >= limitePct.doubleValue();
 
             ElegibilidadeService.Veredito veredito = elegibilidadeService.avaliar(
                     new ElegibilidadeService.Entrada(
                             (nota != null) ? nota.bloqueios() : List.of(),
-                            semAvaliacao, limiteAtingido, nivelSemCapacidade, capacidadeMoeda));
+                            nota == null || !nota.avaliada(),
+                            limiteAtingido,
+                            alocacaoService.moeda(capacidade)));
 
             lista.add(new AporteCandidato(
                     a.ativo_cadastro_id(), a.meta_id(), a.ticker(), a.vinculado(),
@@ -260,117 +319,92 @@ public class AporteService {
                     (nota != null) ? nota.respondidas() : 0,
                     (nota != null) ? nota.bloqueios() : List.of(),
                     veredito.elegivel(), veredito.status(), veredito.motivos(),
-                    a.limite_maximo(), limiteAtingido, capacidadeMoeda,
+                    a.limite_maximo(), limiteAtingido,
+                    limiteOperacionalPct, limitePct, limiteReais,
+                    alocacaoService.moeda(capacidade),
                     // percentualAtualProjetado = valorAtual ÷ R — o MESMO valor atual
                     // de sempre (o aporte ainda não foi distribuído). É por isso que
                     // ele CAI quando o aporte é informado.
-                    ReferenciaAporte.percentualAtualProjetado(moeda(valorAtual), comparativo.valor_total()),
+                    percentualProjetado,
                     a.percentual_ideal(),
-                    moeda(valorAtual), moeda(valorAlvoProjetado),
-                    moeda(deficit), moeda(excesso), tolerancia,
+                    moeda(valorAtual), alvoProjetado,
+                    deficit, excesso, tolerancia,
                     a.preco_atual()));
         }
         return lista;
     }
 
     /**
-     * Teto do ativo: {@code valorAlvoProjetado − valorAtual} (déficit puro),
-     * limitado pelo teto de concentração (% do patrimônio projetado − atual).
-     */
-    private double capacidadeDoAtivo(double valorAlvoProjetado, double valorAtual,
-                                     double patrimonioProjetado, BigDecimal limite) {
-        double teto = Math.max(0d, valorAlvoProjetado - valorAtual);
-        if (limite != null && limite.signum() > 0) {
-            double tetoLimite = Math.max(0d, limite.doubleValue() / 100d * patrimonioProjetado - valorAtual);
-            teto = Math.min(teto, tetoLimite);
-        }
-        return teto;
-    }
-
-    /** Capacidade herdada por posição sem meta: a da subclasse dela ou, na falta, a da classe. */
-    private double capacidadeHerdada(MeusAtivosResponseDTO.MeuAtivoDTO a, ComparativoResponseDTO comparativo,
-                                     double patrimonioProjetado) {
-        for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
-            if (c.classe() != a.classe()) {
-                continue;
-            }
-            if (a.subclasse_id() != null) {
-                for (ComparativoResponseDTO.SubclasseComparativoDTO s : c.subclasses()) {
-                    if (s.id().equals(a.subclasse_id())) {
-                        return Math.max(0d, nz(s.valor_ideal()) - nz(s.valor_atual()));
-                    }
-                }
-            }
-            return alocacaoService
-                    .deficit(c.percentual_ideal(), c.percentual_atual(), patrimonioProjetado)
-                    .doubleValue();
-        }
-        return 0d;
-    }
-
-    /** Limite atingido: o % do ativo sobre o patrimônio PROJETADO alcançou o teto. */
-    private boolean limiteAtingido(double valorAtual, double patrimonioProjetado, BigDecimal limite) {
-        if (limite == null || limite.signum() <= 0 || patrimonioProjetado <= 0d) {
-            return false;
-        }
-        return valorAtual / patrimonioProjetado * 100d >= limite.doubleValue();
-    }
-
-    /**
-     * true = a CLASSE (e a subclasse, quando o ativo está numa) tem déficit — é o
-     * que dá capacidade ao nível.
+     * Espaço que as posições SEM meta própria (renda fixa, Tesouro, caixinha)
+     * herdam do seu BUCKET — a subclasse quando existe, senão a classe.
      *
-     * A conta da subclasse é em REAIS, igual à do rateio: alvo − valor atual. O
-     * percentual da subclasse é uma FATIA DA CLASSE, então usá-lo aqui como % do
-     * patrimônio daria "déficit zero" para todo ativo dentro de uma subclasse de
-     * 100%.
+     * O bucket tem UM espaço (alvo até o limite operacional); dividi-lo entre as
+     * posições na proporção do valor atual evita que a segunda posição da mesma
+     * subclasse receba, sozinha, o bucket inteiro.
      */
-    private boolean temDeficitNoNivel(MeusAtivosResponseDTO.MeuAtivoDTO a,
-                                      ComparativoResponseDTO comparativo, double tol) {
+    private record Heranca(
+            Map<Long, Double> capacidadePorSubclasse,
+            Map<Long, Double> basePorSubclasse,
+            Map<CategoriaInvestimento, Double> capacidadePorClasse,
+            Map<CategoriaInvestimento, Double> basePorClasse) {
+
+        /** Fatia da posição no espaço herdado (0 quando ela não está na Carteira Ideal). */
+        double de(MeusAtivosResponseDTO.MeuAtivoDTO a) {
+            double valor = AlocacaoService.nz(a.valor_atual());
+            if (a.subclasse_id() != null) {
+                return fatia(capacidadePorSubclasse.get(a.subclasse_id()),
+                        basePorSubclasse.get(a.subclasse_id()), valor);
+            }
+            return fatia(capacidadePorClasse.get(a.classe()), basePorClasse.get(a.classe()), valor);
+        }
+
+        private static double fatia(Double capacidade, Double base, double valor) {
+            if (capacidade == null || base == null || base <= 0d) {
+                return 0d;
+            }
+            return Math.max(0d, capacidade) * (valor / base);
+        }
+    }
+
+    private static Heranca heranca(MeusAtivosResponseDTO meus, ComparativoResponseDTO comparativo,
+                                   double margemPercentual) {
+        BigDecimal r = comparativo.valor_total();
+        Map<Long, Double> capSubclasse = new HashMap<>();
+        Map<Long, Double> baseSubclasse = new HashMap<>();
+        Map<CategoriaInvestimento, Double> capClasse = new HashMap<>();
+        Map<CategoriaInvestimento, Double> baseClasse = new HashMap<>();
+
+        // 1) Espaço de cada bucket até o LIMITE OPERACIONAL dele.
         for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
-            if (c.classe() != a.classe()) {
+            capClasse.put(c.classe(), ReferenciaAporte
+                    .limite(c.percentual_ideal(), c.limite_maximo(), c.valor_atual(), r, margemPercentual)
+                    .capacidade().doubleValue());
+            for (ComparativoResponseDTO.SubclasseComparativoDTO s : c.subclasses()) {
+                // O alvo da subclasse já é uma FATIA da classe, então aplicar a
+                // margem sobre ele dá o limite operacional dela em reais.
+                double limiteEmReais = ReferenciaAporte
+                        .comMargem(s.valor_ideal(), margemPercentual).doubleValue();
+                if (s.limite_maximo() != null && s.limite_maximo().signum() > 0) {
+                    limiteEmReais = Math.min(limiteEmReais,
+                            ReferenciaAporte.percentualEmReais(s.limite_maximo(), r).doubleValue());
+                }
+                capSubclasse.put(s.id(), Math.max(0d, limiteEmReais - AlocacaoService.nz(s.valor_atual())));
+            }
+        }
+
+        // 2) Base do rateio: o VALOR das posições sem meta, por bucket.
+        for (MeusAtivosResponseDTO.MeuAtivoDTO a : meus.ativos()) {
+            if (a.meta_id() != null) {
                 continue;
             }
-            if (!temDeficit(c.percentual_ideal(), c.percentual_atual(), comparativo, tol)) {
-                return false;
-            }
-            if (a.subclasse_id() == null) {
-                return true;
-            }
-            for (ComparativoResponseDTO.SubclasseComparativoDTO s : c.subclasses()) {
-                if (s.id().equals(a.subclasse_id())) {
-                    return Math.max(0d, nz(s.valor_ideal()) - nz(s.valor_atual())) > tol;
-                }
-            }
-            return true;
-        }
-        return false;
-    }
-
-    private boolean classeSemCapacidade(CategoriaInvestimento classe, ComparativoResponseDTO comparativo,
-                                        double tol) {
-        for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
-            if (c.classe() == classe) {
-                return !temDeficit(c.percentual_ideal(), c.percentual_atual(), comparativo, tol);
+            double valor = AlocacaoService.nz(a.valor_atual());
+            if (a.subclasse_id() != null) {
+                baseSubclasse.merge(a.subclasse_id(), valor, Double::sum);
+            } else {
+                baseClasse.merge(a.classe(), valor, Double::sum);
             }
         }
-        return true;   // classe fora da Carteira Ideal: sem alvo, sem capacidade
-    }
-
-    private boolean temDeficit(BigDecimal percentualIdeal, BigDecimal percentualAtual,
-                               ComparativoResponseDTO comparativo, double tol) {
-        double total = nz(comparativo.valor_total());
-        return alocacaoService.deficit(percentualIdeal, percentualAtual, total)
-                .doubleValue() > tol;
-    }
-
-    /**
-     * Alvo do item: {@code percentualIdeal × patrimonioProjetado}
-     * (0 quando o item não tem meta própria).
-     */
-    private double valorIdealDe(BigDecimal percentualIdeal, double patrimonioProjetado) {
-        return ReferenciaAporte.valorAlvoProjetado(percentualIdeal,
-                BigDecimal.valueOf(patrimonioProjetado)).doubleValue();
+        return new Heranca(capSubclasse, baseSubclasse, capClasse, baseClasse);
     }
 
     /* ══════════════════════════════════════════════════════════════════
@@ -380,6 +414,7 @@ public class AporteService {
     private List<RankingAportesDTO.ClasseAporteDTO> classesDto(
             ComparativoResponseDTO comparativo,
             List<AporteCandidato> candidatos,
+            double margemOperacional,
             Map<CategoriaInvestimento, BigDecimal> sugeridoPorClasse,
             Map<Long, BigDecimal> sugeridoPorSubclasse) {
 
@@ -387,13 +422,24 @@ public class AporteService {
         List<RankingAportesDTO.ClasseAporteDTO> classes = new ArrayList<>();
         for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
             BigDecimal sugerido = sugeridoPorClasse.getOrDefault(c.classe(), moeda(0d));
+            // O que os ATIVOS ELEGÍVEIS da classe ainda absorvem. É este número — e
+            // não o déficit da classe — que limita o orçamento dela (§15).
+            BigDecimal capacidadeElegivel = moeda(capacidadeElegivelDaClasse(candidatos, c.classe()));
+            BigDecimal limiteOperacional = ReferenciaAporte
+                    .limiteOperacionalPercentual(c.percentual_ideal(), margemOperacional);
+
             List<RankingAportesDTO.SubclasseAporteDTO> subs = c.subclasses().stream()
                     .map(s -> {
                         BigDecimal sugeridoSub = sugeridoPorSubclasse.getOrDefault(s.id(), moeda(0d));
+                        // O percentual da subclasse é FATIA DA CLASSE: para virar um %
+                        // do patrimônio ele precisa do ideal da classe junto.
+                        BigDecimal limiteSub = ReferenciaAporte.limiteOperacionalPercentual(
+                                fatiaPercentual(c.percentual_ideal(), s.percentual_ideal()), margemOperacional);
                         return new RankingAportesDTO.SubclasseAporteDTO(
                                 s.id(), s.nome(), s.percentual_atual(), s.percentual_ideal(),
                                 s.valor_atual(), s.valor_ideal(), s.deficit(), s.excesso(),
-                                s.tolerancia(), s.limite_maximo(),
+                                s.tolerancia(), s.limite_maximo(), limiteSub,
+                                moeda(capacidadeElegivelDaSubclasse(candidatos, s.id())),
                                 statusDe(s.percentual_atual(), s.percentual_ideal(), s.tolerancia(), s.limite_maximo()),
                                 sugeridoSub,
                                 (sugeridoSub.signum() <= 0 && sugerido.signum() > 0)
@@ -404,13 +450,38 @@ public class AporteService {
             classes.add(new RankingAportesDTO.ClasseAporteDTO(
                     c.classe(), c.percentual_atual(), c.percentual_ideal(),
                     c.valor_atual(), c.valor_ideal(), c.deficit(), c.excesso(),
-                    c.tolerancia(), c.limite_maximo(),
+                    c.tolerancia(), c.limite_maximo(), limiteOperacional, capacidadeElegivel,
                     statusDe(c.percentual_atual(), c.percentual_ideal(), c.tolerancia(), c.limite_maximo()),
                     sugerido,
-                    motivoDaClasse(c, sugerido, total, candidatos),
+                    motivoDaClasse(c, sugerido, total, candidatos, capacidadeElegivel),
                     subs));
         }
         return classes;
+    }
+
+    /** Percentual de um nível que é FATIA de outro: {@code base × fatia / 100}. */
+    private BigDecimal fatiaPercentual(BigDecimal basePercentual, BigDecimal fatiaPercentual) {
+        if (basePercentual == null || fatiaPercentual == null) {
+            return BigDecimal.ZERO;
+        }
+        return BigDecimal.valueOf(basePercentual.doubleValue() * fatiaPercentual.doubleValue() / 100d)
+                .setScale(4, RoundingMode.HALF_UP);
+    }
+
+    /** Soma das capacidades dos candidatos ELEGÍVEIS de uma classe. */
+    private double capacidadeElegivelDaClasse(List<AporteCandidato> candidatos, CategoriaInvestimento classe) {
+        return candidatos.stream()
+                .filter(c -> c.classe() == classe && c.elegivel())
+                .mapToDouble(c -> nz(c.capacidade()))
+                .sum();
+    }
+
+    /** Soma das capacidades dos candidatos ELEGÍVEIS de uma subclasse. */
+    private double capacidadeElegivelDaSubclasse(List<AporteCandidato> candidatos, Long subclasseId) {
+        return candidatos.stream()
+                .filter(c -> subclasseId != null && subclasseId.equals(c.subclasseId()) && c.elegivel())
+                .mapToDouble(c -> nz(c.capacidade()))
+                .sum();
     }
 
     private RankingAportesDTO.StatusNivel statusDe(BigDecimal atual, BigDecimal ideal,
@@ -436,63 +507,46 @@ public class AporteService {
     /**
      * Por que a classe recebeu (ou não) parte do aporte.
      *
-     * O motivo diz o que REALMENTE travou: antes ele dizia "nenhum ativo
-     * ELEGÍVEL" mesmo quando havia elegíveis sem capacidade (metas que já
-     * espelhavam a carteira), o que fazia o usuário procurar o problema no
-     * lugar errado.
+     * O motivo diz o que REALMENTE aconteceu, e não usa mais "sem déficit" como
+     * explicação: déficit deixou de ser trava. Se a classe não recebeu, é porque
+     * (a) o limite dela foi atingido, (b) ela não tem ativo na carteira, (c) os
+     * ativos dela já estão no limite operacional, ou (d) o valor disponível não
+     * chegou até ela.
      */
     private String motivoDaClasse(ComparativoResponseDTO.ClasseComparativoDTO c, BigDecimal sugerido,
-                                  double total, List<AporteCandidato> candidatos) {
+                                  double total, List<AporteCandidato> candidatos,
+                                  BigDecimal capacidadeElegivel) {
         BigDecimal limite = c.limite_maximo();
         BigDecimal atual = c.percentual_atual();
+        List<AporteCandidato> daClasse = candidatos.stream()
+                .filter(cand -> cand.classe() == c.classe())
+                .toList();
+
+        if (sugerido.signum() > 0) {
+            return "Recebe o que os ativos dela absorvem: " + formatar(capacidadeElegivel)
+                    + " (soma das capacidades elegíveis — o déficit da classe não é reserva).";
+        }
         if (limite != null && limite.signum() > 0 && atual != null
                 && atual.doubleValue() >= limite.doubleValue()) {
             return "Não recebe: limite de concentração de " + formatar(limite) + "% atingido.";
         }
-        BigDecimal falta = alocacaoService.deficit(c.percentual_ideal(), atual, total);
-        if (falta.signum() <= 0) {
-            return "Não recebe: está no alvo (dentro da tolerância de " + formatar(c.tolerancia()) + "%).";
+        if (daClasse.isEmpty()) {
+            return "Não recebe: nenhum ativo desta classe está na carteira (meta de ativo ainda não "
+                    + "comprado não recebe — o aporte só entra em posição que existe).";
         }
-        if (sugerido.signum() <= 0) {
-            List<AporteCandidato> daClasse = candidatos.stream()
-                    .filter(cand -> cand.classe() == c.classe())
-                    .toList();
-            boolean algumElegivel = daClasse.stream().anyMatch(AporteCandidato::elegivel);
-            boolean algumaCapacidade = daClasse.stream()
-                    .anyMatch(cand -> cand.elegivel() && nz(cand.capacidade()) > 0);
-            // "Travou por capacidade" ≠ "travou por regra": o ativo que só está
-            // no próprio alvo não é um problema de configuração, é o esperado.
-            long soSemCapacidade = daClasse.stream()
-                    .filter(cand -> cand.status() == StatusElegibilidade.SEM_CAPACIDADE
-                            || cand.status() == StatusElegibilidade.CLASSE_SEM_CAPACIDADE)
-                    .count();
-            long travados = daClasse.size() - soSemCapacidade;
-
-            if (daClasse.isEmpty()) {
-                return "Tem déficit de " + formatar(falta)
-                        + ", mas nenhum ativo da classe está na carteira: o aporte só entra em posição que existe "
-                        + "(meta de ativo ainda não comprado não recebe).";
+        long travados = daClasse.stream()
+                .filter(cand -> !cand.elegivel() && cand.status() != StatusElegibilidade.SEM_CAPACIDADE)
+                .count();
+        if (capacidadeElegivel.signum() <= 0) {
+            if (travados > 0) {
+                return "Não recebe: os ativos dela estão travados (limite atingido ou critério eliminatório "
+                        + "do checklist).";
             }
-            if (algumElegivel && !algumaCapacidade) {
-                return "Tem déficit de " + formatar(falta)
-                        + ", mas os ativos da classe já estão no próprio alvo — nada cabe aqui neste aporte "
-                        + "(aumente o alvo do ativo para ele receber mais).";
-            }
-            if (!algumElegivel && soSemCapacidade > 0 && travados == 0) {
-                return "Tem déficit de " + formatar(falta)
-                        + ", mas os ativos da classe já estão no próprio alvo — o dinheiro fica não alocado.";
-            }
-            if (travados == 0) {
-                return "Tem déficit de " + formatar(falta)
-                        + ", mas nenhum ativo da classe pode receber agora (limite atingido, critério eliminatório "
-                        + "ou sem checklist).";
-            }
-            return "Tem déficit de " + formatar(falta)
-                    + ", mas nada foi direcionado a ela neste aporte: uns ativos já estão no próprio alvo e outros "
-                    + "estão travados (limite, critério eliminatório ou sem checklist).";
+            return "Não recebe: os ativos da classe já estão no limite operacional (meta + margem) — não "
+                    + "sobrou espaço neste aporte.";
         }
-        return "Recebe no máximo o déficit da classe: " + formatar(falta)
-                + " (ideal + tolerância − atual).";
+        return "Não recebe neste aporte: o valor disponível não chegou até ela "
+                + "(capacidade elegível de " + formatar(capacidadeElegivel) + ").";
     }
 
     /* ══════════════════════════════════════════════════════════════════
@@ -539,7 +593,8 @@ public class AporteService {
         if (sugestao != null && sugestao.signum() > 0) {
             String teto = (c.limiteAtingido())
                     ? " Limite de concentração atingido: o resto vai para os próximos."
-                    : " Respeita o teto de " + formatar(c.capacidade()) + ".";
+                    : " Respeita a capacidade de " + formatar(c.capacidade())
+                        + " (limite " + percentual(c.limitePercentual()) + " × R).";
             BigDecimal unidades = quantidadeDe(c, sugestao);
             String compra = (unidades != null)
                     ? " Compre " + unidadesTexto(unidades, c)
@@ -603,7 +658,7 @@ public class AporteService {
         return explicacaoNaoAlocadoGenerica(naoAlocado, candidatos);
     }
 
-    /** Sobra que não é troco de arredondamento: falta de espaço nos ativos. */
+    /** Sobra que não é troco de arredondamento: falta de ESPAÇO até o limite. */
     private String explicacaoNaoAlocadoGenerica(BigDecimal naoAlocado, List<AporteCandidato> candidatos) {
         if (naoAlocado == null || naoAlocado.signum() <= 0) {
             return null;
@@ -611,10 +666,10 @@ public class AporteService {
         long descartados = candidatos.stream().filter(c -> !c.elegivel()).count();
         List<String> razoes = new ArrayList<>();
         if (descartados > 0) {
-            razoes.add(descartados + " ativo(s) foram descartados na elegibilidade (nível sem déficit, "
-                    + "teto próprio, limite de concentração ou critério eliminatório do checklist)");
+            razoes.add(descartados + " ativo(s) não podem receber (limite atingido, critério eliminatório do "
+                    + "checklist ou classe fora da Carteira Ideal)");
         }
-        razoes.add("os ativos elegíveis já estão completos (teto = déficit do ativo)");
+        razoes.add("os ativos elegíveis já estão no limite operacional (meta + margem)");
         return formatar(naoAlocado) + " sem destino neste aporte: " + String.join(" e ", razoes) + ".";
     }
 
@@ -649,7 +704,11 @@ public class AporteService {
             }
             if (c.limiteAtingido()) {
                 alertas.add(new RankingAportesDTO.Alerta("ATIVO_LIMITE", c.nome()
-                        + " atingiu o limite de concentração de " + formatar(c.limiteMaximo()) + "%."));
+                        + " atingiu o limite operacional de " + percentual(c.limitePercentual()) + " (meta de "
+                        + percentual(c.percentualIdeal()) + " + margem"
+                        + (c.limiteMaximo() != null && c.limiteMaximo().signum() > 0
+                                ? ", reduzida pelo limite cadastrado de " + percentual(c.limiteMaximo()) : "")
+                        + ")."));
             }
         }
 

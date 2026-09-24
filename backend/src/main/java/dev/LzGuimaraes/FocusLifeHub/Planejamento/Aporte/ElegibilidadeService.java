@@ -11,13 +11,17 @@ import org.springframework.stereotype.Service;
 .
  *
  * Roda ANTES de olhar a nota e é o único lugar que descarta. Nenhuma nota alta
- * reabilita um ativo descartado: quem não tem espaço no nível, estourou o
- * próprio teto ou reprovou um critério eliminatório do checklist fica de fora —
- * e o MOTIVO volta na resposta para a tela explicar.
+ * reabilita um ativo descartado: quem reprovou um critério eliminatório do
+ * checklist ou já está no próprio limite fica de fora — e o MOTIVO volta na
+ * resposta para a tela explicar.
  *
- * A ordem das travas é FIXA (não é mais configurável): critério eliminatório,
- * limite de concentração, capacidade do nível e capacidade do ativo. É sempre a
- * primeira violada que vira o status.
+ * NÃO existe trava de CLASSE/SUBCLASSE ("o nível não tem déficit"). A classe e a
+ * subclasse distribuem o orçamento; elas não vetam ativos. Um ativo cuja classe
+ * está sem espaço continua elegível se ele próprio tiver capacidade — e o
+ * dinheiro que a classe não absorve vai para outra (§9, §15 e §16 da regra).
+ *
+ * A ordem das travas é FIXA: critério eliminatório, limite atingido e
+ * capacidade. É sempre a primeira violada que vira o status.
  */
 @Service
 public class ElegibilidadeService {
@@ -28,11 +32,9 @@ public class ElegibilidadeService {
             List<String> bloqueios,
             /** Ativo sem nenhum checklist respondido. */
             boolean semAvaliacao,
-            /** Já atingiu o limite máximo de concentração da meta. */
+            /** Já atingiu o limite (operacional = meta + margem, ou o cadastrado). */
             boolean limiteAtingido,
-            /** A classe/subclasse do ativo não tem déficit. */
-            boolean nivelSemCapacidade,
-            /** Capacidade do ativo (déficit + tolerância, respeitando o limite). */
+            /** Capacidade até o limite operacional (nunca o déficit da meta). */
             BigDecimal capacidade
     ) {}
 
@@ -51,9 +53,6 @@ public class ElegibilidadeService {
         }
         if (entrada.limiteAtingido()) {
             violados.add(StatusElegibilidade.LIMITE_ATINGIDO);
-        }
-        if (entrada.nivelSemCapacidade()) {
-            violados.add(StatusElegibilidade.CLASSE_SEM_CAPACIDADE);
         }
         if (capacidade(entrada).signum() <= 0) {
             violados.add(StatusElegibilidade.SEM_CAPACIDADE);

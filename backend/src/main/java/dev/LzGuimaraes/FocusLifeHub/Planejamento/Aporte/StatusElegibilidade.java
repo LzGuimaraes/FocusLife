@@ -3,23 +3,31 @@ package dev.LzGuimaraes.FocusLifeHub.Planejamento.Aporte;
 /**
  * VEREDITO de elegibilidade: "esse ativo PODE receber dinheiro agora?".
  *
- * Conceito separado do déficit (quanto falta) e da NOTA do checklist (entre os
- * que podem, qual vem primeiro). Depois da simplificação existem quatro motivos
- * de descarte — todos estruturais, nenhum depende de preço:
+ * Conceito separado do DÉFICIT (quanto falta) e da NOTA do checklist (entre os
+ * que podem, qual vem primeiro).
  *
- *   • o nível (classe/subclasse) não tem déficit;
- *   • o ativo já está no próprio teto (déficit + tolerância);
- *   • o limite de concentração da meta foi atingido;
- *   • o checklist reprovou um critério ELIMINATÓRIO.
+ * O que NÃO é motivo de descarte (era o bug do motor antigo):
+ *   ✗ estar na meta (ou acima dela) — a meta cresce com o patrimônio projetado;
+ *   ✗ a CLASSE ou a SUBCLASSE estar sem déficit — elas distribuem o orçamento,
+ *     não vetam ativos. A classe sem espaço simplesmente não recebe dinheiro; os
+ *     ativos dela continuam sendo avaliados um a um.
+ * Por isso NÃO existe mais o status `CLASSE_SEM_CAPACIDADE`.
+ *
+ * O que resta são três travas REAIS:
+ *
+ *   • o checklist reprovou um critério ELIMINATÓRIO do ativo;
+ *   • o ativo já está no LIMITE (operacional = meta + margem, ou o cadastrado);
+ *   • o ativo não tem capacidade positiva até esse limite.
  */
 public enum StatusElegibilidade {
 
     ELEGIVEL("Elegível", "Pode receber aporte neste momento."),
     SEM_AVALIACAO("Sem avaliação", "Ainda sem nota do checklist: participa do aporte, mas sem nota para a ordem."),
     CRITERIO_ELIMINATORIO("Critério eliminatório", "O checklist reprovou um critério eliminatório deste ativo."),
-    LIMITE_ATINGIDO("Limite atingido", "Já atingiu o limite máximo de concentração definido na meta."),
-    CLASSE_SEM_CAPACIDADE("Nível sem capacidade", "A classe (ou a subclasse) deste ativo não tem déficit."),
-    SEM_CAPACIDADE("Sem capacidade", "O ativo já está no próprio alvo (déficit + tolerância).");
+    LIMITE_ATINGIDO("Limite atingido",
+            "Já está no limite (meta + margem operacional, ou o limite cadastrado): não há espaço até o limite."),
+    SEM_CAPACIDADE("Sem capacidade",
+            "Não sobrou espaço até o limite operacional deste ativo (ou a classe dele não está na Carteira Ideal).");
 
     private final String label;
     private final String descricao;

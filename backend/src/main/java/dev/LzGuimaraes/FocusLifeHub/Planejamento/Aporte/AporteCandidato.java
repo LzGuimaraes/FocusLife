@@ -7,12 +7,16 @@ import java.util.UUID;
 /**
  * Candidato a receber aporte, com o que o motor realmente usa.
  *
- * Depois da simplificação o objeto ficou do tamanho da decisão:
+ * As TRÊS perguntas separadas, na ordem em que são respondidas:
  *
- *   situação na carteira (déficit/excesso/tolerância)
- *   → ELEGIBILIDADE (pode ou não receber + motivo)
- *   → NOTA do checklist (ordem entre os elegíveis)
- *   → CAPACIDADE (quanto ainda cabe)
+ *   1. ELEGIBILIDADE  posso investir neste ativo?
+ *      (critério eliminatório do checklist · limite atingido · capacidade > 0)
+ *   2. CAPACIDADE     quanto posso investir?  → `capacidade`, até o LIMITE
+ *   3. NOTA           quem deve receber mais?  → peso no rateio
+ *
+ * `valorIdeal` e `deficit` são a META (o desejável); `limiteEmReais` e
+ * `capacidade` são o LIMITE (o permitido). São pares diferentes de propósito, e
+ * é essa separação que faz um ativo exatamente na meta continuar candidato.
  *
  * Saíram: preço (atual/médio/máximo/oportunidade), momento, prioridade manual,
  * Priority Score com pesos e os termos normalizados da fórmula aberta.
@@ -40,16 +44,29 @@ public record AporteCandidato(
         StatusElegibilidade status,
         /** Motivos do descarte (vazio quando elegível). */
         List<String> motivos,
+        /** Limite de concentração CADASTRADO pelo usuário (null = não há). */
         BigDecimal limiteMaximo,
         boolean limiteAtingido,
-        /** Quanto o ativo ainda pode receber (déficit + tolerância, respeitando o limite). */
+        /** Limite OPERACIONAL em % = meta × (1 + margem). Ex.: meta 5% → 5,25%. */
+        BigDecimal limiteOperacionalPercentual,
+        /** Limite final em % = min(limite operacional, limite cadastrado). */
+        BigDecimal limitePercentual,
+        /** Limite final em reais = `limitePercentual × R`. */
+        BigDecimal limiteEmReais,
+        /**
+         * Quanto o ativo ainda pode receber até o LIMITE (não até a meta):
+         * {@code max(0, limiteEmReais − valorAtual)}. É este o número que
+         * limita o aporte — um ativo exatamente na meta continua com capacidade.
+         */
         BigDecimal capacidade,
 
         /* ── Situação na carteira ── */
         BigDecimal percentualAtual,
         BigDecimal percentualIdeal,
         BigDecimal valorAtual,
+        /** Alvo projetado em reais: {@code meta% × R} (a META, não o limite). */
         BigDecimal valorIdeal,
+        /** {@code max(0, alvo − valorAtual)} — o espaço DESEJÁVEL até a meta. */
         BigDecimal deficit,
         BigDecimal excesso,
         BigDecimal tolerancia,
