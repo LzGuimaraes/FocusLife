@@ -155,6 +155,9 @@ export default function DonutAporte({ ranking }: { ranking: RankingAportes }) {
           </h3>
           <p style={{ fontSize: 12.5, color: "#64748b", margin: "5px 0 0" }}>
             Anel de dentro: a <strong>classe</strong>. Anel de fora: o <strong>ativo</strong> — o quanto entra em cada um.
+            {ranking.valor_total_com_aporte != null && (
+              <> Os alvos foram recalculados sobre o patrimônio de {fmtMoeda(ranking.valor_total_com_aporte, moeda)}.</>
+            )}
           </p>
         </div>
         <span style={{ ...pill, color: "#047857", background: "#ecfdf5" }}>

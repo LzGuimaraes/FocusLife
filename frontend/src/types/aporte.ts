@@ -126,8 +126,15 @@ export interface ClasseAporte {
 export interface RankingAportes {
   carteira_id: number;
   moeda: string;
+  /** Patrimônio de HOJE (sem o aporte). */
   valor_total: number;
   valor_aporte: number | null;
+  /**
+   * Patrimônio DEPOIS do aporte: é a referência dos alvos. O alvo de uma classe
+   * é um % do total, então o dinheiro novo aumenta o próprio alvo — sem isso um
+   * aporte numa carteira já equilibrada não teria para onde ir.
+   */
+  valor_total_com_aporte: number | null;
   valor_alocado: number | null;
   valor_nao_alocado: number | null;
   /** Quantos ativos disputaram o aporte (elegíveis) e quantos foram descartados. */

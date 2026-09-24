@@ -71,7 +71,13 @@ public class AporteService {
         MeusAtivosResponseDTO meus = carteiraIdealService.meusAtivos(carteiraId);
         Notas notas = notas();
 
-        List<AporteCandidato> calculados = candidatos(meus, comparativo, notas);
+        // A REFERÊNCIA do cálculo é o patrimônio DEPOIS do aporte: o alvo de cada
+        // classe/ativo é um % do total, então o dinheiro novo aumenta o alvo — e é
+        // essa diferença que o aporte preenche. Sem isso, uma carteira cujas metas
+        // espelham o que já existe nunca tem déficit e o aporte fica sem destino.
+        ComparativoResponseDTO referencia = comReferenciaDoAporte(comparativo, valorAporte);
+
+        List<AporteCandidato> calculados = candidatos(meus, referencia, notas);
 
         // Elegível primeiro (o descartado NÃO concorre), depois NOTA do checklist,
         // depois nome. É toda a ordenação que existe.
@@ -80,7 +86,7 @@ public class AporteService {
                 .thenComparing(AporteCandidato::nota, Comparator.nullsLast(Comparator.reverseOrder()))
                 .thenComparing(AporteCandidato::nome, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)));
 
-        OrcamentoAporte orcamento = alocacaoService.ratear(calculados, comparativo, valorAporte);
+        OrcamentoAporte orcamento = alocacaoService.ratear(calculados, referencia, valorAporte);
 
         List<RankingAportesDTO.Item> itens = new ArrayList<>();
         int posicao = 0;
@@ -133,16 +139,115 @@ public class AporteService {
                 carteira.getMoeda(),
                 comparativo.valor_total(),
                 (valorAporte != null) ? valorAporte : null,
+                (valorAporte != null && valorAporte.signum() > 0) ? referencia.valor_total() : null,
                 alocado,
                 naoAlocado,
                 totalElegiveis,
                 calculados.size() - totalElegiveis,
                 explicacaoNaoAlocado(naoAlocado, calculados),
-                avisos(comparativo, calculados, itens),
+                avisos(referencia, calculados, itens),
                 alertas(calculados, itens, naoAlocado),
-                classesDto(comparativo, calculados, (orcamento != null) ? orcamento.porClasse() : Map.of(),
+                classesDto(referencia, calculados, (orcamento != null) ? orcamento.porClasse() : Map.of(),
                         (orcamento != null) ? orcamento.porSubclasse() : Map.of()),
                 itens);
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       REFERÊNCIA DO APORTE
+       ══════════════════════════════════════════════════════════════════ */
+
+    /**
+     * Comparativo com os alvos do patrimônio DEPOIS do aporte (hoje + aporte).
+     *
+     * O QUE MUDA: `valor_total` e todos os `valor_ideal` passam a ser do total novo
+     * (o alvo de 45% de uma carteira que vai a R$ 31.006 é R$ 13.953, não R$ 9.453),
+     * e o `percentual_atual` passa a ser "como o ativo/classe ficaria se o dinheiro
+     * novo entrasse" (valor atual ÷ total novo). Assim um ativo sem dinheiro novo
+     * aparece ABAIXO do alvo — que é a verdade do plano para quem vai aportar.
+     *
+     * O QUE NÃO MUDA: os valores atuais em R$ (é dinheiro que já existe), o
+     * percentual de SUBCLASSE (fatia da classe, não do patrimônio) e o ideal de
+     * cada nível. Também não muda nada quando não há aporte informado.
+     */
+    private ComparativoResponseDTO comReferenciaDoAporte(ComparativoResponseDTO c, BigDecimal aporte) {
+        if (c == null || aporte == null || aporte.signum() <= 0) {
+            return c;
+        }
+        BigDecimal total = moeda(nz(c.valor_total()) + aporte.doubleValue());
+
+        List<ComparativoResponseDTO.ClasseComparativoDTO> classes = new ArrayList<>();
+        for (ComparativoResponseDTO.ClasseComparativoDTO cl : c.classes()) {
+            BigDecimal vIdealClasse = valorDe(cl.percentual_ideal(), total);
+            BigDecimal vAtualClasse = valorDe(cl.valor_atual());
+
+            List<ComparativoResponseDTO.SubclasseComparativoDTO> subs = cl.subclasses().stream()
+                    .map(s -> {
+                        BigDecimal vIdealSub = fatia(s.percentual_ideal(), vIdealClasse);
+                        BigDecimal vAtualSub = valorDe(s.valor_atual());
+                        return new ComparativoResponseDTO.SubclasseComparativoDTO(
+                                s.id(), s.nome(), s.percentual_ideal(), s.percentual_atual(),
+                                vIdealSub, vAtualSub,
+                                sobraPositiva(vIdealSub, vAtualSub), sobraPositiva(vAtualSub, vIdealSub),
+                                s.tolerancia(), s.limite_maximo());
+                    })
+                    .toList();
+
+            List<ComparativoResponseDTO.AtivoComparativoDTO> ativos = cl.ativos().stream()
+                    .map(a -> {
+                        BigDecimal vIdealAtivo = valorDe(a.percentual_ideal(), total);
+                        BigDecimal vAtualAtivo = valorDe(a.valor_atual());
+                        return new ComparativoResponseDTO.AtivoComparativoDTO(
+                                a.meta_id(), a.ativo_cadastro_id(), a.ticker(), a.subclasse_id(),
+                                a.percentual_ideal(), percentualDe(vAtualAtivo, total),
+                                vIdealAtivo, vAtualAtivo,
+                                sobraPositiva(vIdealAtivo, vAtualAtivo), sobraPositiva(vAtualAtivo, vIdealAtivo),
+                                a.tolerancia(), a.limite_maximo(), a.possui_meta());
+                    })
+                    .toList();
+
+            classes.add(new ComparativoResponseDTO.ClasseComparativoDTO(
+                    cl.classe(), cl.percentual_ideal(), percentualDe(vAtualClasse, total),
+                    vIdealClasse, vAtualClasse,
+                    sobraPositiva(vIdealClasse, vAtualClasse), sobraPositiva(vAtualClasse, vIdealClasse),
+                    cl.tolerancia(), cl.limite_maximo(), subs, ativos));
+        }
+
+        return new ComparativoResponseDTO(c.carteira_id(), c.moeda(), total,
+                c.soma_percentuais_ideal(), classes, c.avisos());
+    }
+
+    /** Alvo em R$ de um percentual do patrimônio (mesma escala de moeda). */
+    private BigDecimal valorDe(BigDecimal percentual, BigDecimal total) {
+        if (percentual == null || total == null) {
+            return moeda(0d);
+        }
+        return moeda(percentual.doubleValue() / 100d * total.doubleValue());
+    }
+
+    /** Fatia de um valor-base (percentual de subclasse é fatia da CLASSE). */
+    private BigDecimal fatia(BigDecimal percentual, BigDecimal base) {
+        if (percentual == null || base == null) {
+            return moeda(0d);
+        }
+        return moeda(percentual.doubleValue() / 100d * base.doubleValue());
+    }
+
+    private BigDecimal percentualDe(BigDecimal valor, BigDecimal total) {
+        if (valor == null || total == null || total.signum() <= 0) {
+            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+        }
+        return BigDecimal.valueOf(valor.doubleValue() / total.doubleValue() * 100d)
+                .setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal valorDe(BigDecimal valor) {
+        return moeda(valor != null ? valor.doubleValue() : 0d);
+    }
+
+    /** max(0, a − b), como no comparativo. */
+    private BigDecimal sobraPositiva(BigDecimal a, BigDecimal b) {
+        BigDecimal diferenca = a.subtract(b);
+        return (diferenca.signum() > 0) ? diferenca : moeda(0d);
     }
 
     /* ══════════════════════════════════════════════════════════════════
@@ -247,10 +352,10 @@ public class AporteService {
         return lista;
     }
 
-    /** Teto do ativo: (ideal% + tolerância%) × total − atual, limitado pelo teto de concentração. */
+    /** Teto do ativo: ideal% × total − atual, limitado pelo teto de concentração. */
     private double capacidadeDoAtivo(double vIdeal, BigDecimal tolerancia, double vAtual, double total,
                                      BigDecimal limite) {
-        double teto = Math.max(0d, vIdeal + nz(tolerancia) / 100d * total - vAtual);
+        double teto = Math.max(0d, vIdeal - vAtual);
         if (limite != null && limite.signum() > 0) {
             double tetoLimite = Math.max(0d, limite.doubleValue() / 100d * total - vAtual);
             teto = Math.min(teto, tetoLimite);
@@ -268,13 +373,12 @@ public class AporteService {
             if (a.subclasse_id() != null) {
                 for (ComparativoResponseDTO.SubclasseComparativoDTO s : c.subclasses()) {
                     if (s.id().equals(a.subclasse_id())) {
-                        double alvo = nz(s.valor_ideal()) + nz(s.tolerancia()) / 100d * nz(c.valor_ideal());
-                        return Math.max(0d, alvo - nz(s.valor_atual()));
+                        return Math.max(0d, nz(s.valor_ideal()) - nz(s.valor_atual()));
                     }
                 }
             }
             return alocacaoService
-                    .deficitComTolerancia(c.percentual_ideal(), c.tolerancia(), c.percentual_atual(), total)
+                    .deficit(c.percentual_ideal(), c.percentual_atual(), total)
                     .doubleValue();
         }
         return 0d;
@@ -291,10 +395,10 @@ public class AporteService {
      * true = a CLASSE (e a subclasse, quando o ativo está numa) tem déficit — é o
      * que dá capacidade ao nível.
      *
-     * A conta da subclasse é em REAIS, igual à do rateio: o alvo é (valor ideal +
-     * tolerância em % do ideal da CLASSE) − valor atual. O percentual da subclasse
-     * é uma FATIA DA CLASSE, então usá-lo aqui como % do patrimônio daria "déficit
-     * zero" para todo ativo dentro de uma subclasse de 100%.
+     * A conta da subclasse é em REAIS, igual à do rateio: alvo − valor atual. O
+     * percentual da subclasse é uma FATIA DA CLASSE, então usá-lo aqui como % do
+     * patrimônio daria "déficit zero" para todo ativo dentro de uma subclasse de
+     * 100%.
      */
     private boolean temDeficitNoNivel(MeusAtivosResponseDTO.MeuAtivoDTO a,
                                       ComparativoResponseDTO comparativo, double tol) {
@@ -302,7 +406,7 @@ public class AporteService {
             if (c.classe() != a.classe()) {
                 continue;
             }
-            if (!temDeficit(c.percentual_ideal(), c.tolerancia(), c.percentual_atual(), comparativo, tol)) {
+            if (!temDeficit(c.percentual_ideal(), c.percentual_atual(), comparativo, tol)) {
                 return false;
             }
             if (a.subclasse_id() == null) {
@@ -310,8 +414,7 @@ public class AporteService {
             }
             for (ComparativoResponseDTO.SubclasseComparativoDTO s : c.subclasses()) {
                 if (s.id().equals(a.subclasse_id())) {
-                    double alvo = nz(s.valor_ideal()) + nz(s.tolerancia()) / 100d * nz(c.valor_ideal());
-                    return Math.max(0d, alvo - nz(s.valor_atual())) > tol;
+                    return Math.max(0d, nz(s.valor_ideal()) - nz(s.valor_atual())) > tol;
                 }
             }
             return true;
@@ -323,16 +426,16 @@ public class AporteService {
                                         double tol) {
         for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
             if (c.classe() == classe) {
-                return !temDeficit(c.percentual_ideal(), c.tolerancia(), c.percentual_atual(), comparativo, tol);
+                return !temDeficit(c.percentual_ideal(), c.percentual_atual(), comparativo, tol);
             }
         }
         return true;   // classe fora da Carteira Ideal: sem alvo, sem capacidade
     }
 
-    private boolean temDeficit(BigDecimal percentualIdeal, BigDecimal tolerancia, BigDecimal percentualAtual,
+    private boolean temDeficit(BigDecimal percentualIdeal, BigDecimal percentualAtual,
                                ComparativoResponseDTO comparativo, double tol) {
         double total = nz(comparativo.valor_total());
-        return alocacaoService.deficitComTolerancia(percentualIdeal, tolerancia, percentualAtual, total)
+        return alocacaoService.deficit(percentualIdeal, percentualAtual, total)
                 .doubleValue() > tol;
     }
 
@@ -417,7 +520,7 @@ public class AporteService {
                 && atual.doubleValue() >= limite.doubleValue()) {
             return "Não recebe: limite de concentração de " + formatar(limite) + "% atingido.";
         }
-        BigDecimal falta = alocacaoService.deficitComTolerancia(c.percentual_ideal(), c.tolerancia(), atual, total);
+        BigDecimal falta = alocacaoService.deficit(c.percentual_ideal(), atual, total);
         if (falta.signum() <= 0) {
             return "Não recebe: está no alvo (dentro da tolerância de " + formatar(c.tolerancia()) + "%).";
         }

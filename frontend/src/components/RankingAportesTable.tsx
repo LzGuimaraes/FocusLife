@@ -101,8 +101,10 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: comSugestao ? "1000px" : "820px", fontSize: "13px" }}>
             <thead>
               <tr style={{ background: "#f8fafc" }}>
-                {["#", "Ativo", "Classe", "Nota", "Status", "Ação", "Atual", "Ideal", "Déficit", "Capacidade"]
-                  .map(h => <th key={h} style={{ ...th, textAlign: ["#", "Ativo", "Classe", "Status", "Ação"].includes(h) ? "left" : "right" }}>{h}</th>)}
+                {["#", "Ativo", "Classe", "Nota", "Status", "Ação",
+                  comSugestao ? "Atual (após)" : "Atual", "Ideal (após)", "Déficit", "Capacidade"]
+                  .map(h => <th key={h} style={{ ...th, textAlign: ["#", "Ativo", "Classe", "Status", "Ação"].includes(h) ? "left" : "right" }}
+                    title={h.includes("(após)") ? "Percentual considerando o aporte informado (o alvo cresce com o patrimônio final)" : undefined}>{h}</th>)}
                 {comSugestao && <th style={{ ...th, textAlign: "right" }}>Aporte</th>}
               </tr>
             </thead>
@@ -209,6 +211,12 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
         A ordem do aporte é a <strong>nota do checklist</strong> (por subclasse, uma nota por ativo) ·
         Capacidade = déficit + tolerância, respeitando o limite de concentração ·
         Ninguém recebe mais do que falta: o que sobra fica não alocado.
+        {ranking.valor_total_com_aporte != null && (
+          <> Os alvos são calculados sobre o patrimônio <strong>depois</strong> do aporte
+            ({fmtMoeda(ranking.valor_total, ranking.moeda)} + {fmtMoeda(ranking.valor_aporte ?? 0, ranking.moeda)} ={" "}
+            {fmtMoeda(ranking.valor_total_com_aporte, ranking.moeda)}), então os percentuais da tabela
+            já mostram onde cada ativo ficaria sem o dinheiro novo.</>
+        )}
       </p>
     </div>
   );
@@ -232,6 +240,9 @@ function AportePorClasse({ ranking }: { ranking: RankingAportes }) {
       </h4>
       <p style={{ fontSize: "11.5px", color: "#64748b", margin: "0 0 10px" }}>
         A classe define o quanto; a nota do checklist decide quem entra dentro dela
+        {ranking.valor_total_com_aporte != null && (
+          <> · os alvos já contam o aporte (patrimônio final de {fmtMoeda(ranking.valor_total_com_aporte, moeda)})</>
+        )}
       </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: "10px" }}>

@@ -143,8 +143,15 @@ public final class RankingAportesDTO {
     public record Response(
             Long carteira_id,
             String moeda,
+            /** Patrimônio de HOJE (sem o aporte). */
             BigDecimal valor_total,
             BigDecimal valor_aporte,
+            /**
+             * Patrimônio DEPOIS do aporte (hoje + aporte). É a referência dos
+             * alvos: o déficit de cada classe/ativo é medido contra ele, porque
+             * depois de investir o total muda e o alvo (% do total) cresce junto.
+             */
+            BigDecimal valor_total_com_aporte,
             BigDecimal valor_alocado,
             BigDecimal valor_nao_alocado,
             /** Quantos ativos podem receber e quantos foram descartados. */

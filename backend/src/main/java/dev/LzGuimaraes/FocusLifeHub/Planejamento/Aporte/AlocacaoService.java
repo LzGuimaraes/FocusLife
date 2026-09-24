@@ -54,7 +54,7 @@ public class AlocacaoService {
         // conta como equilibrada e não puxa aporte.
         Map<CategoriaInvestimento, Double> deficitClasse = new LinkedHashMap<>();
         for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
-            double deficit = deficitComTolerancia(c.percentual_ideal(), c.tolerancia(), c.percentual_atual(), total)
+            double deficit = deficit(c.percentual_ideal(), c.percentual_atual(), total)
                     .doubleValue();
             if (deficit > tol) {
                 deficitClasse.put(c.classe(), deficit);
@@ -306,12 +306,20 @@ public class AlocacaoService {
      * Déficit de um nível CONSIDERANDO a tolerância: dentro da faixa o item conta
      * como EQUILIBRADO e não puxa aporte.
      */
-    public BigDecimal deficitComTolerancia(BigDecimal percentualIdeal, BigDecimal tolerancia,
-                                           BigDecimal percentualAtual, double total) {
+    /**
+     * Déficit em R$ do nível: quanto falta do valor ATUAL para o alvo.
+     *
+     * A TOLERÂNCIA NÃO ENTRA AQUI — ela é RÓTULO (dentro da faixa o nível conta
+     * como equilibrado), não orçamento. Somá-la ao déficit dava dinheiro a quem
+     * já estava no alvo e quebrava o rateio proporcional à meta: numa carteira
+     * cujas metas espelham o que já existe, todo mundo recebia pela tolerância e
+     * o aporte novo saía do lugar errado.
+     */
+    public BigDecimal deficit(BigDecimal percentualIdeal, BigDecimal percentualAtual, double total) {
         if (percentualIdeal == null || percentualIdeal.signum() <= 0) {
             return moeda(0d);
         }
-        double alvo = (percentualIdeal.doubleValue() + nz(tolerancia)) / 100d * total;
+        double alvo = percentualIdeal.doubleValue() / 100d * total;
         double atual = ((percentualAtual != null) ? percentualAtual.doubleValue() : 0d) / 100d * total;
         return moeda(Math.max(0d, alvo - atual));
     }
