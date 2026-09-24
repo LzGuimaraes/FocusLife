@@ -35,6 +35,8 @@ import dev.LzGuimaraes.FocusLifeHub.Planejamento.Estrategia.EstrategiaService;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.MetaAtivo.MetaAtivoModel;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.MetaAtivo.MetaAtivoRepository;
 import dev.LzGuimaraes.FocusLifeHub.Planejamento.comum.CarteiraLookup;
+import dev.LzGuimaraes.FocusLifeHub.SetorMercado.SetorMercadoModel;
+import dev.LzGuimaraes.FocusLifeHub.SetorMercado.SetorMercadoService;
 
 /**
  * Carteira Ideal (Módulo 1) + comparativo com a carteira real (Módulo 10).
@@ -57,6 +59,8 @@ public class CarteiraIdealService {
     private final EstrategiaService estrategiaService;
     private final CarteiraLookup carteiraLookup;
     private final PercentualCalculator calculator;
+    /** Catálogo global de setores: todo setor da carteira aponta para ele (V32). */
+    private final SetorMercadoService setorMercadoService;
 
     public CarteiraIdealService(CarteiraIdealClasseRepository classeRepository,
                                 CarteiraIdealSubclasseRepository subclasseRepository,
@@ -66,7 +70,8 @@ public class CarteiraIdealService {
                                 AtivoRepository ativoRepository,
                                 EstrategiaService estrategiaService,
                                 CarteiraLookup carteiraLookup,
-                                PercentualCalculator calculator) {
+                                PercentualCalculator calculator,
+                                SetorMercadoService setorMercadoService) {
         this.classeRepository = classeRepository;
         this.subclasseRepository = subclasseRepository;
         this.setorRepository = setorRepository;
@@ -76,6 +81,7 @@ public class CarteiraIdealService {
         this.estrategiaService = estrategiaService;
         this.carteiraLookup = carteiraLookup;
         this.calculator = calculator;
+        this.setorMercadoService = setorMercadoService;
     }
 
     /* ══════════════════════════════════════════════════════════════════
@@ -215,6 +221,14 @@ public class CarteiraIdealService {
                 for (CarteiraIdealRequestDTO.SetorIdealRequestDTO st : setoresDe(s)) {
                     CarteiraIdealSetorModel setor = new CarteiraIdealSetorModel();
                     setor.setNome(st.nome().trim());
+                    // V32: todo setor da carteira aponta para o CATÁLOGO global. Se a
+                    // tela já mandou o id, usa; senão resolve (ou cria) pelo nome — é
+                    // assim que o setor digitado aqui passa a existir para as outras
+                    // carteiras e para a classificação manual no banco.
+                    SetorMercadoModel catalogoSetor = (st.setor_mercado_id() != null)
+                            ? setorMercadoService.exigir(st.setor_mercado_id())
+                            : setorMercadoService.criarOuObter(st.nome(), null);
+                    setor.setSetorMercado(catalogoSetor);
                     setor.setPercentualIdeal(calculator.percentualNormalizado(st.percentual_ideal()));
                     setor.setTolerancia(toleranciaDe(st.tolerancia()));
                     setor.setLimiteMaximo(st.limite_maximo());
@@ -295,7 +309,62 @@ public class CarteiraIdealService {
             carteira.setEstrategia(null);
         }
 
+        // ── O setor SOBE para o catálogo do ticker (V32) ──
+        // O setor da carteira é um balde com % alvo; o setor do TICKER é a
+        // identidade que sobrevive à carteira. Classificar aqui já classifica o
+        // ativo em qualquer outra carteira — e no mesmo campo que o cadastro
+        // manual do catálogo (banco/script) usa.
+        propagarSetorParaCatalogo(carteiraId);
+
         return get(carteiraId);
+    }
+
+    /**
+     * Grava no TICKER (`ativo_cadastro.setor_mercado_id`) o setor em que ele foi
+     * classificado nesta carteira, quando o ticker ainda não tem setor.
+     *
+     * NÃO sobrescreve classificação existente: o catálogo é a referência
+     * (mantida manualmente no banco) e a carteira é um alvo — quando os dois
+     * divergem, o aviso do comparativo mostra a diferença em vez de o sistema
+     * escolher sozinho.
+     *
+     * @return quantos tickers foram classificados agora
+     */
+    private int propagarSetorParaCatalogo(Long carteiraId) {
+        Map<UUID, AtivoCadastroModel> tickerPorId = new LinkedHashMap<>();
+        Map<UUID, SetorMercadoModel> setorPorTicker = new LinkedHashMap<>();
+
+        for (MetaAtivoModel meta : metaAtivoRepository
+                .findByCarteiraInvestimentoIdOrderByOrdemAscIdAsc(carteiraId)) {
+            if (meta.getAtivoCadastro() != null && meta.getSetor() != null
+                    && meta.getSetor().getSetorMercado() != null) {
+                UUID id = meta.getAtivoCadastro().getId();
+                tickerPorId.putIfAbsent(id, meta.getAtivoCadastro());
+                setorPorTicker.putIfAbsent(id, meta.getSetor().getSetorMercado());
+            }
+        }
+        for (AtivoModel posicao : ativoRepository.findByCarteiraInvestimentoId(carteiraId)) {
+            if (posicao.getAtivoCadastro() != null && posicao.getSetor() != null
+                    && posicao.getSetor().getSetorMercado() != null) {
+                UUID id = posicao.getAtivoCadastro().getId();
+                tickerPorId.putIfAbsent(id, posicao.getAtivoCadastro());
+                setorPorTicker.putIfAbsent(id, posicao.getSetor().getSetorMercado());
+            }
+        }
+
+        int alterados = 0;
+        for (Map.Entry<UUID, SetorMercadoModel> entrada : setorPorTicker.entrySet()) {
+            AtivoCadastroModel ticker = tickerPorId.get(entrada.getKey());
+            if (ticker == null || ticker.getSetorMercado() != null) {
+                continue;
+            }
+            ticker.setSetorMercado(entrada.getValue());
+            alterados++;
+        }
+        if (alterados > 0) {
+            ativoCadastroRepository.flush();
+        }
+        return alterados;
     }
 
     /* ══════════════════════════════════════════════════════════════════
@@ -385,6 +454,7 @@ public class CarteiraIdealService {
                     double alvoSetor = vSubIdeal * st.getPercentualIdeal().doubleValue() / 100d;
                     setorDtos.add(new ComparativoResponseDTO.SetorComparativoDTO(
                             st.getId(),
+                            (st.getSetorMercado() != null) ? st.getSetorMercado().getId() : null,
                             st.getNome(),
                             st.getPercentualIdeal(),
                             calculator.percentual(vSetorAtual, vSubAtual),
@@ -849,7 +919,9 @@ public class CarteiraIdealService {
                                         s.getTolerancia(), s.getLimiteMaximo(), s.getOrdem(),
                                         setoresPorSubclasse.getOrDefault(s.getId(), List.of()).stream()
                                                 .map(st -> new CarteiraIdealResponseDTO.SetorIdealResponseDTO(
-                                                        st.getId(), st.getNome(), st.getPercentualIdeal(),
+                                                        st.getId(),
+                                                        (st.getSetorMercado() != null) ? st.getSetorMercado().getId() : null,
+                                                        st.getNome(), st.getPercentualIdeal(),
                                                         st.getTolerancia(), st.getLimiteMaximo(), st.getOrdem()))
                                                 .toList()))
                                 .toList()))

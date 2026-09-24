@@ -65,6 +65,28 @@ public class AlocacaoService {
      */
     public OrcamentoAporte ratear(List<AporteCandidato> candidatos, ComparativoResponseDTO comparativo,
                                   BigDecimal valorAporte, ScoreConfigModel config) {
+        return ratear(candidatos, comparativo, valorAporte, config, Map.of());
+    }
+
+    /**
+     * Mesmo rateio, com o PESO de cada SETOR da Carteira Ideal (id do setor →
+     * Priority Score agregado do setor).
+     *
+     * Antes o setor recebia sempre o PRÓPRIO déficit, na ordem de cadastro: o
+     * primeiro setor da subclasse consumia o orçamento inteiro e os demais ficavam
+     * com a sobra — ou seja, "quem estava cadastrado primeiro" decidia o aporte,
+     * como se preço e checklist não existissem. Agora os setores da subclasse
+     * concorrem pelo orçamento com peso (déficit + preço + checklist, os mesmos
+     * pesos que o usuário configura em Pontuação), cada um com TETO no próprio
+     * déficit, e o ticker continua entrando pelo Priority Score dele.
+     *
+     * Setor sem score (nenhum ativo avaliado, por exemplo) não fica de fora: quando
+     * NENHUM setor da subclasse tem score, todos voltam a concorrer pelo déficit,
+     * que era o comportamento anterior.
+     */
+    public OrcamentoAporte ratear(List<AporteCandidato> candidatos, ComparativoResponseDTO comparativo,
+                                  BigDecimal valorAporte, ScoreConfigModel config,
+                                  Map<Long, BigDecimal> pesoPorSetor) {
         if (valorAporte == null || valorAporte.signum() <= 0) {
             return null;
         }
@@ -182,22 +204,50 @@ public class AlocacaoService {
                     } else {
                         double restanteSub = orcamentoSub;
                         double valorIdealDaSub = nz(sub.valor_ideal());
+
+                        // Quem CONCORRE: setor com espaço (déficit − já recebido) e com
+                        // pelo menos um ativo ELEGÍVEL dentro. Setor sem candidato
+                        // elegível não reserva orçamento para quem não pode receber.
+                        List<ComparativoResponseDTO.SetorComparativoDTO> concorrentes = new ArrayList<>();
+                        List<Double> espacos = new ArrayList<>();
+                        List<Double> pesos = new ArrayList<>();
                         for (ComparativoResponseDTO.SetorComparativoDTO st : setores) {
                             double alvoSetor = nz(st.valor_ideal())
                                     + nz(st.tolerancia()) / 100d * valorIdealDaSub;
                             double tetoSetor = Math.max(0d, alvoSetor - nz(st.valor_atual()));
                             double jaNoSetor = porSetor.getOrDefault(st.id(), moeda(0d)).doubleValue();
-                            double orcamentoSetor = Math.min(Math.max(0d, tetoSetor - jaNoSetor), restanteSub);
-                            List<Integer> doSetor = (orcamentoSetor > tol)
-                                    ? indicesDaSetor(candidatos, daSub, st.id())
-                                    : List.of();
-                            if (doSetor.isEmpty()) {
+                            double espaco = Math.max(0d, tetoSetor - jaNoSetor);
+                            if (espaco <= tol) {
                                 continue;
                             }
-                            double doSetorDistribuido = distribuir(candidatos, doSetor, orcamentoSetor,
+                            List<Integer> doSetor = indicesDaSetor(candidatos, daSub, st.id());
+                            if (doSetor.stream().noneMatch(i -> candidatos.get(i).elegivel())) {
+                                continue;
+                            }
+                            concorrentes.add(st);
+                            espacos.add(espaco);
+                            pesos.add(pesoPorSetor.getOrDefault(st.id(), BigDecimal.ZERO).doubleValue());
+                        }
+
+                        // Sem NENHUM score de setor, o peso vira o próprio espaço —
+                        // rateio proporcional ao déficit, igual ao que já existia.
+                        boolean temScore = !pesos.isEmpty() && pesos.stream().allMatch(p -> p > 0d);
+                        for (int k = 0; k < pesos.size(); k++) {
+                            if (!temScore) {
+                                pesos.set(k, espacos.get(k));
+                            }
+                        }
+
+                        List<Double> cotas = repartir(pesos, espacos, orcamentoSub, tol);
+                        for (int k = 0; k < concorrentes.size(); k++) {
+                            if (cotas.get(k) <= tol) {
+                                continue;
+                            }
+                            List<Integer> doSetor = indicesDaSetor(candidatos, daSub, concorrentes.get(k).id());
+                            double doSetorDistribuido = distribuir(candidatos, doSetor, cotas.get(k),
                                     config, tol, porCandidato);
                             if (doSetorDistribuido > 0d) {
-                                porSetor.merge(st.id(), moeda(doSetorDistribuido), BigDecimal::add);
+                                porSetor.merge(concorrentes.get(k).id(), moeda(doSetorDistribuido), BigDecimal::add);
                                 restanteSub -= doSetorDistribuido;
                             }
                         }
@@ -295,15 +345,38 @@ public class AlocacaoService {
             return 0d;
         }
 
-        // "Water-filling": divide proporcional ao peso e REPETE com o que sobrou
-        // entre quem ainda tem espaço, senão um ativo na capacidade máxima
-        // travaria o rateio dos demais.
-        double restante = orcamento;
+        List<Double> cotas = repartir(pesos, espacos, orcamento, tol);
+
         double distribuido = 0d;
-        List<Double> ja = new ArrayList<>(Collections.nCopies(elegiveis.size(), 0d));
+        for (int k = 0; k < elegiveis.size(); k++) {
+            if (cotas.get(k) > 0d) {
+                int i = elegiveis.get(k);
+                porCandidato.set(i, moeda(porCandidato.get(i).doubleValue() + cotas.get(k)));
+                distribuido += cotas.get(k);
+            }
+        }
+        return distribuido;
+    }
+
+    /**
+     * Rateio PONDERADO com TETO ("water-filling"), a mesma conta usada para
+     * dividir entre setores e entre ativos.
+     *
+     * Divide o orçamento proporcional ao peso e REPETE com o que sobrou entre quem
+     * ainda tem espaço — sem isso, um item que bate no teto travaria o rateio dos
+     * demais. Devolve quanto cada item recebeu, na ordem recebida.
+     */
+    private List<Double> repartir(List<Double> pesos, List<Double> espacos, double orcamento, double tol) {
+        int n = pesos.size();
+        List<Double> ja = new ArrayList<>(Collections.nCopies(n, 0d));
+        if (n == 0 || orcamento <= tol) {
+            return ja;
+        }
+
+        double restante = orcamento;
         for (int rodada = 0; rodada < 12 && restante > tol; rodada++) {
             double somaPesos = 0d;
-            for (int k = 0; k < elegiveis.size(); k++) {
+            for (int k = 0; k < n; k++) {
                 if (espacos.get(k) - ja.get(k) > tol) {
                     somaPesos += pesos.get(k);
                 }
@@ -312,7 +385,7 @@ public class AlocacaoService {
                 break;
             }
             double nestaRodada = 0d;
-            for (int k = 0; k < elegiveis.size(); k++) {
+            for (int k = 0; k < n; k++) {
                 double espacoLivre = espacos.get(k) - ja.get(k);
                 if (espacoLivre <= tol) {
                     continue;
@@ -325,17 +398,9 @@ public class AlocacaoService {
             if (nestaRodada <= tol) {
                 break;
             }
-            distribuido += nestaRodada;
             restante -= nestaRodada;
         }
-
-        for (int k = 0; k < elegiveis.size(); k++) {
-            if (ja.get(k) > 0d) {
-                int i = elegiveis.get(k);
-                porCandidato.set(i, moeda(porCandidato.get(i).doubleValue() + ja.get(k)));
-            }
-        }
-        return distribuido;
+        return ja;
     }
 
     private List<Integer> indicesDaClasse(List<AporteCandidato> candidatos, CategoriaInvestimento classe) {

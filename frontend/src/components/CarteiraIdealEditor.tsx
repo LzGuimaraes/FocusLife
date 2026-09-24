@@ -108,9 +108,16 @@ interface Props {
   onChange: (classes: ClasseDraft[]) => void;
   /** % atual de cada classe na carteira (vem do comparativo) — só leitura. */
   atualPorClasse?: Partial<Record<CategoriaInvestimento, number>>;
+  /**
+   * Nomes do CATÁLOGO GLOBAL de setores — viram sugestão no campo de setor.
+   * A lista é de referência (mesma para qualquer carteira): escolher um setor
+   * existente mantém a exposição somando entre carteiras; digitar um nome novo
+   * cria o setor no catálogo ao salvar.
+   */
+  setoresCatalogo?: string[];
 }
 
-export default function CarteiraIdealEditor({ classes, onChange, atualPorClasse = {} }: Props) {
+export default function CarteiraIdealEditor({ classes, onChange, atualPorClasse = {}, setoresCatalogo = [] }: Props) {
   /** Quais sanfonas de subclasse estão abertas (por key da classe). */
   const [abertas, setAbertas] = useState<Record<string, boolean>>({});
 
@@ -183,6 +190,14 @@ export default function CarteiraIdealEditor({ classes, onChange, atualPorClasse 
 
   return (
     <section style={sectionCard}>
+      {/* Sugestões do CATÁLOGO global: escolher um setor existente mantém a
+          exposição somando entre carteiras; digitar um nome novo cria o setor
+          ao salvar. Fica aqui (uma vez) porque o campo aparece em cada subclasse. */}
+      {setoresCatalogo.length > 0 && (
+        <datalist id="setores-catalogo">
+          {setoresCatalogo.map(nome => <option key={nome} value={nome} />)}
+        </datalist>
+      )}
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
         <div style={{ maxWidth: "560px" }}>
           <h3 style={sectionTitle}>Classes e subclasses</h3>
@@ -415,12 +430,33 @@ export default function CarteiraIdealEditor({ classes, onChange, atualPorClasse 
                           </div>
 
                           {/* ── SETOR: nível opcional dentro da subclasse (o % é fatia dela) ── */}
-                          {s.setores.map(st => (
+                          {s.setores.map(st => {
+                            // Setor já existente no catálogo? A dica evita que o usuário
+                            // crie "Bancos" de novo por causa de acento ou caixa — o
+                            // backend também reusa pelo nome normalizado.
+                            const noCatalogo = st.nome.trim() !== "" && setoresCatalogo
+                              .some(n => normalizarSetor(n) === normalizarSetor(st.nome));
+                            return (
                             <div key={st.key} style={{ display: "flex", gap: "7px", alignItems: "center", flexWrap: "wrap", marginTop: "9px", paddingLeft: "10px", borderLeft: "2px solid #eef2f7" }}>
                               <input value={st.nome} placeholder="Setor (ex: Bancos)"
                                 aria-label={`Nome do setor ${st.nome || "sem nome"}`}
+                                list={setoresCatalogo.length > 0 ? "setores-catalogo" : undefined}
+                                title={"Escolha um setor do catálogo (sugestões) ou digite um novo — o setor novo entra no catálogo ao salvar."}
                                 onChange={e => atualizarSetor(c.key, s.key, st.key, { nome: e.target.value })}
                                 style={{ ...controlStyle, flex: 1, minWidth: "90px", fontSize: "12px" }} />
+                              {st.nome.trim() !== "" && (
+                                <span title={noCatalogo
+                                  ? "Setor do catálogo: a exposição soma com as outras carteiras."
+                                  : "Setor novo: será criado no catálogo ao salvar."}
+                                  style={{
+                                    fontSize: "9.5px", fontWeight: 800, padding: "2px 6px", borderRadius: "9999px",
+                                    whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: "0.3px",
+                                    color: noCatalogo ? "#047857" : "#6d28d9",
+                                    background: noCatalogo ? "#ecfdf5" : "#f5f3ff",
+                                  }}>
+                                  {noCatalogo ? "catálogo" : "novo"}
+                                </span>
+                              )}
                               <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
                                 <input value={st.percentual_ideal} inputMode="decimal" placeholder="0,00"
                                   aria-label={`Percentual ideal do setor ${st.nome || "sem nome"}`}
@@ -445,7 +481,8 @@ export default function CarteiraIdealEditor({ classes, onChange, atualPorClasse 
                               <button type="button" onClick={() => removerSetor(c.key, s.key, st.key)}
                                 aria-label="Remover setor" style={{ ...iconBtn(false), color: "#ef4444" }}>🗑</button>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       ))}
 
@@ -481,4 +518,14 @@ export default function CarteiraIdealEditor({ classes, onChange, atualPorClasse 
 /** Mantém apenas dígitos, vírgula e ponto (a vírgula é normalizada no save). */
 function apenasNumero(valor: string): string {
   return valor.replace(/[^0-9.,]/g, "");
+}
+
+/**
+ * Compara nomes de setor como o catálogo faz: sem acento, sem caixa e sem
+ * pontuação. É o que evita "Bancos" e "bancos " virarem dois setores — a mesma
+ * regra do `slug` do backend.
+ */
+function normalizarSetor(nome: string): string {
+  return nome.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }

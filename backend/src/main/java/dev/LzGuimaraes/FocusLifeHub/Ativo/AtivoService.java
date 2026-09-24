@@ -38,17 +38,21 @@ public class AtivoService {
     private final AtivoCadastroRepository ativoCadastroRepository;
     private final dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSubclasseRepository subclasseRepository;
     private final dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSetorRepository setorRepository;
+    /** Catálogo global de setores: classifica o TICKER (V32). */
+    private final dev.LzGuimaraes.FocusLifeHub.SetorMercado.SetorMercadoService setorMercadoService;
 
     public AtivoService(AtivoRepository ativoRepository,
                         CarteiraInvestimentoRepository carteiraInvestimentoRepository,
                         AtivoCadastroRepository ativoCadastroRepository,
                         dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSubclasseRepository subclasseRepository,
-                        dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSetorRepository setorRepository) {
+                        dev.LzGuimaraes.FocusLifeHub.Planejamento.CarteiraIdeal.CarteiraIdealSetorRepository setorRepository,
+                        dev.LzGuimaraes.FocusLifeHub.SetorMercado.SetorMercadoService setorMercadoService) {
         this.ativoRepository = ativoRepository;
         this.carteiraInvestimentoRepository = carteiraInvestimentoRepository;
         this.ativoCadastroRepository = ativoCadastroRepository;
         this.subclasseRepository = subclasseRepository;
         this.setorRepository = setorRepository;
+        this.setorMercadoService = setorMercadoService;
     }
 
     private Long getAuthenticatedUserId() {
@@ -402,6 +406,23 @@ public class AtivoService {
             posicao.setSetor(setor);
         }
         ativoRepository.saveAll(posicoes);
+
+        // Classificar a POSIÇÃO classifica o TICKER (V32): o setor do catálogo é
+        // o que sobrevive à carteira e vale para as próximas. Só preenche o que
+        // está vazio — o catálogo mantido no banco tem precedência.
+        if (setor.getSetorMercado() != null) {
+            Set<AtivoCadastroModel> tickers = new java.util.HashSet<>();
+            for (AtivoModel posicao : posicoes) {
+                AtivoCadastroModel ticker = posicao.getAtivoCadastro();
+                if (ticker != null && ticker.getSetorMercado() == null) {
+                    ticker.setSetorMercado(setor.getSetorMercado());
+                    tickers.add(ticker);
+                }
+            }
+            if (!tickers.isEmpty()) {
+                ativoCadastroRepository.saveAll(tickers);
+            }
+        }
         return posicoes.size();
     }
 
@@ -475,6 +496,14 @@ public class AtivoService {
                 novo.setPrecoAtual(dto.getPrecoAtual());
                 cadastro = ativoCadastroRepository.save(novo);
                 created++;
+            }
+
+            // SETOR do ticker: é a porta do cadastro MANUAL do catálogo (script/
+            // banco). O setor é resolvido (ou criado) pelo nome normalizado, então
+            // "Bancos", "bancos" e "BANCOS" caem na mesma linha do catálogo.
+            if (dto.getSetor() != null && !dto.getSetor().isBlank()) {
+                cadastro.setSetorMercado(setorMercadoService.criarOuObter(dto.getSetor(), null));
+                cadastro = ativoCadastroRepository.save(cadastro);
             }
 
             // Propaga o novo preço para as posições (cards) que usam este ativo do catálogo

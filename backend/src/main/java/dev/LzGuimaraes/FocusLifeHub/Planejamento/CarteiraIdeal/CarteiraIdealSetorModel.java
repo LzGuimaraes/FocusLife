@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
+import dev.LzGuimaraes.FocusLifeHub.SetorMercado.SetorMercadoModel;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -59,4 +60,16 @@ public class CarteiraIdealSetorModel {
     @JoinColumn(name = "subclasse_id")
     @JsonIgnore
     private CarteiraIdealSubclasseModel subclasse;
+
+    /**
+     * Setor do CATÁLOGO global (V32) — a identidade deste balde.
+     *
+     * O `nome` continua sendo o rótulo exibido (compatibilidade com os setores
+     * criados antes do catálogo), mas é este vínculo que permite somar exposição
+     * por setor entre carteiras e manter a classificação no banco.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "setor_mercado_id")
+    @JsonIgnore
+    private SetorMercadoModel setorMercado;
 }

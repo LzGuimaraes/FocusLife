@@ -40,6 +40,8 @@ public record CarteiraIdealResponseDTO(
 
     public record SetorIdealResponseDTO(
             Long id,
+            /** Setor do catálogo global (null só em dado antigo sem vínculo). */
+            Long setor_mercado_id,
             String nome,
             BigDecimal percentual_ideal,
             BigDecimal tolerancia,

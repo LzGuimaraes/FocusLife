@@ -139,6 +139,87 @@ class AlocacaoServiceTest {
 
     /* ── Apoio ── */
 
+    /**
+     * V32 — o SETOR é nível de decisão: dentro da subclasse, os setores concorrem
+     * ao orçamento pelo PRIORITY SCORE DO SETOR (déficit + preço + checklist), não
+     * pela ordem de cadastro.
+     *
+     * Antes o primeiro setor levava todo o orçamento (até o próprio teto) e os
+     * demais ficavam com a sobra — "quem foi cadastrado primeiro" decidia o aporte.
+     */
+    @Test
+    @DisplayName("setor com score maior recebe mais, e o rateio fecha com o alocado")
+    void setorComScoreMaiorRecebeMais() {
+        var bancos = setor(1L, "Bancos", "50", "5000", "25000", "0");
+        var energia = setor(2L, "Energia", "50", "5000", "25000", "0");
+        var setorial = new ComparativoResponseDTO.SubclasseComparativoDTO(
+                10L, "Setorial", new BigDecimal("100"), new BigDecimal("40"),
+                new BigDecimal("50000"), new BigDecimal("40000"),
+                new BigDecimal("10000"), BigDecimal.ZERO, BigDecimal.ZERO, null,
+                List.of(bancos, energia));
+
+        ComparativoResponseDTO comparativo = comparativo(
+                classe(CategoriaInvestimento.ACOES, "50", "40", "50000", "40000", "0", 10L, List.of(setorial)));
+
+        AporteCandidato doBancos = comSetor(ativo("BANK3", CategoriaInvestimento.ACOES,
+                "5000", new BigDecimal("5000"), new BigDecimal("5000"), true), "Bancos", 10L, 1L);
+        AporteCandidato doEnergia = comSetor(ativo("ENER3", CategoriaInvestimento.ACOES,
+                "5000", new BigDecimal("5000"), new BigDecimal("5000"), true), "Energia", 10L, 2L);
+
+        OrcamentoAporte orcamento = service.ratear(List.of(doBancos, doEnergia), comparativo,
+                new BigDecimal("4000"), config(),
+                java.util.Map.of(1L, new BigDecimal("80"), 2L, new BigDecimal("20")));
+
+        assertNotNull(orcamento);
+        // 80/20 do orçamento da subclasse (4.000): 3.200 e 800 — proporcional ao
+        // score do setor, e não "o primeiro leva tudo".
+        assertEquals(0, orcamento.porSetor().get(1L).compareTo(new BigDecimal("3200.00")));
+        assertEquals(0, orcamento.porSetor().get(2L).compareTo(new BigDecimal("800.00")));
+        assertEquals(0, orcamento.alocado().compareTo(new BigDecimal("4000.00")));
+    }
+
+    /** Sem score de setor, o peso volta a ser o déficit (comportamento anterior). */
+    @Test
+    @DisplayName("sem score de setor, o rateio entre setores volta a ser pelo espaço")
+    void semScoreDeSetorUsaOEspaco() {
+        // Nenhum setor tem ativo: os dois estão inteiros a construir.
+        var maior = setor(1L, "Maior", "75", "0", "30000", "0");
+        var menor = setor(2L, "Menor", "25", "0", "10000", "0");
+        var setorial = new ComparativoResponseDTO.SubclasseComparativoDTO(
+                10L, "Setorial", new BigDecimal("100"), new BigDecimal("0"),
+                new BigDecimal("40000"), BigDecimal.ZERO,
+                new BigDecimal("40000"), BigDecimal.ZERO, BigDecimal.ZERO, null,
+                List.of(maior, menor));
+
+        ComparativoResponseDTO comparativo = comparativo(
+                classe(CategoriaInvestimento.ACOES, "50", "0", "50000", "0", "0", 10L, List.of(setorial)));
+
+        AporteCandidato a = comSetor(ativo("AAAA3", CategoriaInvestimento.ACOES,
+                "0", new BigDecimal("30000"), new BigDecimal("30000"), true), "Maior", 10L, 1L);
+        AporteCandidato b = comSetor(ativo("BBBB3", CategoriaInvestimento.ACOES,
+                "0", new BigDecimal("10000"), new BigDecimal("10000"), true), "Menor", 10L, 2L);
+
+        OrcamentoAporte orcamento = service.ratear(List.of(a, b), comparativo, new BigDecimal("4000"), config());
+
+        assertNotNull(orcamento);
+        // Espaço dos setores: 30.000 e 10.000 → 3/4 e 1/4 do orçamento.
+        assertEquals(0, orcamento.porSetor().get(1L).compareTo(new BigDecimal("3000.00")));
+        assertEquals(0, orcamento.porSetor().get(2L).compareTo(new BigDecimal("1000.00")));
+    }
+
+    private ComparativoResponseDTO.SetorComparativoDTO setor(Long id, String nome, String pctIdeal,
+                                                             String valorAtual, String valorIdeal,
+                                                             String tolerancia) {
+        BigDecimal vIdeal = new BigDecimal(valorIdeal);
+        BigDecimal vAtual = new BigDecimal(valorAtual);
+        return new ComparativoResponseDTO.SetorComparativoDTO(
+                id, id * 100, nome, new BigDecimal(pctIdeal), new BigDecimal("50"),
+                vIdeal, vAtual,
+                vIdeal.subtract(vAtual).max(BigDecimal.ZERO),
+                vAtual.subtract(vIdeal).max(BigDecimal.ZERO),
+                new BigDecimal(tolerancia), null);
+    }
+
     private ScoreConfigModel config() {
         ScoreConfigModel config = new ScoreConfigModel();
         config.setRedistribuir(false);   // uma rodada: o resultado fica previsível no teste
@@ -183,6 +264,17 @@ class AlocacaoServiceTest {
                 5,
                 BigDecimal.ZERO, 0,
                 0.9, 0.5, 0.0, 0.5, 0.8, 0.1);
+    }
+
+    private AporteCandidato comSetor(AporteCandidato c, String setorNome, Long subclasseId, Long setorId) {
+        return new AporteCandidato(c.ativoCadastroId(), c.metaId(), c.nome(), c.vinculado(), subclasseId,
+                "Setorial", setorId, setorNome, c.classe(), c.quality(), c.momento(), c.fator(),
+                c.bloqueios(), c.elegivel(), c.status(), c.motivos(), c.limiteMaximo(), c.limiteAtingido(),
+                c.capacidade(), c.precoAtual(), c.precoMedio(), c.precoMaximoCompra(), c.oportunidadePreco(),
+                c.priorityScore(), c.percentualAtual(), c.percentualIdeal(), c.valorAtual(), c.valorIdeal(),
+                c.deficit(), c.excesso(), c.tolerancia(), c.prioridade(), c.aportesRecentes(),
+                c.aportesRecentesQtd(), c.qualityNorm(), c.deficitNorm(), c.excessoNorm(), c.prioridadeNorm(),
+                c.momentoNorm(), c.oportunidadeNorm());
     }
 
     private AporteCandidato comScore(AporteCandidato c, String score) {

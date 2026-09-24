@@ -5,6 +5,7 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -115,7 +116,12 @@ public class AporteService {
                 .thenComparing(AporteCandidato::nome, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)));
 
         // ── ALOCAÇÃO ──
-        OrcamentoAporte orcamento = alocacaoService.ratear(calculados, comparativo, orcamentoTotal, config);
+        // O setor entra como NÍVEL de decisão: cada setor da subclasse concorre ao
+        // orçamento com o Priority Score agregado dele (déficit + preço + checklist).
+        Map<Long, SetorAnalise> analisesDeSetor = analiseDeSetores(calculados, comparativo, config);
+        Map<Long, BigDecimal> pesoPorSetor = pesosDeSetor(analisesDeSetor);
+        OrcamentoAporte orcamento = alocacaoService.ratear(calculados, comparativo, orcamentoTotal, config,
+                pesoPorSetor);
 
         // Sugestões de redução (§19/§21): o que passou do alvo + tolerância.
         List<RankingAportesDTO.RebalanceamentoDTO> rebalanceamento = rebalanceamento(comparativo, calculados, config);
@@ -128,7 +134,7 @@ public class AporteService {
         // informado não há plano, então o orçamento continua vazio.
         if (valorAporte != null && valorVendas.signum() > 0) {
             orcamentoTotal = orcamentoTotal.add(valorVendas);
-            orcamento = alocacaoService.ratear(calculados, comparativo, orcamentoTotal, config);
+            orcamento = alocacaoService.ratear(calculados, comparativo, orcamentoTotal, config, pesoPorSetor);
         }
 
         List<RankingAportesDTO.Item> itens = new ArrayList<>();
@@ -190,7 +196,10 @@ public class AporteService {
                 comparativo,
                 (orcamento != null) ? orcamento.porClasse() : Map.of(),
                 (orcamento != null) ? orcamento.porSubclasse() : Map.of(),
-                (orcamento != null) ? orcamento.porSetor() : Map.of());
+                (orcamento != null) ? orcamento.porSetor() : Map.of(),
+                analisesDeSetor,
+                calculados,
+                valorAporte != null);
 
         BigDecimal alocado = (orcamento != null) ? orcamento.alocado() : null;
         BigDecimal naoAlocado = (orcamento != null) ? orcamentoTotal.subtract(alocado) : null;
@@ -462,9 +471,16 @@ public class AporteService {
             }
             for (ComparativoResponseDTO.SubclasseComparativoDTO s : c.subclasses()) {
                 if (s.id().equals(a.subclasse_id())) {
-                    BigDecimal capacidade = alocacaoService.deficitComTolerancia(
-                            s.percentual_ideal(), s.tolerancia(), s.percentual_atual(), nz(c.valor_ideal()));
-                    if (capacidade.doubleValue() <= tol) {
+                    // A conta da subclasse é em REAIS, igual à do rateio: o alvo é
+                    // (valor ideal + tolerância em % do ideal da CLASSE) − valor atual.
+                    // Antes daqui saía `deficitComTolerancia(percentual_ideal,
+                    // tolerancia, percentual_atual, valor_ideal_da_classe)` — e o
+                    // percentual da subclasse é uma FATIA DA CLASSE ATUAL (100% = toda
+                    // a classe), então uma subclasse com 100% dava alvo = atual em R$ e
+                    // "déficit zero" para todo ativo dentro dela, mesmo com a classe
+                    // inteira abaixo do alvo. Resultado: elegibilidade dizia que não
+                    // havia capacidade onde o rateio tinha R$ 4.600 para distribuir.
+                    if (capacidadeDaSubclasse(s, c) <= tol) {
                         return false;
                     }
                     if (a.setor_id() == null) {
@@ -473,16 +489,27 @@ public class AporteService {
                     return s.setores().stream()
                             .filter(st -> st.id().equals(a.setor_id()))
                             .findFirst()
-                            .map(st -> alocacaoService.deficitComTolerancia(
-                                            st.percentual_ideal(), st.tolerancia(), st.percentual_atual(),
-                                            nz(s.valor_ideal()))
-                                    .doubleValue() > tol)
+                            .map(st -> capacidadeDoSetor(st, s) > tol)
                             .orElse(true);
                 }
             }
             return true;
         }
         return false;
+    }
+
+    /** Capacidade em R$ de uma subclasse (base = ideal da CLASSE). */
+    private double capacidadeDaSubclasse(ComparativoResponseDTO.SubclasseComparativoDTO s,
+                                         ComparativoResponseDTO.ClasseComparativoDTO c) {
+        double alvo = nz(s.valor_ideal()) + nz(s.tolerancia()) / 100d * nz(c.valor_ideal());
+        return Math.max(0d, alvo - nz(s.valor_atual()));
+    }
+
+    /** Capacidade em R$ de um setor (base = ideal da SUBCLASSE, como no rateio). */
+    private double capacidadeDoSetor(ComparativoResponseDTO.SetorComparativoDTO st,
+                                     ComparativoResponseDTO.SubclasseComparativoDTO s) {
+        double alvo = nz(st.valor_ideal()) + nz(st.tolerancia()) / 100d * nz(s.valor_ideal());
+        return Math.max(0d, alvo - nz(st.valor_atual()));
     }
 
     private boolean classeSemCapacidade(CategoriaInvestimento classe, ComparativoResponseDTO comparativo, double tol) {
@@ -627,28 +654,210 @@ public class AporteService {
         return String.join(" · ", partes) + ".";
     }
 
+    /* ══════════════════════════════════════════════════════════════════
+       SETOR COMO NÍVEL DE DECISÃO (V32)
+       ══════════════════════════════════════════════════════════════════ */
+
+    /**
+     * Setor analisado: a leitura do CONJUNTO do setor, não de um ativo só.
+     *
+     * `priorityScore` é o Priority Score do SETOR — mesma fórmula e MESMOS pesos
+     * que o usuário configura em Pontuação, com os termos agregados:
+     *
+     *   déficit do setor   → necessidade (alvo com tolerância − atual), normalizado
+     *                        entre os SETORES da carteira (não entre os ativos);
+     *   qualidade média    → checklist dos ativos do setor;
+     *   oportunidade média → preço (distância média até o preço máximo de compra);
+     *   momento médio      → fator 0–1 dos checklists de momento;
+     *   prioridade média   → desempate manual.
+     *
+     * As médias usam como PESO o valor que o usuário tem em cada ativo, então um
+     * ativo grande no setor pesa mais que uma posição simbólica. Ativo sem
+     * avaliação (ou sem regra de preço) SAI da média em vez de entrar como zero —
+     * a mesma regra do ativo, que não é punido por dado que o investidor ainda não
+     * cadastrou.
+     */
+    private record SetorAnalise(
+            Long id,
+            Long setorMercadoId,
+            String nome,
+            BigDecimal deficit,
+            BigDecimal qualidadeMedia,
+            BigDecimal momentoMedio,
+            BigDecimal oportunidadeMedia,
+            int ativos,
+            int ativosAvaliados,
+            BigDecimal priorityScore
+    ) {}
+
+    /**
+     * Analisa cada setor da carteira e devolve, por id do setor, o agregado e o
+     * score que decide quanto ele recebe no rateio.
+     */
+    private Map<Long, SetorAnalise> analiseDeSetores(List<AporteCandidato> candidatos,
+                                                     ComparativoResponseDTO comparativo,
+                                                     ScoreConfigModel config) {
+        Map<Long, List<AporteCandidato>> porSetor = new LinkedHashMap<>();
+        for (AporteCandidato c : candidatos) {
+            if (c.setorId() != null) {
+                porSetor.computeIfAbsent(c.setorId(), k -> new ArrayList<>()).add(c);
+            }
+        }
+        if (porSetor.isEmpty()) {
+            return Map.of();
+        }
+
+        // 1) Necessidade do setor: mesma conta do rateio (alvo COM tolerância).
+        Map<Long, double[]> nivel = new LinkedHashMap<>();      // [deficit, excesso]
+        Map<Long, String> nome = new LinkedHashMap<>();
+        Map<Long, Long> doCatalogo = new LinkedHashMap<>();
+        for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
+            for (ComparativoResponseDTO.SubclasseComparativoDTO s : c.subclasses()) {
+                double valorIdealSub = nz(s.valor_ideal());
+                for (ComparativoResponseDTO.SetorComparativoDTO st : s.setores()) {
+                    if (!porSetor.containsKey(st.id())) {
+                        continue;
+                    }
+                    double alvo = nz(st.valor_ideal()) + nz(st.tolerancia()) / 100d * valorIdealSub;
+                    double atual = nz(st.valor_atual());
+                    nivel.put(st.id(), new double[]{
+                            Math.max(0d, alvo - atual), Math.max(0d, atual - alvo)});
+                    nome.put(st.id(), st.nome());
+                    doCatalogo.put(st.id(), st.setor_mercado_id());
+                }
+            }
+        }
+
+        // 2) Médias ponderadas pelo valor de cada ativo no setor.
+        Map<Long, double[]> somas = new LinkedHashMap<>();
+        for (Map.Entry<Long, List<AporteCandidato>> entrada : porSetor.entrySet()) {
+            double[] soma = new double[9];   // pesoQ,somaQ, pesoM,somaM, pesoP,somaP, pesoPri,somaPri, avaliados
+            for (AporteCandidato c : entrada.getValue()) {
+                double valor = (c.valorAtual() != null) ? c.valorAtual().doubleValue() : 0d;
+                // Posição planejada (ainda sem valor) conta com peso 1: o ativo é
+                // uma intenção do setor e não pode desaparecer da média.
+                double peso = (valor > 0d) ? valor : 1d;
+                if (c.qualityNorm() != null) {
+                    soma[0] += peso;
+                    soma[1] += c.qualityNorm() * peso;
+                    soma[8] += 1d;
+                }
+                if (c.momentoNorm() != null) {
+                    soma[2] += peso;
+                    soma[3] += c.momentoNorm() * peso;
+                }
+                if (c.oportunidadeNorm() != null) {
+                    soma[4] += peso;
+                    soma[5] += c.oportunidadeNorm() * peso;
+                }
+                soma[6] += peso;
+                soma[7] += c.prioridadeNorm() * peso;
+            }
+            somas.put(entrada.getKey(), soma);
+        }
+
+        // 3) Normalização ENTRE SETORES: o setor com maior buraco define a escala,
+        //    como acontece entre os ativos.
+        double maiorDeficit = 0d;
+        double maiorExcesso = 0d;
+        for (double[] n : nivel.values()) {
+            maiorDeficit = Math.max(maiorDeficit, n[0]);
+            maiorExcesso = Math.max(maiorExcesso, n[1]);
+        }
+
+        Map<Long, SetorAnalise> analises = new LinkedHashMap<>();
+        for (Map.Entry<Long, List<AporteCandidato>> entrada : porSetor.entrySet()) {
+            Long id = entrada.getKey();
+            double[] n = nivel.getOrDefault(id, new double[]{0d, 0d});
+            double[] soma = somas.get(id);
+
+            BigDecimal qualidade = media(soma[1], soma[0]);
+            BigDecimal momento = media(soma[3], soma[2]);
+            BigDecimal oportunidade = media(soma[5], soma[4]);
+            BigDecimal prioridade = media(soma[7], soma[6]);
+
+            PrioridadeService.Termos termos = new PrioridadeService.Termos(
+                    (qualidade != null) ? qualidade.doubleValue() : null,
+                    scoreCalculator.normalizar(n[0], maiorDeficit),
+                    scoreCalculator.normalizar(n[1], maiorExcesso),
+                    (prioridade != null) ? Math.max(0d, Math.min(1d, prioridade.doubleValue())) : 0d,
+                    (momento != null) ? momento.doubleValue() : null,
+                    (oportunidade != null) ? oportunidade.doubleValue() : null);
+
+            analises.put(id, new SetorAnalise(
+                    id,
+                    doCatalogo.get(id),
+                    nome.getOrDefault(id, ""),
+                    moeda(n[0]),
+                    (qualidade != null) ? percentualDeNota(qualidade.doubleValue()) : null,
+                    (momento != null) ? momento : null,
+                    (oportunidade != null) ? oportunidade : null,
+                    entrada.getValue().size(),
+                    (int) soma[8],
+                    prioridadeService.calcular(termos, config)));
+        }
+        return analises;
+    }
+
+    /** Média ponderada de um acumulador [soma, peso]; null quando ninguém entrou. */
+    private BigDecimal media(double soma, double peso) {
+        if (peso <= 0d) {
+            return null;
+        }
+        return BigDecimal.valueOf(soma / peso).setScale(4, java.math.RoundingMode.HALF_UP);
+    }
+
+    /** Nota 0–1 → Quality Score 0–100 (a mesma escala do Quality Score do ativo). */
+    private BigDecimal percentualDeNota(double nota) {
+        return BigDecimal.valueOf(nota * 100d).setScale(4, java.math.RoundingMode.HALF_UP);
+    }
+
+    /** Peso de cada setor no rateio da subclasse = Priority Score do setor. */
+    private Map<Long, BigDecimal> pesosDeSetor(Map<Long, SetorAnalise> analises) {
+        Map<Long, BigDecimal> pesos = new LinkedHashMap<>();
+        analises.forEach((id, a) -> pesos.put(id, a.priorityScore()));
+        return pesos;
+    }
+
     /** Onde entra o dinheiro: uma linha por classe (e suas subclasses). */
     private List<RankingAportesDTO.ClasseAporteDTO> classesDto(
             ComparativoResponseDTO comparativo,
             Map<CategoriaInvestimento, BigDecimal> sugeridoPorClasse,
             Map<Long, BigDecimal> sugeridoPorSubclasse,
-            Map<Long, BigDecimal> sugeridoPorSetor) {
+            Map<Long, BigDecimal> sugeridoPorSetor,
+            Map<Long, SetorAnalise> analisePorSetor,
+            List<AporteCandidato> candidatos,
+            boolean temPlano) {
 
         double total = nz(comparativo.valor_total());
         List<RankingAportesDTO.ClasseAporteDTO> classes = new ArrayList<>();
         for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
             BigDecimal sugerido = sugeridoPorClasse.getOrDefault(c.classe(), moeda(0d));
+            long elegiveisNaClasse = candidatos.stream()
+                    .filter(x -> x.classe() == c.classe() && x.elegivel())
+                    .count();
             List<RankingAportesDTO.SubclasseAporteDTO> subs = c.subclasses().stream()
                     .map(s -> {
                         BigDecimal sugeridoSub = sugeridoPorSubclasse.getOrDefault(s.id(), moeda(0d));
                         List<RankingAportesDTO.SetorAporteDTO> setores = s.setores().stream()
-                                .map(st -> new RankingAportesDTO.SetorAporteDTO(
-                                        st.id(), st.nome(), st.percentual_atual(), st.percentual_ideal(),
-                                        st.valor_atual(), st.valor_ideal(), st.deficit(), st.excesso(),
-                                        st.tolerancia(), st.limite_maximo(),
-                                        statusDe(st.percentual_atual(), st.percentual_ideal(),
-                                                st.tolerancia(), st.limite_maximo()),
-                                        sugeridoPorSetor.getOrDefault(st.id(), moeda(0d))))
+                                .map(st -> {
+                                    SetorAnalise a = analisePorSetor.get(st.id());
+                                    return new RankingAportesDTO.SetorAporteDTO(
+                                            st.id(),
+                                            st.setor_mercado_id(),
+                                            st.nome(), st.percentual_atual(), st.percentual_ideal(),
+                                            st.valor_atual(), st.valor_ideal(), st.deficit(), st.excesso(),
+                                            st.tolerancia(), st.limite_maximo(),
+                                            statusDe(st.percentual_atual(), st.percentual_ideal(),
+                                                    st.tolerancia(), st.limite_maximo()),
+                                            sugeridoPorSetor.getOrDefault(st.id(), moeda(0d)),
+                                            (a != null) ? a.qualidadeMedia() : null,
+                                            (a != null) ? a.momentoMedio() : null,
+                                            (a != null) ? a.oportunidadeMedia() : null,
+                                            (a != null) ? a.ativos() : 0,
+                                            (a != null) ? a.ativosAvaliados() : 0,
+                                            (a != null) ? a.priorityScore() : null);
+                                })
                                 .toList();
                         return new RankingAportesDTO.SubclasseAporteDTO(
                                 s.id(), s.nome(), s.percentual_atual(), s.percentual_ideal(),
@@ -671,7 +880,7 @@ public class AporteService {
                     c.tolerancia(), c.limite_maximo(),
                     statusDe(c.percentual_atual(), c.percentual_ideal(), c.tolerancia(), c.limite_maximo()),
                     sugerido,
-                    motivoDaClasse(c, sugerido, total),
+                    motivoDaClasse(c, sugerido, total, temPlano, elegiveisNaClasse),
                     subs));
         }
         return classes;
@@ -697,8 +906,17 @@ public class AporteService {
         return RankingAportesDTO.StatusNivel.EQUILIBRADO;
     }
 
-    /** Por que a classe recebeu (ou não) parte do aporte. */
-    private String motivoDaClasse(ComparativoResponseDTO.ClasseComparativoDTO c, BigDecimal sugerido, double total) {
+    /**
+     * Por que a classe recebeu (ou não) parte do aporte.
+     *
+     * A mensagem precisa separar TRÊS situações que antes caíam todas em "nenhum
+     * ativo ELEGÍVEL": (a) a classe não tem ativo elegível de verdade; (b) o
+     * usuário ainda não informou quanto vai aportar (sem valor não existe rateio);
+     * (c) o valor foi para as outras classes. Dizer "nenhum ativo elegível" com
+     * dois ativos elegíveis na tela é pior do que não dizer nada.
+     */
+    private String motivoDaClasse(ComparativoResponseDTO.ClasseComparativoDTO c, BigDecimal sugerido, double total,
+                                  boolean temPlano, long elegiveisNaClasse) {
         BigDecimal limite = c.limite_maximo();
         BigDecimal atual = c.percentual_atual();
         if (limite != null && limite.signum() > 0 && atual != null
@@ -710,8 +928,16 @@ public class AporteService {
             return "Não recebe: está no alvo (dentro da tolerância de " + formatar(c.tolerancia()) + "%).";
         }
         if (sugerido.signum() <= 0) {
+            if (elegiveisNaClasse == 0) {
+                return "Tem déficit de " + formatar(falta)
+                        + ", mas nenhum ativo ELEGÍVEL da classe neste momento (preço/limite/critério).";
+            }
+            if (!temPlano) {
+                return "Tem déficit de " + formatar(falta) + " e " + elegiveisNaClasse
+                        + " ativo(s) elegível(is): informe quanto você vai aportar para o motor ratear.";
+            }
             return "Tem déficit de " + formatar(falta)
-                    + ", mas nenhum ativo ELEGÍVEL da classe neste momento (preço/limite/critério).";
+                    + ", mas neste aporte o valor foi direcionado para as outras classes.";
         }
         return "Recebe no máximo o déficit da classe: " + formatar(falta)
                 + " (ideal + tolerância − atual).";
@@ -1120,7 +1346,10 @@ public class AporteService {
         cs.sort(Comparator
                 .comparing(AporteCandidato::elegivel, Comparator.reverseOrder())
                 .thenComparing(AporteCandidato::priorityScore, Comparator.reverseOrder()));
-        OrcamentoAporte o = alocacaoService.ratear(cs, comparativo, valorAporte, cfg);
+        // O cenário usa o MESMO critério de setor do plano real (senão comparar
+        // cenários seria comparar coisas diferentes).
+        OrcamentoAporte o = alocacaoService.ratear(cs, comparativo, valorAporte, cfg,
+                pesosDeSetor(analiseDeSetores(cs, comparativo, cfg)));
 
         String pesos = "qualidade " + fmt(pesoQuality) + " · déficit " + fmt(pesoDeficit)
                 + " · excesso " + fmt(pesoExcesso) + " · prioridade " + fmt(pesoPrioridade)

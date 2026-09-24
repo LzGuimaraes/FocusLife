@@ -26,6 +26,8 @@ export interface Estrategia {
 /* ── Configuração da Carteira Ideal ── */
 export interface SetorIdeal {
   id: number;
+  /** Setor do CATÁLOGO global (null só em dado antigo sem vínculo). */
+  setor_mercado_id: number | null;
   nome: string;
   percentual_ideal: number;
   tolerancia: number;
@@ -85,6 +87,8 @@ export interface CarteiraIdeal {
 /* ── Payload de gravação (replace-all) ── */
 export interface SetorIdealPayload {
   nome: string;
+  /** Opcional: o backend resolve (ou cria) pelo nome quando vier nulo. */
+  setor_mercado_id?: number | null;
   percentual_ideal: number;
   tolerancia?: number;
   limite_maximo?: number | null;
@@ -139,6 +143,23 @@ export interface SubclasseComparativo {
   valor_atual: number;
   deficit: number;
   excesso: number;
+  /** Setores da subclasse (o % do setor é fatia DESTA subclasse). */
+  setores: SetorComparativo[];
+}
+
+export interface SetorComparativo {
+  id: number;
+  /** Setor do catálogo global (identidade estável). */
+  setor_mercado_id: number | null;
+  nome: string;
+  percentual_ideal: number;
+  percentual_atual: number;
+  valor_ideal: number;
+  valor_atual: number;
+  deficit: number;
+  excesso: number;
+  tolerancia: number;
+  limite_maximo: number | null;
 }
 
 export interface AtivoComparativo {

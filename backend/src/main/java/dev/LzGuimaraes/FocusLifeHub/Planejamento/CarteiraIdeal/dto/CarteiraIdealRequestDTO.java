@@ -80,6 +80,13 @@ public record CarteiraIdealRequestDTO(
             @Size(max = 80, message = "O nome do setor deve ter no máximo 80 caracteres")
             String nome,
 
+            /**
+             * Setor do CATÁLOGO global. Opcional: quando vem nulo, o backend
+             * resolve pelo nome (e cria no catálogo se ainda não existir), então
+             * a tela antiga continua funcionando.
+             */
+            Long setor_mercado_id,
+
             /** % do setor DENTRO da subclasse (a soma dos setores fecha em 100% dela). */
             @NotNull(message = "O percentual ideal do setor é obrigatório")
             @DecimalMin(value = "0.0", message = "O percentual ideal não pode ser negativo")

@@ -64,6 +64,8 @@ public record ComparativoResponseDTO(
 
     public record SetorComparativoDTO(
             Long id,
+            /** Setor do catálogo global (identidade estável, V32). */
+            Long setor_mercado_id,
             String nome,
             BigDecimal percentual_ideal,
             BigDecimal percentual_atual,

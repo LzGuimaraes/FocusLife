@@ -476,15 +476,49 @@ function AportePorClasse({ ranking }: { ranking: RankingAportes }) {
               {subs.length > 0 && (
                 <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: "1px solid #f1f5f9", display: "flex", flexDirection: "column", gap: "5px" }}>
                   {subs.map(s => (
-                    <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
-                      <span style={{ fontSize: "11.5px", color: "#475569" }}>
-                        ↳ <strong>{s.nome}</strong>
-                        <span style={{ color: "#94a3b8" }}> {fmtPercentual(s.percentual_atual)} → {fmtPercentual(s.percentual_ideal)}</span>
-                        {s.motivo && <span style={{ color: "#94a3b8" }}> · {s.motivo}</span>}
-                      </span>
-                      <span style={{ fontSize: "11.5px", fontWeight: 700, color: s.sugerido > 0 ? "#047857" : "#cbd5e1", whiteSpace: "nowrap" }}>
-                        {fmtMoeda(s.sugerido, moeda)}
-                      </span>
+                    <div key={s.id}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontSize: "11.5px", color: "#475569" }}>
+                          ↳ <strong>{s.nome}</strong>
+                          <span style={{ color: "#94a3b8" }}> {fmtPercentual(s.percentual_atual)} → {fmtPercentual(s.percentual_ideal)}</span>
+                          {s.motivo && <span style={{ color: "#94a3b8" }}> · {s.motivo}</span>}
+                        </span>
+                        <span style={{ fontSize: "11.5px", fontWeight: 700, color: s.sugerido > 0 ? "#047857" : "#cbd5e1", whiteSpace: "nowrap" }}>
+                          {fmtMoeda(s.sugerido, moeda)}
+                        </span>
+                      </div>
+                      {/* SETORES: aqui o setor aparece como NÍVEL DE DECISÃO — o score
+                          agregado (déficit + preço + checklist) é o que faz ele
+                          receber antes dos outros, e não a ordem de cadastro. */}
+                      {s.setores.length > 0 && (
+                        <div style={{ marginTop: "5px", marginLeft: "10px", paddingLeft: "8px", borderLeft: "2px solid #f1f5f9", display: "flex", flexDirection: "column", gap: "4px" }}>
+                          {[...s.setores]
+                            .sort((a, b) => (b.sugerido - a.sugerido) || ((b.priority_score ?? 0) - (a.priority_score ?? 0)))
+                            .map(st => (
+                              <div key={st.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                                <span style={{ fontSize: "11px", color: "#475569", display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                                  <strong>{st.nome}</strong>
+                                  {st.priority_score != null && (
+                                    <span title="Priority Score do SETOR: déficit + preço médio (oportunidade) + checklist dos ativos, com os pesos que você configura em Pontuação."
+                                      style={{ ...scorePill, color: scoreColor(st.priority_score), background: scoreBg(st.priority_score) }}>
+                                      {fmtScore(st.priority_score)}
+                                    </span>
+                                  )}
+                                  <span style={{ color: "#94a3b8" }} title="Quality Score médio dos ativos do setor (só os avaliados entram na média)">
+                                    checklist {st.quality_medio != null ? fmtPercentual(st.quality_medio) : "—"}
+                                    {st.ativos_avaliados > 0 && <> ({st.ativos_avaliados}/{st.ativos})</>}
+                                  </span>
+                                  <span style={{ color: "#94a3b8" }} title="Oportunidade de preço média do setor: quanto os ativos dele estão abaixo do preço máximo de compra">
+                                    preço {st.oportunidade_media != null ? fmtPercentual(st.oportunidade_media * 100) : "—"}
+                                  </span>
+                                </span>
+                                <span style={{ fontSize: "11px", fontWeight: 700, color: st.sugerido > 0 ? "#047857" : "#cbd5e1", whiteSpace: "nowrap" }}>
+                                  {fmtMoeda(st.sugerido, moeda)}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -634,13 +668,18 @@ const statusBg = (s: StatusElegibilidade): string => ({
   SEM_CAPACIDADE: "#f1f5f9",
 }[s] ?? "#f1f5f9");
 
+/** Pílula do Priority Score (do setor e do ativo) — mesma linguagem visual. */
+const scorePill: React.CSSProperties = {
+  fontSize: "10.5px", fontWeight: 800, padding: "1px 7px",
+  borderRadius: "9999px", fontVariantNumeric: "tabular-nums",
+};
+
 const statusLabelNivel = (s: StatusNivel): string => ({
   ABAIXO: "abaixo do alvo",
   EQUILIBRADO: "equilibrado",
   ACIMA: "acima do alvo",
   SEM_ALVO: "sem alvo",
 }[s] ?? s);
-
 const statusCorNivel = (s: StatusNivel): string => ({
   ABAIXO: "#1d4ed8",
   EQUILIBRADO: "#047857",

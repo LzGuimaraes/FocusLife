@@ -12,4 +12,7 @@ public interface CarteiraIdealSetorRepository extends JpaRepository<CarteiraIdea
     List<CarteiraIdealSetorModel> findBySubclasseIdInOrderByOrdemAscIdAsc(List<Long> subclasseIds);
 
     void deleteBySubclasseIdIn(List<Long> subclasseIds);
+
+    /** Quantos alvos de carteira usam este setor do catálogo. */
+    long countBySetorMercadoId(Long setorMercadoId);
 }

@@ -240,6 +240,8 @@ export interface Cenario {
 /** Setor dentro da subclasse (nível opcional): % é fatia da SUBCLASSE. */
 export interface SetorAporte {
   id: number;
+  /** Setor do catálogo global — a identidade que soma entre carteiras. */
+  setor_mercado_id: number | null;
   nome: string;
   percentual_atual: number;
   percentual_ideal: number;
@@ -251,6 +253,22 @@ export interface SetorAporte {
   limite_maximo: number | null;
   status: StatusNivel;
   sugerido: number;
+
+  /* ── AGREGADO DO SETOR: o setor como nível de DECISÃO ──
+     O setor concorre ao orçamento da subclasse com o Priority Score agregado
+     (déficit + preço + checklist), e só depois o ticker entra dentro dele. */
+  /** Quality Score médio dos ativos do setor — só os AVALIADOS entram na média. */
+  quality_medio: number | null;
+  /** Fator de momento médio (0–1); null quando ninguém tem checklist de momento. */
+  momento_medio: number | null;
+  /** Oportunidade de preço média (0–1); null sem regra de preço nos ativos. */
+  oportunidade_media: number | null;
+  /** Quantos ativos da carteira estão neste setor. */
+  ativos: number;
+  /** Quantos têm checklist de qualidade respondido. */
+  ativos_avaliados: number;
+  /** Priority Score do SETOR (mesmos pesos configurados para o ativo). */
+  priority_score: number | null;
 }
 
 /** Onde o dinheiro entra, no nível da decisão: classe → subclasse. */

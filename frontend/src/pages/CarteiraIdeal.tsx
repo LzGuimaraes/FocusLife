@@ -20,6 +20,7 @@ import { catInfo, fmtPercentual, somaFechada, CATEGORIAS } from "../utils/percen
 import type {
   CarteiraIdeal, CarteiraIdealPayload, CarteiraResumo, Comparativo, Estrategia, MeusAtivos,
 } from "../types/planejamento";
+import type { SetorMercado } from "../types/setorMercado";
 
 /* ══════════════════════════════════════════════════════════════════════
    Tela da Carteira Ideal (Módulos 1, 7 e 10 - parte do comparativo).
@@ -52,7 +53,10 @@ export default function CarteiraIdealPage() {
 
   const [comparativo, setComparativo] = useState<Comparativo | null>(null);
   const [meusAtivos, setMeusAtivos] = useState<MeusAtivos | null>(null);
-  const [avisos, setAvisos] = useState<string[]>([]);
+  const [avisos, setAvisos] = useState<string[]>(
+    []);
+  /** Nomes do catálogo global de setores (sugestões do campo de setor). */
+  const [setoresCatalogo, setSetoresCatalogo] = useState<string[]>([]);
   /** Pendências aparecem logo abaixo do cabeçalho (e podem ser recolhidas). */
   const [alertasAbertos, setAlertasAbertos] = useState(true);
   /** Payload gravado no servidor: base para saber se há alteração não salva. */
@@ -68,6 +72,12 @@ export default function CarteiraIdealPage() {
     api.get("/estrategias/all?page=0&size=100")
       .then(r => setEstrategias(r.data.content ?? []))
       .catch(() => setEstrategias([]));
+
+    // Catálogo de setores: é uma tabela de REFERÊNCIA (não é dado do usuário),
+    // então é buscada uma vez por tela e serve para qualquer carteira.
+    api.get<SetorMercado[]>("/setores-mercado?somente_ativos=true")
+      .then(r => setSetoresCatalogo((r.data ?? []).map(s => s.nome)))
+      .catch(() => setSetoresCatalogo([]));
   }, []);
 
   /* ── Garante SEMPRE uma carteira válida selecionada ──
@@ -565,7 +575,8 @@ export default function CarteiraIdealPage() {
               de qualquer edição — dá o contexto antes de mexer nos números. */}
           {comparativo && <DonutsAtualIdeal comparativo={comparativo} />}
 
-          <CarteiraIdealEditor classes={classes} onChange={setClasses} atualPorClasse={atualPorClasse} />
+          <CarteiraIdealEditor classes={classes} onChange={setClasses} atualPorClasse={atualPorClasse}
+            setoresCatalogo={setoresCatalogo} />
           <MetasEditor metas={metas} classes={classes} onChange={setMetas}
             onVincular={vincular}
             onAtribuirSubclasse={atribuirSubclasse}

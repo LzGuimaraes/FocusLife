@@ -214,6 +214,8 @@ public final class RankingAportesDTO {
 
     public record SetorAporteDTO(
             Long id,
+            /** Setor do catálogo global (identidade estável, V32). */
+            Long setor_mercado_id,
             String nome,
             BigDecimal percentual_atual,
             BigDecimal percentual_ideal,
@@ -224,7 +226,22 @@ public final class RankingAportesDTO {
             BigDecimal tolerancia,
             BigDecimal limite_maximo,
             StatusNivel status,
-            BigDecimal sugerido
+            BigDecimal sugerido,
+
+            /* ── AGREGADO DO SETOR (V32): é o que decide se o setor recebe antes
+               do ticker — setor + preço médio + checklist. ── */
+            /** Quality Score médio dos ativos do setor (só os AVALIADOS entram na média). */
+            BigDecimal quality_medio,
+            /** Fator de momento médio (0–1) — null quando ninguém tem checklist de momento. */
+            BigDecimal momento_medio,
+            /** Oportunidade de preço média (0–1) do setor — null sem regra de preço. */
+            BigDecimal oportunidade_media,
+            /** Quantos ativos da carteira estão neste setor. */
+            Integer ativos,
+            /** Quantos têm checklist de qualidade respondido. */
+            Integer ativos_avaliados,
+            /** Priority Score do SETOR (mesmos pesos configurados para o ativo). */
+            BigDecimal priority_score
     ) {}
 
     public record Response(

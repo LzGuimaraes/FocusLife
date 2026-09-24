@@ -11,4 +11,9 @@ public interface AtivoCadastroRepository extends JpaRepository<AtivoCadastroMode
     List<AtivoCadastroModel> findAllByOrderByNomeAsc();
     List<AtivoCadastroModel> findByNomeContainingIgnoreCaseOrderByNomeAsc(String nome);
     java.util.Optional<AtivoCadastroModel> findByNomeIgnoreCase(String nome);
+
+    /** Quantos tickers do catálogo estão classificados neste setor. */
+    long countBySetorMercadoId(Long setorMercadoId);
+
+    List<AtivoCadastroModel> findBySetorMercadoId(Long setorMercadoId);
 }
