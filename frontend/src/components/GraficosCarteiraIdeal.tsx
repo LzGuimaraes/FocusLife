@@ -319,8 +319,26 @@ export function DonutsAtualIdeal({ comparativo }: { comparativo: Comparativo }) 
 const fmtRestante = (soma: number): string =>
   `${(100 - soma).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 
-/** Balão/centro: sem os centavos quando o valor é redondo ("R$ 19.400"). */
+/** Balão/fonte do valor: sem os centavos quando o valor é redondo ("R$ 19.400"). */
 const fmtCurto = (valor: number, moeda: string): string => fmtMoeda(valor, moeda).replace(/,00$/, "");
+
+/**
+ * Valor do CENTRO do anel: arredonda para a unidade. O furo tem ~128 de
+ * diâmetro e "R$ 21.006,68" não cabe nele sem espremer o anel — os centavos
+ * continuam no balão, onde há espaço.
+ */
+const fmtCentro = (valor: number, moeda: string): string => fmtMoeda(Math.round(valor), moeda).replace(/,00$/, "");
+
+/**
+ * Tamanho de fonte que faz o texto caber na largura disponível.
+ *
+ * `fator` é o consumo por caractere em "em" — medido nas fontes do app: 0,58
+ * para o valor (dígitos tabulares, fonte 800) e 0,70 para CAIXA ALTA com
+ * letter-spacing (o título do centro). É o que impede o número de invadir o
+ * anel quando a carteira cresce de dígitos.
+ */
+const fonteQueCabe = (texto: string, largura: number, max: number, min: number, fator = 0.58): number =>
+  Math.max(min, Math.min(max, Math.floor(largura / Math.max(1, texto.length * fator))));
 
 const clamp = (valor: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, valor));
@@ -351,10 +369,13 @@ function Donut({ id, titulo, subtitulo, fatias, moeda, total, ativo, fonte, onAt
   const T = 300;                 // lado do viewBox
   const cx = T / 2;
   const cy = T / 2;
-  const rExt = 86;
-  const rInt = 58;
-  const rRotulo = 112;           // onde ficam as % de fora
+  const rExt = 88;
+  // Furo com 64 de raio (128 de diâmetro): é o espaço REAL do texto do centro.
+  // Com o furo antigo (58) o valor em reais não cabia e encostava no anel.
+  const rInt = 64;
+  const rRotulo = 114;           // onde ficam as % de fora
   const VAO = 0.03;              // vão entre fatias (radianos)
+  const LARGURA_INTERNA = 2 * rInt - 16;   // folga de 8 de cada lado no furo
 
   const base = fatias.reduce((s, f) => s + Math.max(0, f.percentual), 0) || 1;
   const visiveis = fatias.filter(f => f.percentual > 0.004);
@@ -399,9 +420,14 @@ function Donut({ id, titulo, subtitulo, fatias, moeda, total, ativo, fonte, onAt
   const balaoX = clamp(ax - largura / 2, 8, T - largura - 8);
   const balaoY = acima ? clamp(ay - altura - 14, 6, T - altura - 6) : clamp(ay + 14, 6, T - altura - 6);
 
-  const centroValor = fmtCurto(apontado ? apontado.valor : total, moeda);
+  const centroValor = fmtCentro(apontado ? apontado.valor : total, moeda);
   const centroTitulo = apontado ? apontado.label : titulo;
   const centroPct = apontado ? fmtPercentual(apontado.percentual) : "100,00%";
+  const tituloCentro = centroTitulo.length > 16 ? `${centroTitulo.slice(0, 15)}…` : centroTitulo;
+  // Fonte do centro dimensionada pelo texto: o número encolhe até caber no furo
+  // (e para de invadir o anel quando o valor tem 6 ou 7 dígitos).
+  const fonteValor = fonteQueCabe(centroValor, LARGURA_INTERNA, 21, 12);
+  const fonteTitulo = fonteQueCabe(tituloCentro.toUpperCase(), 2 * rInt - 8, 11.5, 8.5, 0.7);
 
   return (
     <div style={{ textAlign: "center", width: "min(300px, 84vw)" }}>
@@ -436,10 +462,10 @@ function Donut({ id, titulo, subtitulo, fatias, moeda, total, ativo, fonte, onAt
           const cosseno = Math.cos(s.meio);
           const [x, y] = ponto(rRotulo, s.meio);
           return (
-            <text key={s.key} x={x} y={y + 4}
+            <text key={s.key} x={x} y={y + 4.5}
               textAnchor={cosseno > 0.35 ? "start" : cosseno < -0.35 ? "end" : "middle"}
-              fontSize="12" fontWeight="700" letterSpacing="0.2"
-              fill={apontado?.key === s.key ? "#0f172a" : "#94a3b8"}
+              fontSize="12.5" fontWeight="700" letterSpacing="0.1"
+              fill={apontado?.key === s.key ? "#0f172a" : "#64748b"}
               style={{ fontVariantNumeric: "tabular-nums", transition: "fill .18s ease" }}>
               {s.percentual.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
             </text>
@@ -447,16 +473,16 @@ function Donut({ id, titulo, subtitulo, fatias, moeda, total, ativo, fonte, onAt
         })}
 
         {/* Centro: sem hover mostra o total; com hover, a classe sob o cursor. */}
-        <text x={cx} y={cy - 6} textAnchor="middle" fontSize="11" fontWeight="700" fill="#94a3b8"
+        <text x={cx} y={cy - 10} textAnchor="middle" fontSize={fonteTitulo} fontWeight="700" fill="#94a3b8"
           letterSpacing="0.4">
-          {(centroTitulo.length > 16 ? `${centroTitulo.slice(0, 15)}…` : centroTitulo).toUpperCase()}
+          {tituloCentro.toUpperCase()}
         </text>
-        <text x={cx} y={cy + 18} textAnchor="middle" fontWeight="800" fill="#0f172a"
-          fontSize={centroValor.length > 12 ? 17 : 21} style={{ fontVariantNumeric: "tabular-nums" }}>
+        <text x={cx} y={cy + 13} textAnchor="middle" fontWeight="800" fill="#0f172a"
+          fontSize={fonteValor} style={{ fontVariantNumeric: "tabular-nums" }}>
           {centroValor}
         </text>
-        <text x={cx} y={cy + 36} textAnchor="middle" fontSize="11.5" fontWeight="700"
-          fill={apontado ? "#475569" : "#cbd5e1"}>
+        <text x={cx} y={cy + 32} textAnchor="middle" fontSize="11.5" fontWeight="700"
+          fill={apontado ? "#475569" : "#94a3b8"}>
           {centroPct}
         </text>
 
@@ -465,10 +491,10 @@ function Donut({ id, titulo, subtitulo, fatias, moeda, total, ativo, fonte, onAt
           <g style={{ filter: "drop-shadow(0 10px 22px rgba(15,23,42,0.30))", pointerEvents: "none" }}>
             <rect x={balaoX} y={balaoY} width={largura} height={altura} rx="12" fill="#0f172a" />
             <circle cx={balaoX + 15} cy={balaoY + 18} r="3.6" fill={apontado.cor} />
-            <text x={balaoX + 25} y={balaoY + 22} fontSize="11.5" fontWeight="600" fill="#cbd5e1">
+            <text x={balaoX + 25} y={balaoY + 22} fontSize="12" fontWeight="600" fill="#cbd5e1">
               {apontado.icone} {apontado.label.length > 18 ? `${apontado.label.slice(0, 17)}…` : apontado.label}
             </text>
-            <text x={balaoX + 15} y={balaoY + 41} fontSize="14" fontWeight="800" fill="#ffffff"
+            <text x={balaoX + 15} y={balaoY + 41} fontSize="14.5" fontWeight="800" fill="#ffffff"
               style={{ fontVariantNumeric: "tabular-nums" }}>
               {fmtCurto(apontado.valor, moeda)}
             </text>
@@ -479,10 +505,10 @@ function Donut({ id, titulo, subtitulo, fatias, moeda, total, ativo, fonte, onAt
         )}
       </svg>
 
-      <p style={{ margin: "2px 0 0", fontSize: "12px", fontWeight: 700, color: corAnel }}>
+      <p style={{ margin: "2px 0 0", fontSize: "12.5px", fontWeight: 700, color: corAnel }}>
         {titulo}
       </p>
-      <p style={{ margin: "1px 0 0", fontSize: "11px", color: "#94a3b8" }}>{subtitulo}</p>
+      <p style={{ margin: "1px 0 0", fontSize: "11.5px", color: "#94a3b8" }}>{subtitulo}</p>
     </div>
   );
 }
