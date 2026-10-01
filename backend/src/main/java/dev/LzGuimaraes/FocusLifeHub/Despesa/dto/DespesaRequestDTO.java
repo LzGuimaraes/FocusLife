@@ -4,6 +4,7 @@ import java.time.LocalDate;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 
+import dev.LzGuimaraes.FocusLifeHub.Despesa.TipoLancamento;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -15,11 +16,15 @@ public record DespesaRequestDTO(
     @NotNull(message = "O valor (saldo) é obrigatório")
     Float saldo,
 
-    @NotNull(message = "A data de vencimento é obrigatória")
+    // A obrigatoriedade da data de vencimento depende do tipo: é exigida para
+    // DESPESA e ignorada para SALDO (validado no DespesaService).
     @JsonFormat(pattern = "yyyy-MM-dd")
     LocalDate dataVencimento,
 
     Boolean pago,
+
+    // DESPESA (padrão quando ausente) ou SALDO.
+    TipoLancamento tipo,
 
     @NotNull(message = "O ID da carteira de dívidas é obrigatório")
     Long carteira_dividas_id

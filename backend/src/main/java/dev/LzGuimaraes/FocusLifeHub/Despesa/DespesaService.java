@@ -1,5 +1,6 @@
 package dev.LzGuimaraes.FocusLifeHub.Despesa;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -16,6 +17,7 @@ import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraDividasRepository;
 import dev.LzGuimaraes.FocusLifeHub.Despesa.dto.DespesaLogResponseDTO;
 import dev.LzGuimaraes.FocusLifeHub.Despesa.dto.DespesaRequestDTO;
 import dev.LzGuimaraes.FocusLifeHub.Despesa.dto.DespesaResponseDTO;
+import dev.LzGuimaraes.FocusLifeHub.Exceptions.BusinessRuleException;
 import dev.LzGuimaraes.FocusLifeHub.Exceptions.ResourceNotFoundException;
 import dev.LzGuimaraes.FocusLifeHub.config.JWTUserData;
 
@@ -66,8 +68,27 @@ public class DespesaService {
             despesa.getSaldo(),
             despesa.getDataVencimento(),
             despesa.getPago(),
+            despesa.getTipo() != null ? despesa.getTipo() : TipoLancamento.DESPESA,
             carteiraId
         );
+    }
+
+    /**
+     * Aplica as regras do tipo de lançamento: um SALDO é um crédito sem
+     * vencimento nem status de pagamento; uma DESPESA exige data de vencimento.
+     */
+    private void aplicarTipo(DespesaModel despesa, TipoLancamento tipo, LocalDate dataVencimento, boolean pago) {
+        despesa.setTipo(tipo);
+        if (tipo == TipoLancamento.SALDO) {
+            despesa.setDataVencimento(null);
+            despesa.setPago(null);
+            return;
+        }
+        if (dataVencimento == null) {
+            throw new BusinessRuleException("Informe a data de vencimento da despesa.");
+        }
+        despesa.setDataVencimento(dataVencimento);
+        despesa.setPago(pago);
     }
 
     public Page<DespesaResponseDTO> getAll(Pageable pageable) {
@@ -108,12 +129,13 @@ public class DespesaService {
         Long userId = getAuthenticatedUserId();
         CarteiraDividasModel carteira = resolveCarteira(dto.carteira_dividas_id(), userId);
 
+        TipoLancamento tipo = dto.tipo() != null ? dto.tipo() : TipoLancamento.DESPESA;
+
         DespesaModel despesa = new DespesaModel();
         despesa.setNome(dto.nome());
         despesa.setSaldo(Math.abs(dto.saldo() != null ? dto.saldo() : 0f));
-        despesa.setDataVencimento(dto.dataVencimento());
-        despesa.setPago(dto.pago() != null && dto.pago());
         despesa.setCarteiraDividas(carteira);
+        aplicarTipo(despesa, tipo, dto.dataVencimento(), dto.pago() != null && dto.pago());
 
         return toResponse(despesaRepository.save(despesa));
     }
@@ -130,12 +152,25 @@ public class DespesaService {
         if (dto.saldo() != null) {
             despesa.setSaldo(Math.abs(dto.saldo()));
         }
-        if (dto.dataVencimento() != null) {
-            despesa.setDataVencimento(dto.dataVencimento());
+
+        // O tipo vigente mantém-se quando o payload não o informa (ex.: toggle de pago).
+        TipoLancamento tipo = dto.tipo() != null
+                ? dto.tipo()
+                : (despesa.getTipo() != null ? despesa.getTipo() : TipoLancamento.DESPESA);
+
+        if (tipo == TipoLancamento.SALDO) {
+            aplicarTipo(despesa, TipoLancamento.SALDO, null, false);
+        } else {
+            despesa.setTipo(TipoLancamento.DESPESA);
+            // Alterações parciais (ex.: só marcar como pago) não invalidam a data já gravada.
+            if (dto.dataVencimento() != null) {
+                despesa.setDataVencimento(dto.dataVencimento());
+            }
+            if (dto.pago() != null) {
+                despesa.setPago(dto.pago());
+            }
         }
-        if (dto.pago() != null) {
-            despesa.setPago(dto.pago());
-        }
+
         if (dto.carteira_dividas_id() != null
                 && (despesa.getCarteiraDividas() == null
                     || !despesa.getCarteiraDividas().getId().equals(dto.carteira_dividas_id()))) {

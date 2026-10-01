@@ -170,6 +170,7 @@ public abstract class AbstractCarteiraService<T extends CarteiraModel> {
                 nova.setSaldo(despesa.getSaldo());
                 nova.setDataVencimento(despesa.getDataVencimento());
                 nova.setPago(despesa.getPago());
+                nova.setTipo(despesa.getTipo());
                 nova.setCarteiraDividas(dividasCopy);
                 despesaRepository.save(nova);
             }

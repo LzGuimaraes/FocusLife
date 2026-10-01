@@ -15,10 +15,12 @@ import AtivoAutocomplete from "../components/AtivoAutocomplete";
 type CatInvest = "RENDA_FIXA" | "TESOURO_DIRETO" | "ACOES" | "FIIS" | "ETFS" | "CRIPTOMOEDAS";
 type TipoCarteira = "INVESTIMENTO" | "DESPESAS";
 type FiltroStatus = "all" | "pagas" | "nao_pagas" | "vencidas" | "pendentes";
+/** Tipo de lançamento da carteira de dívidas: despesa (débito) ou saldo (crédito). */
+type TipoLancamento = "DESPESA" | "SALDO";
 
-interface Ativo { id: number; nome: string; categoria: "CONTA" | "INVESTIMENTO"; categoriaInvestimento: CatInvest | null; quantidade: number | null; valorUnitario: number | null; precoAtual: number | null; saldo: number; instituicao: string | null; dataAplicacao: string | null; vencimento: string | null; dataVencimento: string | null; rentabilidade: number | null; pago: boolean | null; carteira_investimento_id: number | null; carteira_dividas_id: number | null; ativo_cadastro_id: string | null; }
+interface Ativo { id: number; nome: string; categoria: "CONTA" | "INVESTIMENTO"; categoriaInvestimento: CatInvest | null; quantidade: number | null; valorUnitario: number | null; precoAtual: number | null; saldo: number; instituicao: string | null; dataAplicacao: string | null; vencimento: string | null; dataVencimento: string | null; rentabilidade: number | null; pago: boolean | null; tipo: TipoLancamento | null; carteira_investimento_id: number | null; carteira_dividas_id: number | null; ativo_cadastro_id: string | null; }
 interface Financa { id: number; nome: string; moeda: string; tipo: TipoCarteira; }
-interface FormData { nome: string; categoria: "CONTA" | "INVESTIMENTO"; categoriaInvestimento: CatInvest | ""; quantidade: string; valorUnitario: string; precoAtual: string; saldo: string; instituicao: string; dataAplicacao: string; vencimento: string; dataVencimento: string; rentabilidade: string; ativo_cadastro_id: string; carteira_id: string; pago: boolean; }
+interface FormData { nome: string; categoria: "CONTA" | "INVESTIMENTO"; categoriaInvestimento: CatInvest | ""; quantidade: string; valorUnitario: string; precoAtual: string; saldo: string; instituicao: string; dataAplicacao: string; vencimento: string; dataVencimento: string; rentabilidade: string; ativo_cadastro_id: string; carteira_id: string; pago: boolean; tipo: TipoLancamento; }
 
 const moedaS: Record<string, string> = { BRL: "R$", USD: "$", EUR: "€", GBP: "£", JPY: "¥" };
 const fmt = (v: number | null | undefined, m: string) => v != null ? `${moedaS[m] || m} ${v.toFixed(2)}` : "-";
@@ -51,7 +53,7 @@ const tipoLabel: Record<TipoCarteira, { icon: string; label: string; color: stri
   DESPESAS: { icon: "📋", label: "Despesas", color: "#ef4444", bg: "#fef2f2" },
 };
 
-const emptyForm: FormData = { nome: "", categoria: "INVESTIMENTO", categoriaInvestimento: "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", dataVencimento: "", rentabilidade: "", ativo_cadastro_id: "", carteira_id: "", pago: false };
+const emptyForm: FormData = { nome: "", categoria: "INVESTIMENTO", categoriaInvestimento: "", quantidade: "", valorUnitario: "", precoAtual: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", dataVencimento: "", rentabilidade: "", ativo_cadastro_id: "", carteira_id: "", pago: false, tipo: "DESPESA" };
 type Errors = Partial<Record<keyof FormData, string>>;
 
 export default function CarteiraDetalhe() {
@@ -95,10 +97,10 @@ export default function CarteiraDetalhe() {
     try {
       if (carteiraTipo === "INVESTIMENTO") {
         const r = await api.get(`/ativos/by-carteira/${carteiraId}`);
-        setAtivos((r.data ?? []).map((x: any): Ativo => ({ id: x.id, nome: x.nome, categoria: "INVESTIMENTO", categoriaInvestimento: x.categoriaInvestimento ?? null, quantidade: x.quantidade ?? null, valorUnitario: x.valorUnitario ?? null, precoAtual: x.precoAtual ?? null, saldo: x.saldo ?? 0, instituicao: x.instituicao ?? null, dataAplicacao: x.dataAplicacao ?? null, vencimento: x.vencimento ?? null, dataVencimento: x.dataVencimento ?? null, rentabilidade: x.rentabilidade ?? null, pago: null, ativo_cadastro_id: x.ativo_cadastro_id ?? null, carteira_investimento_id: x.carteira_investimento_id ?? null, carteira_dividas_id: null })));
+        setAtivos((r.data ?? []).map((x: any): Ativo => ({ id: x.id, nome: x.nome, categoria: "INVESTIMENTO", categoriaInvestimento: x.categoriaInvestimento ?? null, quantidade: x.quantidade ?? null, valorUnitario: x.valorUnitario ?? null, precoAtual: x.precoAtual ?? null, saldo: x.saldo ?? 0, instituicao: x.instituicao ?? null, dataAplicacao: x.dataAplicacao ?? null, vencimento: x.vencimento ?? null, dataVencimento: x.dataVencimento ?? null, rentabilidade: x.rentabilidade ?? null, pago: null, tipo: null, ativo_cadastro_id: x.ativo_cadastro_id ?? null, carteira_investimento_id: x.carteira_investimento_id ?? null, carteira_dividas_id: null })));
       } else {
         const r = await api.get(`/despesas/by-carteira/${carteiraId}`);
-        setAtivos((r.data ?? []).map((x: any): Ativo => ({ id: x.id, nome: x.nome, categoria: "CONTA", categoriaInvestimento: null, quantidade: null, valorUnitario: null, precoAtual: null, saldo: x.saldo ?? 0, instituicao: null, dataAplicacao: null, vencimento: null, dataVencimento: x.dataVencimento ?? null, rentabilidade: null, pago: x.pago ?? null, ativo_cadastro_id: null, carteira_investimento_id: null, carteira_dividas_id: x.carteira_dividas_id ?? null })));
+        setAtivos((r.data ?? []).map((x: any): Ativo => ({ id: x.id, nome: x.nome, categoria: "CONTA", categoriaInvestimento: null, quantidade: null, valorUnitario: null, precoAtual: null, saldo: x.saldo ?? 0, instituicao: null, dataAplicacao: null, vencimento: null, dataVencimento: x.dataVencimento ?? null, rentabilidade: null, pago: x.pago ?? null, tipo: x.tipo ?? "DESPESA", ativo_cadastro_id: null, carteira_investimento_id: null, carteira_dividas_id: x.carteira_dividas_id ?? null })));
       }
     }
     catch { toast.error("Erro ao carregar"); }
@@ -109,14 +111,16 @@ export default function CarteiraDetalhe() {
   const isInvest = walletType === "INVESTIMENTO";
   const isDespesa = walletType === "DESPESAS";
   const isRendaVariavel = isInvest && ["ACOES", "FIIS", "ETFS", "CRIPTOMOEDAS"].includes(form.categoriaInvestimento);
-  const itemLabel = isInvest ? "Investimento" : "Despesa";
+  const itemLabel = isInvest ? "Investimento" : "Lançamento";
   const moeda = carteira?.moeda || "BRL";
 
   /* ── Validação ── */
   const validate = (): boolean => {
     const e: Errors = {};
     if (!form.nome.trim()) e.nome = "O nome é obrigatório.";
-    if (!isRendaVariavel && !form.dataVencimento) e.dataVencimento = "Informe a data de vencimento.";
+    // Saldo é um crédito (sem vencimento); despesas e investimentos fora de renda variável exigem.
+    const exigeVencimento = !isRendaVariavel && !(isDespesa && form.tipo === "SALDO");
+    if (exigeVencimento && !form.dataVencimento) e.dataVencimento = "Informe a data de vencimento.";
     if (isInvest && !form.categoriaInvestimento) e.categoriaInvestimento = "Selecione a categoria.";
     const ci = catInfo[form.categoriaInvestimento as CatInvest];
     if (ci?.autoCalc) { const vu = parseFloat(form.valorUnitario); const q = parseFloat(form.quantidade); if (!form.valorUnitario || isNaN(vu) || vu <= 0) e.valorUnitario = "Informe o preço médio."; if (!form.quantidade || isNaN(q) || q <= 0) e.quantidade = "Informe a quantidade."; }
@@ -134,28 +138,32 @@ export default function CarteiraDetalhe() {
     if (isInvest) payload.carteira_investimento_id = carteiraId;
     else payload.carteira_dividas_id = carteiraId;
     if (isInvest) { payload.categoriaInvestimento = form.categoriaInvestimento; payload.ativo_cadastro_id = form.ativo_cadastro_id || null; payload.instituicao = form.instituicao || null; payload.dataAplicacao = form.dataAplicacao || null; payload.vencimento = form.vencimento || null; payload.rentabilidade = form.rentabilidade ? parseFloat(form.rentabilidade) : null; payload.precoAtual = form.precoAtual ? parseFloat(form.precoAtual) : null; const ci = catInfo[form.categoriaInvestimento as CatInvest]; if (ci?.autoCalc) { payload.valorUnitario = parseFloat(form.valorUnitario) || 0; payload.quantidade = parseFloat(form.quantidade) || 0; } else { payload.saldo = parseFloat(form.saldo) || 0; } }
-    else { payload.saldo = parseFloat(form.saldo) || 0; payload.pago = form.pago; }
+    else { payload.tipo = form.tipo; payload.saldo = parseFloat(form.saldo) || 0; if (form.tipo === "DESPESA") payload.pago = form.pago; }
     const promise = editing ? api.put(`${base}/alter/${editing.id}`, payload) : api.post(`${base}/create`, payload);
     toast.promise(promise, { loading: "Salvando...", success: () => { closeModal(); fetchAtivos(); return editing ? "Atualizado!" : "Criado!"; }, error: (err: any) => err?.response?.data?.message || "Erro" });
   };
 
   const handleDelete = async (id: number) => { const base = isInvest ? "/ativos" : "/despesas"; toast("Excluir?", { action: { label: "Sim", onClick: () => { toast.promise(api.delete(`${base}/delete/${id}`), { loading: "Excluindo...", success: () => { fetchAtivos(); return "Excluído!"; }, error: "Erro" }); }}, cancel: { label: "Cancelar", onClick: () => {} } }); };
 
-  const togglePago = async (ativo: Ativo) => { const novo = !ativo.pago; try { await api.put(`/despesas/alter/${ativo.id}`, { ...ativo, pago: novo }); setAtivos(prev => prev.map(a => a.id === ativo.id ? { ...a, pago: novo } : a)); toast.success(novo ? "Pago!" : "Desmarcado"); } catch { toast.error("Erro"); } };
+  const togglePago = async (ativo: Ativo) => { if (ativo.tipo === "SALDO") return; const novo = !ativo.pago; try { await api.put(`/despesas/alter/${ativo.id}`, { ...ativo, pago: novo }); setAtivos(prev => prev.map(a => a.id === ativo.id ? { ...a, pago: novo } : a)); toast.success(novo ? "Pago!" : "Desmarcado"); } catch { toast.error("Erro"); } };
 
-  const openModal = (a: Ativo | null = null) => { setErrors({}); if (a) { setEditing(a); setForm({ nome: a.nome, categoria: a.categoria, categoriaInvestimento: a.categoriaInvestimento || "", quantidade: a.quantidade?.toString() || "", valorUnitario: a.valorUnitario?.toString() || "", precoAtual: a.precoAtual?.toString() || "", saldo: a.saldo?.toString() || "0", instituicao: a.instituicao || "", dataAplicacao: a.dataAplicacao || "", vencimento: a.vencimento || "", dataVencimento: a.dataVencimento || "", rentabilidade: a.rentabilidade?.toString() || "", ativo_cadastro_id: a.ativo_cadastro_id ?? "", carteira_id: carteiraId.toString(), pago: a.pago ?? false }); } else { setEditing(null); setForm({ ...emptyForm, categoria: isInvest ? "INVESTIMENTO" : "CONTA", carteira_id: carteiraId.toString() }); } setShowModal(true); };
+  const openModal = (a: Ativo | null = null) => { setErrors({}); if (a) { setEditing(a); setForm({ nome: a.nome, categoria: a.categoria, categoriaInvestimento: a.categoriaInvestimento || "", quantidade: a.quantidade?.toString() || "", valorUnitario: a.valorUnitario?.toString() || "", precoAtual: a.precoAtual?.toString() || "", saldo: a.saldo?.toString() || "0", instituicao: a.instituicao || "", dataAplicacao: a.dataAplicacao || "", vencimento: a.vencimento || "", dataVencimento: a.dataVencimento || "", rentabilidade: a.rentabilidade?.toString() || "", ativo_cadastro_id: a.ativo_cadastro_id ?? "", carteira_id: carteiraId.toString(), pago: a.pago ?? false, tipo: a.tipo ?? "DESPESA" }); } else { setEditing(null); setForm({ ...emptyForm, categoria: isInvest ? "INVESTIMENTO" : "CONTA", carteira_id: carteiraId.toString() }); } setShowModal(true); };
   const closeModal = () => { setShowModal(false); setEditing(null); };
 
   /* ── Sumários ── */
   const contas = ativos.filter(a => a.categoria === "CONTA");
+  const saldos = contas.filter(a => a.tipo === "SALDO").reduce((s, a) => s + (a.saldo || 0), 0);
+  const despesas = contas.filter(a => a.tipo !== "SALDO");
   const investimentos = ativos.filter(a => a.categoria === "INVESTIMENTO");
   const totalInvestidoCarteira = investimentos.reduce((s, a) => s + totalInvestido(a), 0);
   const valorAtualCarteira = investimentos.reduce((s, a) => s + saldoAtual(a), 0);
   const lucroTotal = valorAtualCarteira - totalInvestidoCarteira;
   const rentTotal = totalInvestidoCarteira > 0 ? ((valorAtualCarteira - totalInvestidoCarteira) / totalInvestidoCarteira) * 100 : 0;
-  const pagas = contas.filter(a => a.pago).reduce((s, a) => s + (a.saldo || 0), 0);
-  const pendentes = contas.filter(a => !a.pago).reduce((s, a) => s + (a.saldo || 0), 0);
+  const pagas = despesas.filter(a => a.pago).reduce((s, a) => s + (a.saldo || 0), 0);
+  const pendentes = despesas.filter(a => !a.pago).reduce((s, a) => s + (a.saldo || 0), 0);
   const totalDespesas = pagas + pendentes;
+  // Saldo final = créditos (saldos) − débitos (todas as despesas, pagas e pendentes).
+  const saldoFinal = saldos - totalDespesas;
 
   const distCategorias = (Object.keys(catInfo) as CatInvest[]).map(ci => { const items = investimentos.filter(a => a.categoriaInvestimento === ci); return { key: ci, ...catInfo[ci], total: items.reduce((s, a) => s + saldoAtual(a), 0), count: items.length }; }).filter(d => d.count > 0);
 
@@ -166,12 +174,13 @@ export default function CarteiraDetalhe() {
         { icon: lucroTotal >= 0 ? "📈" : "📉", label: "Lucro/Prejuízo Total", value: fmtSigned(lucroTotal, moeda), color: lucroTotal >= 0 ? "#10b981" : "#ef4444", bg: lucroTotal >= 0 ? "#ecfdf5" : "#fef2f2" },
         { icon: "🎯", label: "Rentabilidade Total", value: fmtPct(rentTotal), color: rentTotal > 0 ? "#10b981" : rentTotal < 0 ? "#ef4444" : "#64748b", bg: rentTotal > 0 ? "#ecfdf5" : rentTotal < 0 ? "#fef2f2" : "#f1f5f9" },
       ]
-    : [{ icon: "📋", label: "Total Despesas", value: fmt(totalDespesas, moeda), color: "#ef4444", bg: "#fef2f2" }, { icon: "✅", label: "Pagas", value: fmt(pagas, moeda), color: "#10b981", bg: "#d1fae5" }, { icon: "⏳", label: "Pendentes", value: fmt(pendentes, moeda), color: "#f59e0b", bg: "#fef3c7" }];
+    : [{ icon: "�", label: "Saldos", value: fmt(saldos, moeda), color: "#10b981", bg: "#d1fae5" }, { icon: "📋", label: "Total Despesas", value: fmt(totalDespesas, moeda), color: "#ef4444", bg: "#fef2f2" }, { icon: "⏳", label: "Pendentes", value: fmt(pendentes, moeda), color: "#f59e0b", bg: "#fef3c7" }, { icon: saldoFinal >= 0 ? "💵" : "⚠️", label: "Saldo Final", value: fmtSigned(saldoFinal, moeda), color: saldoFinal >= 0 ? "#10b981" : "#ef4444", bg: saldoFinal >= 0 ? "#ecfdf5" : "#fef2f2" }];
 
   /* ── Filtros (status p/ despesas, classe p/ investimentos) ── */
   const hojeStr = formatLocalDate(new Date());
   const matchesStatus = (a: Ativo, s: FiltroStatus): boolean => {
     if (s === "all" || a.categoria !== "CONTA") return true;
+    if (a.tipo === "SALDO") return false; // saldo é crédito, não tem status de pagamento
     if (s === "pagas") return a.pago === true;
     if (s === "nao_pagas") return a.pago === false;
     if (s === "vencidas") return a.pago === false && a.dataVencimento != null && a.dataVencimento < hojeStr;
@@ -200,7 +209,7 @@ export default function CarteiraDetalhe() {
                 <h1 style={{ fontSize: "clamp(20px, 3vw, 26px)", fontWeight: 800, color: "#0f172a", margin: 0 }}>{carteira?.nome || "Carregando..."}</h1>
                 {walletType && <span style={{ fontSize: "12px", fontWeight: 700, padding: "4px 12px", borderRadius: "var(--radius-full)", background: tipoLabel[walletType].bg, color: tipoLabel[walletType].color }}>{tipoLabel[walletType].icon} {tipoLabel[walletType].label}</span>}
               </div>
-              <p style={{ fontSize: "13px", color: "#64748b", margin: "4px 0 0" }}>{moedaS[moeda] || moeda} {moeda} · {ativos.length} {isInvest ? "investimentos" : "despesas"}</p>
+              <p style={{ fontSize: "13px", color: "#64748b", margin: "4px 0 0" }}>{moedaS[moeda] || moeda} {moeda} · {ativos.length} {isInvest ? "investimentos" : "lançamentos"}</p>
             </div>
           </div>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -227,7 +236,7 @@ export default function CarteiraDetalhe() {
               style={{ padding: "10px 18px", background: isInvest ? "#8b5cf6" : "#ef4444", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: 600, transition: "all 0.15s ease", whiteSpace: "nowrap" }}
               onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)"; }}
               onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
-              + {isInvest ? "Novo Investimento" : "Nova Despesa"}
+              + {isInvest ? "Novo Investimento" : "Novo lançamento"}
             </button>
           </div>
         </div>
@@ -296,20 +305,21 @@ export default function CarteiraDetalhe() {
           const ci = catInfo[a.categoriaInvestimento as CatInvest];
           const isConta = a.categoria === "CONTA";
           const isInv = a.categoria === "INVESTIMENTO";
+          const isSaldo = isConta && a.tipo === "SALDO";
           return (
-            <div key={a.id} style={{ ...cardStyle, borderLeftColor: isConta ? (a.pago ? "#10b981" : "#f59e0b") : (ci?.color || "#8b5cf6") }}
+            <div key={a.id} style={{ ...cardStyle, borderLeftColor: isInv ? (ci?.color || "#8b5cf6") : (isSaldo || a.pago ? "#10b981" : "#f59e0b") }}
               onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 10px 25px rgba(0,0,0,0.1)"; }}
               onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.05)"; }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "8px", gap: "6px", flexWrap: "wrap" }}>
                 {isInv && ci && <span style={{ fontSize: "11px", fontWeight: 600, padding: "4px 10px", borderRadius: "var(--radius-full)", background: ci.bg, color: ci.color }}>{ci.icon} {ci.label}</span>}
-                {isConta && <span style={{ fontSize: "12px", fontWeight: 600, padding: "4px 10px", borderRadius: "var(--radius-full)", background: "#dbeafe", color: "#1d4ed8" }}>💳 Conta</span>}
-                {isConta && <span style={{ fontSize: "11px", fontWeight: 700, padding: "4px 10px", borderRadius: "var(--radius-full)", background: a.pago ? "#d1fae5" : "#fef3c7", color: a.pago ? "#047857" : "#b45309" }}>{a.pago ? "✅ Pago" : "⏳ Pendente"}</span>}
+                {isConta && <span style={{ fontSize: "12px", fontWeight: 600, padding: "4px 10px", borderRadius: "var(--radius-full)", background: isSaldo ? "#d1fae5" : "#dbeafe", color: isSaldo ? "#047857" : "#1d4ed8" }}>{isSaldo ? "💰 Saldo" : "💳 Conta"}</span>}
+                {isConta && !isSaldo && <span style={{ fontSize: "11px", fontWeight: 700, padding: "4px 10px", borderRadius: "var(--radius-full)", background: a.pago ? "#d1fae5" : "#fef3c7", color: a.pago ? "#047857" : "#b45309" }}>{a.pago ? "✅ Pago" : "⏳ Pendente"}</span>}
               </div>
               <h3 style={{ fontSize: "16px", fontWeight: 600, marginBottom: "6px" }}>{a.nome}</h3>
               <InvestInfo ativo={a} moeda={moeda} />
-              <p style={{ fontSize: "20px", fontWeight: 800, color: isConta ? (a.pago ? "#10b981" : "#f59e0b") : "#10b981", marginBottom: "14px" }}>{fmt(saldoAtual(a), moeda)}</p>
+              <p style={{ fontSize: "20px", fontWeight: 800, color: isInv ? "#10b981" : (isSaldo || a.pago ? "#10b981" : "#f59e0b"), marginBottom: "14px" }}>{isSaldo ? "+" : ""}{fmt(saldoAtual(a), moeda)}</p>
               <div style={{ display: "flex", gap: "8px", marginTop: "auto", flexWrap: "wrap" }}>
-                {isConta && <button onClick={() => togglePago(a)} style={{ ...btnSm, background: a.pago ? "#fef3c7" : "#d1fae5", color: a.pago ? "#b45309" : "#047857", fontWeight: 700 }}>{a.pago ? "↩ Desmarcar" : "✓ Pagar"}</button>}
+                {isConta && !isSaldo && <button onClick={() => togglePago(a)} style={{ ...btnSm, background: a.pago ? "#fef3c7" : "#d1fae5", color: a.pago ? "#b45309" : "#047857", fontWeight: 700 }}>{a.pago ? "↩ Desmarcar" : "✓ Pagar"}</button>}
                 <button onClick={() => openModal(a)} style={btnSm}>✏️ Editar</button>
                 <button onClick={() => handleDelete(a.id)} style={{ ...btnSm, background: "#fee2e2", color: "#ef4444" }}>🗑</button>
               </div>
@@ -335,6 +345,7 @@ export default function CarteiraDetalhe() {
                     const ci = catInfo[a.categoriaInvestimento as CatInvest];
                     const isConta = a.categoria === "CONTA";
                     const isInv = a.categoria === "INVESTIMENTO";
+                    const isSaldo = isConta && a.tipo === "SALDO";
                     const temQtd = isInv && a.quantidade != null && a.valorUnitario != null;
                     const vencida = a.dataVencimento != null && a.dataVencimento < formatLocalDate(new Date());
                     return (
@@ -343,8 +354,8 @@ export default function CarteiraDetalhe() {
                           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                             <span style={{ fontWeight: 600, color: "#0f172a" }}>{a.nome}</span>
                             {isInv && ci && <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 9px", borderRadius: "var(--radius-full)", background: ci.bg, color: ci.color }}>{ci.icon} {ci.label}</span>}
-                            {isConta && <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 9px", borderRadius: "var(--radius-full)", background: "#dbeafe", color: "#1d4ed8" }}>💳 Conta</span>}
-                            {isConta && <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 9px", borderRadius: "var(--radius-full)", background: a.pago ? "#d1fae5" : "#fef3c7", color: a.pago ? "#047857" : "#b45309" }}>{a.pago ? "✅ Pago" : "⏳ Pendente"}</span>}
+                            {isConta && <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 9px", borderRadius: "var(--radius-full)", background: isSaldo ? "#d1fae5" : "#dbeafe", color: isSaldo ? "#047857" : "#1d4ed8" }}>{isSaldo ? "💰 Saldo" : "💳 Conta"}</span>}
+                            {isConta && !isSaldo && <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 9px", borderRadius: "var(--radius-full)", background: a.pago ? "#d1fae5" : "#fef3c7", color: a.pago ? "#047857" : "#b45309" }}>{a.pago ? "✅ Pago" : "⏳ Pendente"}</span>}
                           </div>
                         </td>
                         <td style={tdStyle}>
@@ -367,13 +378,13 @@ export default function CarteiraDetalhe() {
                           </span>
                         </td>
                         <td style={{ ...tdStyle, textAlign: "right" }}>
-                          <span style={{ fontSize: "15px", fontWeight: 800, color: isConta ? (a.pago ? "#10b981" : "#f59e0b") : "#10b981", whiteSpace: "nowrap" }}>{fmt(saldoAtual(a), moeda)}</span>
+                          <span style={{ fontSize: "15px", fontWeight: 800, color: isInv ? "#10b981" : (isSaldo || a.pago ? "#10b981" : "#f59e0b"), whiteSpace: "nowrap" }}>{isSaldo ? "+" : ""}{fmt(saldoAtual(a), moeda)}</span>
                         </td>
                         <td style={tdStyle}>
                           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                            {isConta && <button onClick={() => togglePago(a)} style={{ ...btnSm, background: a.pago ? "#fef3c7" : "#d1fae5", color: a.pago ? "#b45309" : "#047857", fontWeight: 700 }}>{a.pago ? "↩ Desmarcar" : "✓ Pagar"}</button>}
+                            {isConta && !isSaldo && <button onClick={() => togglePago(a)} style={{ ...btnSm, background: a.pago ? "#fef3c7" : "#d1fae5", color: a.pago ? "#b45309" : "#047857", fontWeight: 700 }}>{a.pago ? "↩ Desmarcar" : "✓ Pagar"}</button>}
                             <button onClick={() => openModal(a)} style={btnSm}>✏️ Editar</button>
-                            {isConta && <button onClick={() => setLogsConta(a)} style={btnSm} title="Ver logs">📜</button>}
+                            {isConta && !isSaldo && <button onClick={() => setLogsConta(a)} style={btnSm} title="Ver logs">📜</button>}
                             <button onClick={() => handleDelete(a.id)} style={{ ...btnSm, background: "#fee2e2", color: "#ef4444" }}>🗑</button>
                           </div>
                         </td>
@@ -388,12 +399,26 @@ export default function CarteiraDetalhe() {
       }
 
       {/* ── Modal ── */}
-      <Modal open={showModal} onClose={closeModal} title={editing ? `Editar ${itemLabel}` : `Novo ${itemLabel}`} onSubmit={handleSubmit} submitLabel="Salvar" width="540px">
+      <Modal open={showModal} onClose={closeModal} title={isInvest ? (editing ? "Editar Investimento" : "Novo Investimento") : form.tipo === "SALDO" ? (editing ? "Editar Saldo" : "Novo Saldo") : (editing ? "Editar Despesa" : "Nova Despesa")} onSubmit={handleSubmit} submitLabel="Salvar" width="540px">
         {isInvest && (
           <Select label="Categoria de Investimento" required value={form.categoriaInvestimento} onChange={e => { setForm({ ...form, categoriaInvestimento: e.target.value as CatInvest | "", nome: "", precoAtual: "", quantidade: "", valorUnitario: "", saldo: "0", instituicao: "", dataAplicacao: "", vencimento: "", rentabilidade: "" }); }} error={errors.categoriaInvestimento}>
             <option value="">Selecione...</option>
             {(Object.keys(catInfo) as CatInvest[]).map(ci => <option key={ci} value={ci}>{catInfo[ci].icon} {catInfo[ci].label}</option>)}
           </Select>
+        )}
+
+        {/* Tipo de lançamento: despesa (débito) ou saldo (crédito) */}
+        {isDespesa && (
+          <div>
+            <label style={{ fontSize: "13px", fontWeight: 600, color: "#374151", display: "block", marginBottom: "6px" }}>Tipo de lançamento *</label>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button type="button" onClick={() => setForm({ ...form, tipo: "DESPESA" })} style={tipoBtn(form.tipo === "DESPESA", "#ef4444")}>📋 Despesa</button>
+              <button type="button" onClick={() => setForm({ ...form, tipo: "SALDO", dataVencimento: "", pago: false })} style={tipoBtn(form.tipo === "SALDO", "#10b981")}>💰 Saldo</button>
+            </div>
+            <p style={{ margin: "6px 0 0", fontSize: "12px", color: "#94a3b8" }}>
+              {form.tipo === "SALDO" ? "Crédito/valor disponível que abate as despesas no saldo final." : "Conta a pagar (dívida) com data de vencimento."}
+            </p>
+          </div>
         )}
 
         {/* Ativo: autocomplete (renda variável) ou texto */}
@@ -407,12 +432,12 @@ export default function CarteiraDetalhe() {
             <Input label="Nome / Ticker / Ativo" required value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} placeholder="Ex: Tesouro Selic 2029, CDB..." error={errors.nome} />
           )
         ) : (
-          <Input label="Nome / Ticker / Ativo" required value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} placeholder="Ex: Aluguel, Internet..." error={errors.nome} />
+          <Input label={form.tipo === "SALDO" ? "Descrição do saldo" : "Nome da despesa"} required value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} placeholder={form.tipo === "SALDO" ? "Ex: Salário, Reserva, Rendimento..." : "Ex: Aluguel, Internet..."} error={errors.nome} />
         )}
 
-        {!isRendaVariavel && (<DateInput label="Data de Vencimento" value={form.dataVencimento} onChange={e => setForm({ ...form, dataVencimento: e.target.value })} error={errors.dataVencimento} required />)}
+        {!isRendaVariavel && !(isDespesa && form.tipo === "SALDO") && (<DateInput label="Data de Vencimento" value={form.dataVencimento} onChange={e => setForm({ ...form, dataVencimento: e.target.value })} error={errors.dataVencimento} required />)}
 
-        {isDespesa && (
+        {isDespesa && form.tipo === "DESPESA" && (
           <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", background: form.pago ? "#d1fae5" : "#fef3c7", borderRadius: "10px", border: `1.5px solid ${form.pago ? "#10b981" : "#f59e0b"}` }}>
             <input type="checkbox" id="pago-check" checked={form.pago} onChange={e => setForm({ ...form, pago: e.target.checked })} style={{ width: "18px", height: "18px", accentColor: "#10b981", cursor: "pointer" }} />
             <label htmlFor="pago-check" style={{ fontSize: "14px", fontWeight: 600, color: form.pago ? "#047857" : "#b45309", cursor: "pointer" }}>{form.pago ? "✅ Pago" : "⏳ Pendente"} (opcional)</label>
@@ -430,7 +455,7 @@ export default function CarteiraDetalhe() {
           </>);
         })()}
 
-        {isDespesa && (<div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "14px" }}><NumberInput label="Valor" required decimal value={form.saldo} onChange={v => setForm({ ...form, saldo: v })} error={errors.saldo} placeholder="0.00" hint="Valor da conta/despesa neste vencimento" /></div>)}
+        {isDespesa && (<div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "14px" }}><NumberInput label={form.tipo === "SALDO" ? "Valor do saldo" : "Valor"} required decimal value={form.saldo} onChange={v => setForm({ ...form, saldo: v })} error={errors.saldo} placeholder="0.00" hint={form.tipo === "SALDO" ? "Valor disponível/creditado nesta carteira" : "Valor da conta/despesa neste vencimento"} /></div>)}
       </Modal>
       {logsConta && (
         <ContaLogsModal open contaId={logsConta.id} contaNome={logsConta.nome} onClose={() => setLogsConta(null)} />
@@ -442,6 +467,8 @@ export default function CarteiraDetalhe() {
 const cardStyle: React.CSSProperties = { background: "white", borderRadius: "12px", padding: "20px", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", transition: "all 0.25s ease", display: "flex", flexDirection: "column", borderLeft: "4px solid #6366f1" };
 const btnSm: React.CSSProperties = { padding: "7px 14px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 600, background: "#f1f5f9", color: "#64748b" };
 const viewBtn = (active: boolean): React.CSSProperties => ({ padding: "7px 14px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 600, background: active ? "white" : "transparent", color: active ? "#6366f1" : "#64748b", boxShadow: active ? "0 1px 3px rgba(0,0,0,0.12)" : "none", transition: "all 0.15s ease" });
+/** Botão de seleção do tipo de lançamento (Despesa | Saldo) no modal. */
+const tipoBtn = (active: boolean, color: string): React.CSSProperties => ({ flex: 1, padding: "10px 14px", borderRadius: "10px", cursor: "pointer", fontSize: "13px", fontWeight: 700, border: `1.5px solid ${active ? color : "#e2e8f0"}`, background: active ? color : "white", color: active ? "white" : "#64748b", transition: "all 0.15s ease" });
 const statusBtn = (active: boolean, color: string): React.CSSProperties => ({ padding: "7px 14px", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: active ? 700 : 500, background: active ? color : "white", color: active ? "#fff" : "#64748b", boxShadow: active ? "0 1px 3px rgba(0,0,0,0.18)" : "0 1px 2px rgba(0,0,0,0.04)", transition: "all 0.15s ease" });
 const thStyle: React.CSSProperties = { padding: "12px 16px", fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" };
 const tdStyle: React.CSSProperties = { padding: "12px 16px", borderTop: "1px solid #f1f5f9", verticalAlign: "middle" };

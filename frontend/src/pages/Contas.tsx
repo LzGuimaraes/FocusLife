@@ -97,6 +97,11 @@ export default function Contas() {
   const mapAtivo = (x: any): Ativo => ({ id: x.id, nome: x.nome, categoria: "INVESTIMENTO", categoriaInvestimento: x.categoriaInvestimento ?? null, quantidade: x.quantidade ?? null, valorUnitario: x.valorUnitario ?? null, precoAtual: x.precoAtual ?? null, saldo: x.saldo ?? 0, instituicao: x.instituicao ?? null, dataAplicacao: x.dataAplicacao ?? null, vencimento: x.vencimento ?? null, dataVencimento: x.dataVencimento ?? null, rentabilidade: x.rentabilidade ?? null, pago: null, ativo_cadastro_id: x.ativo_cadastro_id ?? null, carteira_investimento_id: x.carteira_investimento_id ?? null, carteira_dividas_id: null });
   const mapDespesa = (x: any): Ativo => ({ id: x.id, nome: x.nome, categoria: "CONTA", categoriaInvestimento: null, quantidade: null, valorUnitario: null, precoAtual: null, saldo: x.saldo ?? 0, instituicao: null, dataAplicacao: null, vencimento: null, dataVencimento: x.dataVencimento ?? null, rentabilidade: null, pago: x.pago ?? null, ativo_cadastro_id: null, carteira_investimento_id: null, carteira_dividas_id: x.carteira_dividas_id ?? null });
 
+  // A carteira de dívidas aceita lançamentos do tipo SALDO (crédito), que NÃO são
+  // contas a pagar: ficam de fora desta tela global para não distorcer os
+  // totalizadores. Eles aparecem na página da própria carteira de dívidas.
+  const soDespesas = (arr: any[]) => (arr ?? []).filter(x => (x.tipo ?? "DESPESA") !== "SALDO");
+
   const fetchAtivos = async () => {
     setLoading(true);
     try {
@@ -106,7 +111,7 @@ export default function Contas() {
           api.get(`/despesas/all?page=0&size=200`),
         ]);
         const invest: Ativo[] = (a.data.content ?? []).map(mapAtivo);
-        const despesas: Ativo[] = (d.data.content ?? []).map(mapDespesa);
+        const despesas: Ativo[] = soDespesas(d.data.content ?? []).map(mapDespesa);
         setAtivos([...invest, ...despesas]);
       } else {
         const [tipo, id] = filterFinanca.split(":");
@@ -115,7 +120,7 @@ export default function Contas() {
           setAtivos((r.data ?? []).map(mapAtivo));
         } else {
           const r = await api.get(`/despesas/by-carteira/${id}`);
-          setAtivos((r.data ?? []).map(mapDespesa));
+          setAtivos(soDespesas(r.data ?? []).map(mapDespesa));
         }
       }
     } catch { toast.error("Erro ao carregar"); } finally { setLoading(false); }
