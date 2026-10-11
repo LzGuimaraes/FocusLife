@@ -2,6 +2,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "../auth/AuthProvider";
+import { useTema } from "../theme/ThemeProvider";
 
 interface LayoutProps { children: ReactNode; }
 
@@ -17,6 +18,7 @@ const baseNavItems = [
 
 export default function Layout({ children }: LayoutProps) {
   const { user, logout } = useAuth();
+  const { tema, alternar } = useTema();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -80,6 +82,10 @@ export default function Layout({ children }: LayoutProps) {
             <p style={{ fontSize: "13px", fontWeight: 500, color: "white", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>{user?.nome || "Usuário"}</p>
             <p style={{ fontSize: "11px", color: "#a5b4fc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>{user?.email}</p>
           </div>
+          <button onClick={alternar} aria-label="Alternar tema claro/escuro" title={tema === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro"}
+            style={{ background: "rgba(255,255,255,0.08)", color: "white", border: "none", borderRadius: "6px", padding: "5px 9px", cursor: "pointer", fontSize: "14px", lineHeight: 1, transition: "all 0.15s ease", flexShrink: 0 }}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.16)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}>{tema === "dark" ? "☀️" : "🌙"}</button>
           <button onClick={handleLogout} disabled={loggingOut} style={{ background: "rgba(239,68,68,0.15)", color: "#fca5a5", border: "none", borderRadius: "6px", padding: "5px 10px", cursor: "pointer", fontSize: "12px", fontWeight: 500, transition: "all 0.15s ease", whiteSpace: "nowrap" }}
             onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,68,68,0.3)"; }} onMouseLeave={e => { e.currentTarget.style.background = "rgba(239,68,68,0.15)"; }}>{loggingOut ? "..." : "Sair"}</button>
         </div>
@@ -89,6 +95,8 @@ export default function Layout({ children }: LayoutProps) {
           <header style={{ background: "white", padding: "12px 16px", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", display: "flex", alignItems: "center", gap: "12px", position: "sticky", top: 0, zIndex: 50 }}>
             <button onClick={() => setSidebarOpen(true)} style={{ background: "#f1f5f9", border: "none", borderRadius: "6px", padding: "8px 10px", cursor: "pointer", fontSize: "18px", display: "flex", alignItems: "center", lineHeight: 1 }}>☰</button>
             <span style={{ fontWeight: 600, fontSize: "15px", color: "#0f172a" }}>{navItems.find(i => i.path === location.pathname)?.label || "FocusLife"}</span>
+            <button onClick={alternar} aria-label="Alternar tema claro/escuro" title={tema === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro"}
+              style={{ marginLeft: "auto", background: "#f1f5f9", border: "none", borderRadius: "6px", padding: "8px 10px", cursor: "pointer", fontSize: "16px", display: "flex", alignItems: "center", lineHeight: 1 }}>{tema === "dark" ? "☀️" : "🌙"}</button>
           </header>
         )}
         <main style={{ flex: 1, padding: isDesktop ? "28px 32px" : "16px", overflow: "auto" }}>

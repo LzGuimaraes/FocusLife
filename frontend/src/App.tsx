@@ -27,12 +27,14 @@ import Metas from "./pages/Metas";
 import Estudos from "./pages/Estudos";
 import ComoFunciona from "./pages/ComoFunciona";
 import Admin from "./pages/Admin";
+import { useTema } from "./theme/ThemeProvider";
 
 export default function App() {
+  const { tema } = useTema();
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Toaster position="top-right" richColors closeButton duration={3500} theme="dark" />
+        <Toaster position="top-right" richColors closeButton duration={3500} theme={tema} />
         <Routes>
           <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/auth/login" element={<Login />} />

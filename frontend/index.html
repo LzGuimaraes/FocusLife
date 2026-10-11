@@ -6,8 +6,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0b0f22" />
     <title>FocusLifeHub</title>
+    <!-- Aplica o tema salvo ANTES do primeiro paint (evita o flash branco). -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("fl-theme");
+          document.documentElement.dataset.theme = t === "light" ? "light" : "dark";
+        } catch (e) {
+          document.documentElement.dataset.theme = "dark";
+        }
+      })();
+    </script>
+    <style>
+      html { background: #0b0f22; }
+      html[data-theme="light"] { background: #f1f5f9; }
+    </style>
   </head>
-  <body style="background: #0b0f22">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
