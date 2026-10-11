@@ -83,6 +83,8 @@ export default function AdminUsuarioDetalhe() {
         { chave: "tarefas", icone: "✓", nome: "Tarefas", descricao: "Tarefas cadastradas", contagem: usuario.resumo.tarefas },
         { chave: "metas", icone: "🎯", nome: "Metas", descricao: "Metas cadastradas", contagem: null },
         { chave: "estudos", icone: "📖", nome: "Estudos", descricao: "Registros de estudo", contagem: usuario.resumo.estudos.estudos },
+        { chave: "investimentos", icone: "📈", nome: "Investimentos", descricao: "Posições nas carteiras de investimento", contagem: usuario.resumo.financas.ativos },
+        { chave: "contas", icone: "🧾", nome: "Contas", descricao: "Contas e saldos das carteiras de dívidas", contagem: usuario.resumo.financas.despesas },
       ]
     : [];
 

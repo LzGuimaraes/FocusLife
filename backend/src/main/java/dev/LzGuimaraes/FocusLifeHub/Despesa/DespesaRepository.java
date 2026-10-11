@@ -6,6 +6,8 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -14,6 +16,36 @@ public interface DespesaRepository extends JpaRepository<DespesaModel, Long> {
     List<DespesaModel> findByCarteiraDividasId(Long carteiraId);
     List<DespesaModel> findByPagoFalseAndDataVencimento(LocalDate dataVencimento);
     List<DespesaModel> findByCarteiraDividas_UserIdAndPagoFalseAndDataVencimento(Long userId, LocalDate dataVencimento);
+
+    /**
+     * Consulta ADMIN dos lançamentos (contas/saldos) de UM usuário-alvo.
+     *
+     * O {@code userId} é SEMPRE obrigatório e aplicado junto com os filtros
+     * ({@code AND}), então nenhum filtro opcional consegue ampliar o escopo
+     * para lançamentos de outros usuários. A carteira dona vem na MESMA query
+     * (join fetch) para o admin ver nome/moeda sem N+1. Cada filtro tem uma
+     * flag de presença ({@code temTipo}/{@code temPago}): usar
+     * {@code :x is null} quebra no Postgres, que não consegue inferir o tipo
+     * de um parâmetro nulo. Pelo mesmo motivo, o filtro de pagamento usa
+     * {@code Boolean} (o {@code pago} de um SALDO é nulo): com
+     * {@code temPago=false} a primeira condição é sempre verdadeira e o valor
+     * nulo do parâmetro não filtra nada.
+     */
+    @Query(value = "select d from DespesaModel d "
+            + "join fetch d.carteiraDividas "
+            + "where d.carteiraDividas.user.id = :userId "
+            + "and (:temTipo = false or d.tipo = :tipo) "
+            + "and (:temPago = false or d.pago = :pago)",
+            countQuery = "select count(d) from DespesaModel d "
+            + "where d.carteiraDividas.user.id = :userId "
+            + "and (:temTipo = false or d.tipo = :tipo) "
+            + "and (:temPago = false or d.pago = :pago)")
+    Page<DespesaModel> buscarDoUsuario(@Param("userId") Long userId,
+                                       @Param("temTipo") boolean temTipo,
+                                       @Param("tipo") TipoLancamento tipo,
+                                       @Param("temPago") boolean temPago,
+                                       @Param("pago") Boolean pago,
+                                       Pageable pageable);
 
     /** Despesas sem carteira (dados legados): invisíveis em todas as telas. */
     List<DespesaModel> findByCarteiraDividasIsNull();

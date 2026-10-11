@@ -24,7 +24,18 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
+import dev.LzGuimaraes.FocusLifeHub.Admin.dto.AdminAtivoDTO;
+import dev.LzGuimaraes.FocusLifeHub.Admin.dto.AdminDespesaDTO;
 import dev.LzGuimaraes.FocusLifeHub.Admin.dto.AdminUserRecordsDTO;
+import dev.LzGuimaraes.FocusLifeHub.Ativo.AtivoModel;
+import dev.LzGuimaraes.FocusLifeHub.Ativo.AtivoRepository;
+import dev.LzGuimaraes.FocusLifeHub.Ativo.CategoriaInvestimento;
+import dev.LzGuimaraes.FocusLifeHub.AtivoCadastro.AtivoCadastroModel;
+import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraDividasModel;
+import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraInvestimentoModel;
+import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaModel;
+import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaRepository;
+import dev.LzGuimaraes.FocusLifeHub.Despesa.TipoLancamento;
 import dev.LzGuimaraes.FocusLifeHub.Estudos.EstudosMapper;
 import dev.LzGuimaraes.FocusLifeHub.Estudos.EstudosRepository;
 import dev.LzGuimaraes.FocusLifeHub.Estudos.dto.EstudosResponseDTO;
@@ -57,6 +68,8 @@ class AdminUserRecordsServiceTest {
     @Mock private TarefasRepository tarefasRepository;
     @Mock private MetasRepository metasRepository;
     @Mock private EstudosRepository estudosRepository;
+    @Mock private AtivoRepository ativoRepository;
+    @Mock private DespesaRepository despesaRepository;
     @Mock private TarefasMapper tarefasMapper;
     @Mock private MetasMapper metasMapper;
     @Mock private EstudosMapper estudosMapper;
@@ -207,6 +220,118 @@ class AdminUserRecordsServiceTest {
         verify(estudosRepository).buscarDoUsuario(eq(9L), eq(false), isNull(), eq(false), isNull(), eq(false), isNull(), any(Pageable.class));
     }
 
+    // ------------------------------------------------------------- INVESTIMENTOS
+
+    private AtivoModel ativo(String nome, CategoriaInvestimento categoria,
+                             String nomeCarteira, String moeda) {
+        CarteiraInvestimentoModel carteira = new CarteiraInvestimentoModel();
+        carteira.setId(30L);
+        carteira.setNome(nomeCarteira);
+        carteira.setMoeda(moeda);
+
+        AtivoModel ativo = new AtivoModel();
+        ativo.setId(5L);
+        ativo.setNome(nome);
+        ativo.setCategoriaInvestimento(categoria);
+        ativo.setQuantidade(10f);
+        ativo.setValorUnitario(30f);
+        ativo.setPrecoAtual(31f);
+        ativo.setSaldo(310f);
+        ativo.setCarteiraInvestimento(carteira);
+        return ativo;
+    }
+
+    @Test
+    void investimentosUsamOUsuarioAlvoComFiltroDeCategoriaEIncluemACarteira() {
+        AtivoModel model = ativo("PETR4", CategoriaInvestimento.ACOES, "Carteira Teste", "BRL");
+
+        when(userRepository.existsById(9L)).thenReturn(true);
+        when(ativoRepository.buscarDoUsuario(eq(9L), eq(true), eq(CategoriaInvestimento.ACOES), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(model)));
+
+        AdminUserRecordsDTO<AdminAtivoDTO> resultado =
+                service.investimentosDoUsuario(9L, CategoriaInvestimento.ACOES, PageRequest.of(0, 20));
+
+        assertThat(resultado.usuarioId()).isEqualTo(9L);
+        assertThat(resultado.pagina().getContent()).hasSize(1);
+        AdminAtivoDTO dto = resultado.pagina().getContent().get(0);
+        assertThat(dto.nome()).isEqualTo("PETR4");
+        assertThat(dto.categoriaInvestimento()).isEqualTo(CategoriaInvestimento.ACOES);
+        // Sem catálogo vinculado, o preço guardado na posição é mantido.
+        assertThat(dto.precoAtual()).isEqualTo(31f);
+        assertThat(dto.carteiraId()).isEqualTo(30L);
+        assertThat(dto.carteiraNome()).isEqualTo("Carteira Teste");
+        assertThat(dto.carteiraMoeda()).isEqualTo("BRL");
+
+        verify(ativoRepository).buscarDoUsuario(eq(9L), eq(true), eq(CategoriaInvestimento.ACOES), any(Pageable.class));
+    }
+
+    @Test
+    void precoDoCatalogoPrevaleceNaVisaoAdminComoNoEndpointComum() {
+        AtivoModel model = ativo("VALE3", CategoriaInvestimento.ACOES, "Carteira Teste", "BRL");
+        AtivoCadastroModel catalogo = new AtivoCadastroModel();
+        catalogo.setPrecoAtual(55f);
+        model.setAtivoCadastro(catalogo);
+
+        when(userRepository.existsById(9L)).thenReturn(true);
+        when(ativoRepository.buscarDoUsuario(eq(9L), eq(false), isNull(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(model)));
+
+        AdminUserRecordsDTO<AdminAtivoDTO> resultado =
+                service.investimentosDoUsuario(9L, null, PageRequest.of(0, 20));
+
+        assertThat(resultado.pagina().getContent().get(0).precoAtual()).isEqualTo(55f);
+        verify(ativoRepository).buscarDoUsuario(eq(9L), eq(false), isNull(), any(Pageable.class));
+    }
+
+    // ------------------------------------------------------------------- CONTAS
+
+    @Test
+    void contasUsamOUsuarioAlvoComFiltrosDeTipoEPagoEIncluemACarteira() {
+        CarteiraDividasModel carteira = new CarteiraDividasModel();
+        carteira.setId(40L);
+        carteira.setNome("Carteira de Dívidas");
+        carteira.setMoeda("BRL");
+
+        DespesaModel model = new DespesaModel();
+        model.setId(7L);
+        model.setNome("Aluguel");
+        model.setSaldo(1500f);
+        model.setPago(false);
+        model.setTipo(TipoLancamento.DESPESA);
+        model.setCarteiraDividas(carteira);
+
+        when(userRepository.existsById(9L)).thenReturn(true);
+        when(despesaRepository.buscarDoUsuario(eq(9L), eq(true), eq(TipoLancamento.DESPESA),
+                eq(true), eq(false), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(model)));
+
+        AdminUserRecordsDTO<AdminDespesaDTO> resultado =
+                service.contasDoUsuario(9L, TipoLancamento.DESPESA, false, PageRequest.of(0, 20));
+
+        assertThat(resultado.usuarioId()).isEqualTo(9L);
+        AdminDespesaDTO dto = resultado.pagina().getContent().get(0);
+        assertThat(dto.nome()).isEqualTo("Aluguel");
+        assertThat(dto.saldo()).isEqualTo(1500f);
+        assertThat(dto.pago()).isFalse();
+        assertThat(dto.tipo()).isEqualTo(TipoLancamento.DESPESA);
+        assertThat(dto.carteiraNome()).isEqualTo("Carteira de Dívidas");
+
+        verify(despesaRepository).buscarDoUsuario(eq(9L), eq(true), eq(TipoLancamento.DESPESA),
+                eq(true), eq(false), any(Pageable.class));
+    }
+
+    @Test
+    void contasSemFiltrosPassamFlagsFalsasJuntoComOAlvo() {
+        when(userRepository.existsById(9L)).thenReturn(true);
+        when(despesaRepository.buscarDoUsuario(eq(9L), eq(false), isNull(), eq(false), isNull(), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        service.contasDoUsuario(9L, null, null, PageRequest.of(0, 20));
+
+        verify(despesaRepository).buscarDoUsuario(eq(9L), eq(false), isNull(), eq(false), isNull(), any(Pageable.class));
+    }
+
     // ------------------------------------------------------------------- SEGURANÇA
 
     @Test
@@ -222,7 +347,14 @@ class AdminUserRecordsServiceTest {
         assertThatThrownBy(() -> service.estudosDoUsuario(99L, null, null, null, PageRequest.of(0, 20)))
                 .isInstanceOf(ResourceNotFoundException.class);
 
+        assertThatThrownBy(() -> service.investimentosDoUsuario(99L, null, PageRequest.of(0, 20)))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        assertThatThrownBy(() -> service.contasDoUsuario(99L, null, null, PageRequest.of(0, 20)))
+                .isInstanceOf(ResourceNotFoundException.class);
+
         // Nenhuma consulta de dados foi disparada para um alvo inexistente.
-        verifyNoInteractions(tarefasRepository, metasRepository, estudosRepository);
+        verifyNoInteractions(tarefasRepository, metasRepository, estudosRepository,
+                ativoRepository, despesaRepository);
     }
 }

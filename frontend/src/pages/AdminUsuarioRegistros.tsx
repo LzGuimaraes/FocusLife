@@ -7,32 +7,62 @@ import { Select, DateInput } from "../components/Form";
 import { Button } from "../components/Shared";
 import { PageHeader, Spinner, EmptyState, ErrorState, Pagination, StatusBadge, PrioridadeBadge, ProgressBar } from "../components/UI";
 import { parseLocalDate } from "../utils/date";
+import { fmtUnidades } from "../utils/numeros";
+import { categoriaDespesaInfo, type CategoriaDespesa } from "../types/despesas";
 
 /* Consultas ADMIN de leitura dos registros de UM usuário-alvo
    (GET /admin/users/{usuarioId}/{modulo}). O backend é quem garante o escopo:
    o id vem do caminho da URL e é aplicado como filtro obrigatório. */
 
-type Modulo = "tarefas" | "metas" | "estudos";
+type Modulo = "tarefas" | "metas" | "estudos" | "investimentos" | "contas";
 
 interface TarefaAdmin { id: number; titulo: string; status: string; prioridade: string; prazo: string | null; horario: string | null; }
 interface MetaAdmin { id: number; titulo: string; descricao: string | null; prograsso: number; prazo: string | null; status: string; }
 interface EstudoAdmin { id: number; nome: string; duracao_min: number; data: string | null; notas: string | null; materia_id: number | null; }
-type Registro = TarefaAdmin | MetaAdmin | EstudoAdmin;
+interface InvestimentoAdmin { id: number; nome: string; categoriaInvestimento: string | null; quantidade: number | null; valorUnitario: number | null; precoAtual: number | null; saldo: number; instituicao: string | null; dataAplicacao: string | null; vencimento: string | null; dataVencimento: string | null; rentabilidade: number | null; carteiraNome: string | null; carteiraMoeda: string | null; }
+interface ContaAdmin { id: number; nome: string; saldo: number; dataVencimento: string | null; pago: boolean | null; tipo: string; categoria: CategoriaDespesa | null; carteiraNome: string | null; carteiraMoeda: string | null; }
+type Registro = TarefaAdmin | MetaAdmin | EstudoAdmin | InvestimentoAdmin | ContaAdmin;
 
 interface UsuarioResumo { id: number; nome: string; email: string; }
 
 const TAMANHO_PAGINA = 10;
 
+/* Rótulos/cores das classes de investimento — mesmos do formulário de posições
+   (CarteiraDetalhe/Contas), aqui só para exibir o badge e o filtro. */
+const catInvestInfo: Record<string, { icon: string; label: string; color: string }> = {
+  RENDA_FIXA: { icon: "📊", label: "Renda Fixa", color: "#3b82f6" },
+  TESOURO_DIRETO: { icon: "🏛️", label: "Tesouro Direto", color: "#10b981" },
+  ACOES: { icon: "📈", label: "Ações", color: "#6366f1" },
+  FIIS: { icon: "🏢", label: "FIIs", color: "#8b5cf6" },
+  ETFS: { icon: "📦", label: "ETFs", color: "#06b6d4" },
+  CRIPTOMOEDAS: { icon: "₿", label: "Criptomoedas", color: "#f59e0b" },
+  OUTROS: { icon: "📦", label: "Outros", color: "#64748b" },
+};
+
+/** Classes oferecidas no filtro: as mesmas do cadastro de posições (sem "Outros"). */
+const classesInvestimento = ["RENDA_FIXA", "TESOURO_DIRETO", "ACOES", "FIIS", "ETFS", "CRIPTOMOEDAS"] as const;
+
+const moedaSimbolo: Record<string, string> = { BRL: "R$", USD: "$", EUR: "€", GBP: "£", JPY: "¥" };
+const fmtMoeda = (v: number | null | undefined, m: string | null) => {
+  if (v == null) return "—";
+  const simbolo = m ? (moedaSimbolo[m] || m) : "R$";
+  return `${simbolo} ${v.toFixed(2)}`;
+};
+
 const MODULO_INFO: Record<Modulo, { icone: string; titulo: string; tituloVazio: string; vazio: string; plural: string }> = {
   tarefas: { icone: "✓", titulo: "Tarefas", tituloVazio: "Nenhuma tarefa", vazio: "Este usuário ainda não possui tarefas cadastradas.", plural: "tarefas" },
   metas: { icone: "🎯", titulo: "Metas", tituloVazio: "Nenhuma meta", vazio: "Este usuário ainda não possui metas cadastradas.", plural: "metas" },
   estudos: { icone: "📖", titulo: "Estudos", tituloVazio: "Nenhum registro de estudo", vazio: "Este usuário ainda não possui registros de estudo.", plural: "registros de estudo" },
+  investimentos: { icone: "📈", titulo: "Investimentos", tituloVazio: "Nenhum investimento", vazio: "Este usuário ainda não possui investimentos nas carteiras.", plural: "investimentos" },
+  contas: { icone: "🧾", titulo: "Contas", tituloVazio: "Nenhum lançamento", vazio: "Este usuário ainda não possui contas ou saldos nas carteiras de dívidas.", plural: "contas" },
 };
 
 const ABAS: { id: Modulo; label: string; icon: string }[] = [
   { id: "tarefas", label: "Tarefas", icon: "✓" },
   { id: "metas", label: "Metas", icon: "🎯" },
   { id: "estudos", label: "Estudos", icon: "📖" },
+  { id: "investimentos", label: "Investimentos", icon: "📈" },
+  { id: "contas", label: "Contas", icon: "🧾" },
 ];
 
 const fmtData = (d: string | null) => (d ? parseLocalDate(d).toLocaleDateString("pt-BR") : "—");
@@ -58,11 +88,18 @@ export default function AdminUsuarioRegistros({ modulo }: { modulo: Modulo }) {
   const [filtroPrioridade, setFiltroPrioridade] = useState("");
   const [de, setDe] = useState("");
   const [ate, setAte] = useState("");
+  const [filtroClasse, setFiltroClasse] = useState("");
+  const [filtroTipo, setFiltroTipo] = useState("");
+  const [filtroPago, setFiltroPago] = useState("");
 
   const temFiltro =
     modulo === "estudos"
       ? de !== "" || ate !== ""
-      : filtroStatus !== "" || (modulo === "tarefas" && filtroPrioridade !== "");
+      : modulo === "investimentos"
+        ? filtroClasse !== ""
+        : modulo === "contas"
+          ? filtroTipo !== "" || filtroPago !== ""
+          : filtroStatus !== "" || (modulo === "tarefas" && filtroPrioridade !== "");
 
   /* Nome/e-mail do usuário para o cabeçalho (best effort: se falhar, mostramos
      só o id — os dados de verdade vêm da consulta de registros). */
@@ -86,9 +123,14 @@ export default function AdminUsuarioRegistros({ modulo }: { modulo: Modulo }) {
           if (filtroPrioridade) params.prioridade = filtroPrioridade;
         } else if (modulo === "metas") {
           if (filtroStatus) params.status = filtroStatus;
-        } else {
+        } else if (modulo === "estudos") {
           if (de) params.de = de;
           if (ate) params.ate = ate;
+        } else if (modulo === "investimentos") {
+          if (filtroClasse) params.categoria = filtroClasse;
+        } else {
+          if (filtroTipo) params.tipo = filtroTipo;
+          if (filtroPago) params.pago = filtroPago;
         }
         const res = await api.get(`/admin/users/${usuarioId}/${modulo}`, { params });
         if (!ativo) return;
@@ -103,13 +145,16 @@ export default function AdminUsuarioRegistros({ modulo }: { modulo: Modulo }) {
       }
     })();
     return () => { ativo = false; };
-  }, [usuarioId, modulo, pagina, filtroStatus, filtroPrioridade, de, ate, tentativa]);
+  }, [usuarioId, modulo, pagina, filtroStatus, filtroPrioridade, de, ate, filtroClasse, filtroTipo, filtroPago, tentativa]);
 
   const alterarStatus = (v: string) => { setFiltroStatus(v); setPagina(0); };
   const alterarPrioridade = (v: string) => { setFiltroPrioridade(v); setPagina(0); };
   const alterarDe = (v: string) => { setDe(v); setPagina(0); };
   const alterarAte = (v: string) => { setAte(v); setPagina(0); };
-  const limparFiltros = () => { setFiltroStatus(""); setFiltroPrioridade(""); setDe(""); setAte(""); setPagina(0); };
+  const alterarClasse = (v: string) => { setFiltroClasse(v); setPagina(0); };
+  const alterarTipo = (v: string) => { setFiltroTipo(v); setPagina(0); };
+  const alterarPago = (v: string) => { setFiltroPago(v); setPagina(0); };
+  const limparFiltros = () => { setFiltroStatus(""); setFiltroPrioridade(""); setDe(""); setAte(""); setFiltroClasse(""); setFiltroTipo(""); setFiltroPago(""); setPagina(0); };
 
   return (
     <Layout>
@@ -189,6 +234,34 @@ export default function AdminUsuarioRegistros({ modulo }: { modulo: Modulo }) {
             </div>
           </>
         )}
+        {modulo === "investimentos" && (
+          <div style={{ width: "200px" }}>
+            <Select label="Classe" value={filtroClasse} onChange={(e) => alterarClasse(e.target.value)}>
+              <option value="">Todas</option>
+              {classesInvestimento.map((c) => (
+                <option key={c} value={c}>{catInvestInfo[c].icon} {catInvestInfo[c].label}</option>
+              ))}
+            </Select>
+          </div>
+        )}
+        {modulo === "contas" && (
+          <>
+            <div style={{ width: "180px" }}>
+              <Select label="Tipo" value={filtroTipo} onChange={(e) => alterarTipo(e.target.value)}>
+                <option value="">Todos</option>
+                <option value="DESPESA">💳 Contas</option>
+                <option value="SALDO">💰 Saldos</option>
+              </Select>
+            </div>
+            <div style={{ width: "180px" }}>
+              <Select label="Pagamento" value={filtroPago} onChange={(e) => alterarPago(e.target.value)}>
+                <option value="">Todos</option>
+                <option value="true">✅ Pagas</option>
+                <option value="false">⏳ Não pagas</option>
+              </Select>
+            </div>
+          </>
+        )}
         {temFiltro && <Button variant="ghost" size="sm" onClick={limparFiltros}>Limpar filtros</Button>}
       </div>
 
@@ -256,6 +329,52 @@ export default function AdminUsuarioRegistros({ modulo }: { modulo: Modulo }) {
                 </div>
               </div>
             ))}
+            {modulo === "investimentos" && (registros as InvestimentoAdmin[]).map((i) => {
+              const ci = i.categoriaInvestimento ? catInvestInfo[i.categoriaInvestimento] : null;
+              const temQtd = i.quantidade != null && i.valorUnitario != null;
+              return (
+                <div key={i.id} style={linhaStyle}>
+                  <div style={{ flex: 1, minWidth: "220px" }}>
+                    <p style={linhaTitulo}>{i.nome}</p>
+                    <p style={linhaInfo}>
+                      {temQtd ? `📦 ${fmtUnidades(i.quantidade!, Number.isInteger(i.quantidade!))} · Médio ${fmtMoeda(i.valorUnitario, i.carteiraMoeda)} · ` : ""}
+                      Atual {fmtMoeda(i.precoAtual, i.carteiraMoeda)}
+                      {i.instituicao ? ` · 🏦 ${i.instituicao}` : ""}
+                    </p>
+                    <p style={{ ...linhaInfo, marginTop: "4px" }}>
+                      🗂 {i.carteiraNome ?? "—"}
+                      {i.vencimento ? ` · ⏳ ${i.vencimento}` : i.dataVencimento ? ` · ⏳ vence ${fmtData(i.dataVencimento)}` : ""}
+                      {` · ID #${i.id}`}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                    {ci && <span style={{ fontSize: "12px", fontWeight: 600, padding: "3px 10px", borderRadius: "var(--radius-full)", background: `${ci.color}1f`, color: ci.color }}>{ci.icon} {ci.label}</span>}
+                    <span style={{ fontSize: "14px", fontWeight: 800, color: "var(--color-success)", whiteSpace: "nowrap" }}>{fmtMoeda(i.saldo, i.carteiraMoeda)}</span>
+                  </div>
+                </div>
+              );
+            })}
+            {modulo === "contas" && (registros as ContaAdmin[]).map((c) => {
+              const isSaldo = c.tipo === "SALDO";
+              const cd = c.categoria ? categoriaDespesaInfo[c.categoria] : null;
+              return (
+                <div key={c.id} style={linhaStyle}>
+                  <div style={{ flex: 1, minWidth: "220px" }}>
+                    <p style={linhaTitulo}>{c.nome}</p>
+                    <p style={linhaInfo}>
+                      {isSaldo ? "💰 Crédito disponível" : `📅 ${c.dataVencimento ? `vence ${fmtData(c.dataVencimento)}` : "sem vencimento"}`}
+                      {` · 🗂 ${c.carteiraNome ?? "—"} · ID #${c.id}`}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                    <span style={{ fontSize: "12px", fontWeight: 600, padding: "3px 10px", borderRadius: "var(--radius-full)", background: isSaldo ? "var(--color-success-light)" : "var(--color-info-light)", color: isSaldo ? "var(--color-success)" : "var(--color-info)" }}>{isSaldo ? "💰 Saldo" : "💳 Conta"}</span>
+                    {!isSaldo && <span style={{ fontSize: "12px", fontWeight: 700, padding: "3px 10px", borderRadius: "var(--radius-full)", background: c.pago ? "var(--color-success-light)" : "var(--color-warning-light)", color: c.pago ? "var(--color-success)" : "var(--color-warning)" }}>{c.pago ? "✅ Pago" : "⏳ Pendente"}</span>}
+                    {cd && <span style={{ fontSize: "12px", fontWeight: 600, padding: "3px 10px", borderRadius: "var(--radius-full)", background: `${cd.cor}1f`, color: cd.cor }}>{cd.icon} {cd.label}</span>}
+                    <span style={{ fontSize: "14px", fontWeight: 800, whiteSpace: "nowrap", color: isSaldo || c.pago ? "var(--color-success)" : "var(--color-warning)" }}>{isSaldo ? "+" : ""}{fmtMoeda(c.saldo, c.carteiraMoeda)}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
           <Pagination page={pagina} totalPages={totalPaginas} onChange={setPagina} ariaLabel={`Paginação de ${info.plural}`} />
         </>

@@ -25,7 +25,11 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import dev.LzGuimaraes.FocusLifeHub.Admin.dto.AdminAtivoDTO;
+import dev.LzGuimaraes.FocusLifeHub.Admin.dto.AdminDespesaDTO;
 import dev.LzGuimaraes.FocusLifeHub.Admin.dto.AdminUserRecordsDTO;
+import dev.LzGuimaraes.FocusLifeHub.Ativo.CategoriaInvestimento;
+import dev.LzGuimaraes.FocusLifeHub.Despesa.TipoLancamento;
 import dev.LzGuimaraes.FocusLifeHub.Estudos.dto.EstudosResponseDTO;
 import dev.LzGuimaraes.FocusLifeHub.Exceptions.ResourceNotFoundException;
 import dev.LzGuimaraes.FocusLifeHub.Metas.Enum.MetaStatus;
@@ -114,6 +118,20 @@ class AdminUserRecordsControllerTest {
         return new AdminUserRecordsDTO<>(alvo, new PageImpl<>(List.of(dto)));
     }
 
+    private AdminUserRecordsDTO<AdminAtivoDTO> paginaDeInvestimentos(Long alvo) {
+        AdminAtivoDTO dto = new AdminAtivoDTO(
+                400L, "PETR4", CategoriaInvestimento.ACOES, 10f, 30f, 33f, 330f,
+                "Corretora X", null, null, null, null, 30L, "Carteira do alvo", "BRL");
+        return new AdminUserRecordsDTO<>(alvo, new PageImpl<>(List.of(dto)));
+    }
+
+    private AdminUserRecordsDTO<AdminDespesaDTO> paginaDeContas(Long alvo) {
+        AdminDespesaDTO dto = new AdminDespesaDTO(
+                500L, "Aluguel", 1500f, LocalDate.of(2026, 11, 5), false,
+                TipoLancamento.DESPESA, null, 40L, "Dívidas do alvo", "BRL");
+        return new AdminUserRecordsDTO<>(alvo, new PageImpl<>(List.of(dto)));
+    }
+
     // ------------------------------------------------------------------ ADMIN OK
 
     @Test
@@ -185,6 +203,46 @@ class AdminUserRecordsControllerTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void adminConsultaInvestimentosDoUsuarioSelecionadoComFiltroDeCategoria() throws Exception {
+        UserModel admin = user(1L, Role.ADMIN, true);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(adminUserRecordsService.investimentosDoUsuario(eq(9L), eq(CategoriaInvestimento.ACOES), any(Pageable.class)))
+                .thenReturn(paginaDeInvestimentos(9L));
+
+        mockMvc.perform(get("/admin/users/9/investimentos")
+                        .param("categoria", "ACOES")
+                        .cookie(jwtCookie(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usuarioId").value(9))
+                .andExpect(jsonPath("$.pagina.content[0].nome").value("PETR4"))
+                .andExpect(jsonPath("$.pagina.content[0].carteiraNome").value("Carteira do alvo"))
+                .andExpect(jsonPath("$.pagina.totalElements").value(1));
+
+        // O alvo é o 9 (do caminho) e o filtro vai JUNTO — nunca troca o dono.
+        verify(adminUserRecordsService).investimentosDoUsuario(eq(9L), eq(CategoriaInvestimento.ACOES), any(Pageable.class));
+    }
+
+    @Test
+    void adminConsultaContasDoUsuarioSelecionadoComFiltrosDeTipoEPago() throws Exception {
+        UserModel admin = user(1L, Role.ADMIN, true);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(adminUserRecordsService.contasDoUsuario(eq(9L), eq(TipoLancamento.DESPESA), eq(false), any(Pageable.class)))
+                .thenReturn(paginaDeContas(9L));
+
+        mockMvc.perform(get("/admin/users/9/contas")
+                        .param("tipo", "DESPESA")
+                        .param("pago", "false")
+                        .cookie(jwtCookie(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usuarioId").value(9))
+                .andExpect(jsonPath("$.pagina.content[0].nome").value("Aluguel"))
+                .andExpect(jsonPath("$.pagina.content[0].pago").value(false))
+                .andExpect(jsonPath("$.pagina.content[0].carteiraNome").value("Dívidas do alvo"));
+
+        verify(adminUserRecordsService).contasDoUsuario(eq(9L), eq(TipoLancamento.DESPESA), eq(false), any(Pageable.class));
+    }
+
     // ------------------------------------------------------------- NÃO AUTORIZADO
 
     @Test
@@ -196,6 +254,8 @@ class AdminUserRecordsControllerTest {
         mockMvc.perform(get("/admin/users/9/tarefas").cookie(cookie)).andExpect(status().isForbidden());
         mockMvc.perform(get("/admin/users/9/metas").cookie(cookie)).andExpect(status().isForbidden());
         mockMvc.perform(get("/admin/users/9/estudos").cookie(cookie)).andExpect(status().isForbidden());
+        mockMvc.perform(get("/admin/users/9/investimentos").cookie(cookie)).andExpect(status().isForbidden());
+        mockMvc.perform(get("/admin/users/9/contas").cookie(cookie)).andExpect(status().isForbidden());
 
         // Nem chega a consultar: a barreira é a autorização, não o serviço.
         verifyNoInteractions(adminUserRecordsService);

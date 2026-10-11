@@ -69,6 +69,8 @@ export default function App() {
           <Route path="/admin/usuarios/:id/tarefas" element={<PrivateRoute requireAdmin><AdminUsuarioRegistros key="tarefas" modulo="tarefas" /></PrivateRoute>} />
           <Route path="/admin/usuarios/:id/metas" element={<PrivateRoute requireAdmin><AdminUsuarioRegistros key="metas" modulo="metas" /></PrivateRoute>} />
           <Route path="/admin/usuarios/:id/estudos" element={<PrivateRoute requireAdmin><AdminUsuarioRegistros key="estudos" modulo="estudos" /></PrivateRoute>} />
+          <Route path="/admin/usuarios/:id/investimentos" element={<PrivateRoute requireAdmin><AdminUsuarioRegistros key="investimentos" modulo="investimentos" /></PrivateRoute>} />
+          <Route path="/admin/usuarios/:id/contas" element={<PrivateRoute requireAdmin><AdminUsuarioRegistros key="contas" modulo="contas" /></PrivateRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

@@ -11,7 +11,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import dev.LzGuimaraes.FocusLifeHub.Admin.dto.AdminAtivoDTO;
+import dev.LzGuimaraes.FocusLifeHub.Admin.dto.AdminDespesaDTO;
 import dev.LzGuimaraes.FocusLifeHub.Admin.dto.AdminUserRecordsDTO;
+import dev.LzGuimaraes.FocusLifeHub.Ativo.CategoriaInvestimento;
+import dev.LzGuimaraes.FocusLifeHub.Despesa.TipoLancamento;
 import dev.LzGuimaraes.FocusLifeHub.Estudos.dto.EstudosResponseDTO;
 import dev.LzGuimaraes.FocusLifeHub.Metas.Enum.MetaStatus;
 import dev.LzGuimaraes.FocusLifeHub.Metas.dto.MetasResponseDTO;
@@ -78,5 +82,31 @@ public class AdminUserRecordsController {
             @RequestParam(name = "ate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate ate,
             Pageable pageable) {
         return ResponseEntity.ok(adminUserRecordsService.estudosDoUsuario(usuarioId, materiaId, de, ate, pageable));
+    }
+
+    /**
+     * Posições de investimento do usuário-alvo (inclui a carteira dona).
+     * {@code GET /admin/users/{usuarioId}/investimentos?categoria=&page=&size=&sort=}
+     */
+    @GetMapping("/investimentos")
+    public ResponseEntity<AdminUserRecordsDTO<AdminAtivoDTO>> investimentos(
+            @PathVariable("usuarioId") Long usuarioId,
+            @RequestParam(name = "categoria", required = false) CategoriaInvestimento categoria,
+            Pageable pageable) {
+        return ResponseEntity.ok(adminUserRecordsService.investimentosDoUsuario(usuarioId, categoria, pageable));
+    }
+
+    /**
+     * Contas (despesas) e saldos do usuário-alvo, com filtro opcional de tipo e
+     * de pagamento (inclui a carteira dona).
+     * {@code GET /admin/users/{usuarioId}/contas?tipo=&pago=&page=&size=&sort=}
+     */
+    @GetMapping("/contas")
+    public ResponseEntity<AdminUserRecordsDTO<AdminDespesaDTO>> contas(
+            @PathVariable("usuarioId") Long usuarioId,
+            @RequestParam(name = "tipo", required = false) TipoLancamento tipo,
+            @RequestParam(name = "pago", required = false) Boolean pago,
+            Pageable pageable) {
+        return ResponseEntity.ok(adminUserRecordsService.contasDoUsuario(usuarioId, tipo, pago, pageable));
     }
 }

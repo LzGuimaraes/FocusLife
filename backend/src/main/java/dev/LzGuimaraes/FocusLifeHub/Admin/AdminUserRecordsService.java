@@ -9,7 +9,16 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import dev.LzGuimaraes.FocusLifeHub.Admin.dto.AdminAtivoDTO;
+import dev.LzGuimaraes.FocusLifeHub.Admin.dto.AdminDespesaDTO;
 import dev.LzGuimaraes.FocusLifeHub.Admin.dto.AdminUserRecordsDTO;
+import dev.LzGuimaraes.FocusLifeHub.Ativo.AtivoModel;
+import dev.LzGuimaraes.FocusLifeHub.Ativo.AtivoRepository;
+import dev.LzGuimaraes.FocusLifeHub.Ativo.CategoriaInvestimento;
+import dev.LzGuimaraes.FocusLifeHub.Carteira.CarteiraInvestimentoModel;
+import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaModel;
+import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaRepository;
+import dev.LzGuimaraes.FocusLifeHub.Despesa.TipoLancamento;
 import dev.LzGuimaraes.FocusLifeHub.Estudos.EstudosMapper;
 import dev.LzGuimaraes.FocusLifeHub.Estudos.EstudosRepository;
 import dev.LzGuimaraes.FocusLifeHub.Estudos.dto.EstudosResponseDTO;
@@ -46,8 +55,9 @@ import dev.LzGuimaraes.FocusLifeHub.User.UserRepository;
  * Os serviços comuns (ex.: {@code TarefasService}) resolvem o usuário pelo
  * {@code SecurityContext}; reusá-los aqui devolveria os dados do PRÓPRIO admin,
  * não os do alvo, e comprometeria a autorização. Por isso esta camada lê
- * direto dos repositórios por {@code userId} e reusa apenas os MAPPERS
- * existentes (mapeamento puro, sem regra de negócio) — sem duplicar contrato de
+ * direto dos repositórios por {@code userId} e reusa os MAPPERS existentes ou
+ * faz mapeamento local puro (quando o DTO administrativo ganha campo extra,
+ * como a carteira dona de investimentos/contas) — sem duplicar contrato de
  * resposta nem reimplementar regras.
  *
  * SEM ESCRITA
@@ -63,11 +73,14 @@ public class AdminUserRecordsService {
     private static final Sort TAREFAS_ORDEM_PADRAO = Sort.by(Sort.Direction.DESC, "id");
     private static final Sort METAS_ORDEM_PADRAO = Sort.by(Sort.Direction.DESC, "id");
     private static final Sort ESTUDOS_ORDEM_PADRAO = Sort.by(Sort.Direction.DESC, "data").and(Sort.by(Sort.Direction.DESC, "id"));
+    private static final Sort FINANCEIRO_ORDEM_PADRAO = Sort.by(Sort.Direction.DESC, "id");
 
     private final UserRepository userRepository;
     private final TarefasRepository tarefasRepository;
     private final MetasRepository metasRepository;
     private final EstudosRepository estudosRepository;
+    private final AtivoRepository ativoRepository;
+    private final DespesaRepository despesaRepository;
     private final TarefasMapper tarefasMapper;
     private final MetasMapper metasMapper;
     private final EstudosMapper estudosMapper;
@@ -76,6 +89,8 @@ public class AdminUserRecordsService {
                                    TarefasRepository tarefasRepository,
                                    MetasRepository metasRepository,
                                    EstudosRepository estudosRepository,
+                                   AtivoRepository ativoRepository,
+                                   DespesaRepository despesaRepository,
                                    TarefasMapper tarefasMapper,
                                    MetasMapper metasMapper,
                                    EstudosMapper estudosMapper) {
@@ -83,6 +98,8 @@ public class AdminUserRecordsService {
         this.tarefasRepository = tarefasRepository;
         this.metasRepository = metasRepository;
         this.estudosRepository = estudosRepository;
+        this.ativoRepository = ativoRepository;
+        this.despesaRepository = despesaRepository;
         this.tarefasMapper = tarefasMapper;
         this.metasMapper = metasMapper;
         this.estudosMapper = estudosMapper;
@@ -131,6 +148,96 @@ public class AdminUserRecordsService {
                         sanitizar(pageable, ESTUDOS_ORDEM_PADRAO))
                 .map(estudosMapper::toResponse);
         return new AdminUserRecordsDTO<>(usuarioId, pagina);
+    }
+
+    /**
+     * Posições de investimento de um usuário-alvo, com filtro opcional de
+     * classe ({@link CategoriaInvestimento}).
+     *
+     * A posse vem da carteira ({@code ativo.carteira_investimento_id ->
+     * carteira_investimento.user_id}) e é aplicada no banco junto com o filtro
+     * ({@code AND}), então nenhum parâmetro amplia o escopo para terceiros.
+     * Aqui não existe mapper compartilhado (o DTO administrativo ganhou a
+     * carteira dona), então o mapeamento é local e puro.
+     */
+    @Transactional(readOnly = true)
+    public AdminUserRecordsDTO<AdminAtivoDTO> investimentosDoUsuario(Long usuarioId,
+                                                                     CategoriaInvestimento categoria,
+                                                                     Pageable pageable) {
+        validarUsuarioAlvo(usuarioId);
+        Page<AdminAtivoDTO> pagina = ativoRepository
+                .buscarDoUsuario(usuarioId, categoria != null, categoria, sanitizar(pageable, FINANCEIRO_ORDEM_PADRAO))
+                .map(this::toAdminAtivo);
+        return new AdminUserRecordsDTO<>(usuarioId, pagina);
+    }
+
+    /**
+     * Lançamentos (contas a pagar e saldos) de um usuário-alvo, com filtros
+     * opcionais de tipo e de pagamento.
+     *
+     * A posse vem da carteira ({@code despesa.carteira_dividas_id ->
+     * carteira_dividas.user_id}) e é aplicada no banco junto com os filtros
+     * ({@code AND}), então nenhum parâmetro amplia o escopo para terceiros.
+     * Um {@code pago=false} devolve só despesas não pagas: SALDOS têm
+     * {@code pago} nulo e ficam de fora (use o filtro de tipo para vê-los).
+     */
+    @Transactional(readOnly = true)
+    public AdminUserRecordsDTO<AdminDespesaDTO> contasDoUsuario(Long usuarioId,
+                                                                TipoLancamento tipo,
+                                                                Boolean pago,
+                                                                Pageable pageable) {
+        validarUsuarioAlvo(usuarioId);
+        Page<AdminDespesaDTO> pagina = despesaRepository
+                .buscarDoUsuario(usuarioId, tipo != null, tipo, pago != null, pago, sanitizar(pageable, FINANCEIRO_ORDEM_PADRAO))
+                .map(this::toAdminDespesa);
+        return new AdminUserRecordsDTO<>(usuarioId, pagina);
+    }
+
+    /**
+     * Mapeamento puro posição → DTO administrativo. O preço atual segue a MESMA
+     * regra do endpoint comum: o preço do catálogo vinculado prevalece sobre o
+     * guardado na posição (a carteira e o catálogo vêm por join fetch).
+     */
+    private AdminAtivoDTO toAdminAtivo(AtivoModel ativo) {
+        CarteiraInvestimentoModel carteira = ativo.getCarteiraInvestimento();
+
+        Float precoAtual = ativo.getPrecoAtual();
+        if (ativo.getAtivoCadastro() != null && ativo.getAtivoCadastro().getPrecoAtual() != null) {
+            precoAtual = ativo.getAtivoCadastro().getPrecoAtual();
+        }
+
+        return new AdminAtivoDTO(
+                ativo.getId(),
+                ativo.getNome(),
+                ativo.getCategoriaInvestimento(),
+                ativo.getQuantidade(),
+                ativo.getValorUnitario(),
+                precoAtual,
+                ativo.getSaldo(),
+                ativo.getInstituicao(),
+                ativo.getDataAplicacao(),
+                ativo.getVencimento(),
+                ativo.getDataVencimento(),
+                ativo.getRentabilidade(),
+                carteira != null ? carteira.getId() : null,
+                carteira != null ? carteira.getNome() : null,
+                carteira != null ? carteira.getMoeda() : null);
+    }
+
+    /** Mapeamento puro lançamento → DTO administrativo (mesmos campos que o usuário vê). */
+    private AdminDespesaDTO toAdminDespesa(DespesaModel despesa) {
+        var carteira = despesa.getCarteiraDividas();
+        return new AdminDespesaDTO(
+                despesa.getId(),
+                despesa.getNome(),
+                despesa.getSaldo(),
+                despesa.getDataVencimento(),
+                despesa.getPago(),
+                despesa.getTipo() != null ? despesa.getTipo() : TipoLancamento.DESPESA,
+                despesa.getCategoria(),
+                carteira != null ? carteira.getId() : null,
+                carteira != null ? carteira.getNome() : null,
+                carteira != null ? carteira.getMoeda() : null);
     }
 
     private void validarUsuarioAlvo(Long usuarioId) {
