@@ -15,7 +15,7 @@ interface Aba {
 }
 
 const ABAS: Aba[] = [
-  { id: "visao", label: "Visão geral", icon: "📐", path: "/planejamento" },
+  { id: "visao", label: "Organização", icon: "📐", path: "/planejamento" },
   { id: "carteira-ideal", label: "Carteira Ideal", icon: "🎯", path: "/planejamento/carteira-ideal" },
   { id: "avaliacao", label: "Avaliação", icon: "✅", path: "/avaliacao" },
   { id: "notas", label: "Notas por subclasse", icon: "📝", path: "/avaliacao/notas" },

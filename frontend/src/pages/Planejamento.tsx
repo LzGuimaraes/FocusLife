@@ -68,7 +68,7 @@ export default function Planejamento() {
       <PlanejamentoNav ativo="visao" />
       <PageHeader
         icon="📐"
-        title="Planejamento"
+        title="Organização"
         subtitle="Sua metodologia de investimentos: metas, avaliações e prioridades de aporte"
       />
       <CardGrid>

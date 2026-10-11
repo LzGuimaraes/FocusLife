@@ -9,6 +9,8 @@ import ResetPassword from "./pages/ResetPassword";
 import ActivateAccount from "./pages/ActivateAccount";
 import Dashboard from "./pages/Dashboard";
 import Financas from "./pages/Financas";
+import FinancasCarteiras from "./pages/FinancasCarteiras";
+import ComprasVendas from "./pages/ComprasVendas";
 import CarteiraDetalhe from "./pages/CarteiraDetalhe";
 import Contas from "./pages/Contas";
 import Planejamento from "./pages/Planejamento";
@@ -40,6 +42,8 @@ export default function App() {
           <Route path="/auth/activate" element={<ActivateAccount />} />
           <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/financas" element={<PrivateRoute><Financas /></PrivateRoute>} />
+          <Route path="/financas/carteiras" element={<PrivateRoute><FinancasCarteiras /></PrivateRoute>} />
+          <Route path="/financas/compras-vendas" element={<PrivateRoute><ComprasVendas /></PrivateRoute>} />
           <Route path="/financas/carteiras/:tipo/:id" element={<PrivateRoute><CarteiraDetalhe /></PrivateRoute>} />
           <Route path="/contas" element={<PrivateRoute><Contas /></PrivateRoute>} />
           <Route path="/planejamento" element={<PrivateRoute><Planejamento /></PrivateRoute>} />

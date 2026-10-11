@@ -12,7 +12,6 @@ const baseNavItems = [
   { path: "/treinos",   label: "Treinos",   icon: "💪", color: "#8b5cf6" },
   { path: "/metas",     label: "Metas",     icon: "🎯", color: "#f59e0b" },
   { path: "/financas",  label: "Finanças",  icon: "💰", color: "#10b981" },
-  { path: "/planejamento", label: "Planejamento", icon: "📐", color: "#6366f1" },
   { path: "/como-funciona", label: "Como Funciona", icon: "❓", color: "#8b5cf6" },
 ];
 
@@ -65,7 +64,7 @@ export default function Layout({ children }: LayoutProps) {
           {navItems.map((item) => {
             const active = location.pathname === item.path
               || (item.path === "/dashboard" && location.pathname === "/")
-              || (item.path === "/planejamento" && location.pathname.startsWith("/planejamento"));
+              || (item.path === "/financas" && location.pathname.startsWith("/financas"));
             return (
               <button key={item.path} onClick={() => { navigate(item.path); setSidebarOpen(false); }}
                 style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", borderRadius: "8px", background: active ? "rgba(99,102,241,0.2)" : "transparent", color: active ? "white" : "#c7d2fe", border: "none", cursor: "pointer", fontSize: "14px", fontWeight: active ? 600 : 400, transition: "all 0.15s ease", textAlign: "left" as const, width: "100%" }}

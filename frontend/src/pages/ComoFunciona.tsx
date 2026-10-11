@@ -13,6 +13,21 @@ const features = [
     ],
   },
   {
+    icon: "🔄", title: "Compras/Vendas (lucro por operação)",
+    color: "#0ea5e9", bg: "#f0f9ff",
+    desc: "Registre a compra e a venda de um ativo e acompanhe, por operação, o lucro/prejuízo em R$ e a rentabilidade %. Fica em Finanças → Compras/Vendas.",
+    steps: [
+      "Cada linha é uma operação: compra (custo total, data, quantidade) e, ao vender, a venda (valor, data)",
+      "Lucro/prejuízo e rentabilidade % calculados no servidor — verde para lucro, vermelho para prejuízo",
+      "Prazo em dias e selo ABERTA/FECHADA; operação só de compra fica ABERTA com o resultado não realizado",
+      "Venda PARCIAL: informe a quantidade vendida e o custo é rateado por ela (o restante mantém o preço unitário)",
+      "Gráfico de andamento: barras do valor bruto movimentado (R$) e linha da rentabilidade acumulada (%) por período",
+      "Puxa os ativos do catálogo (autocomplete de tickers) ou das posições que você JÁ tem na carteira",
+      "Preço teto / preço mínimo por ativo: o sistema avisa quando a cotação está acima do teto ou abaixo do mínimo",
+      "Lista global do usuário, com filtro por carteira e por intervalo de datas",
+    ],
+  },
+  {
     icon: "🧩", title: "Recuperação de Carteiras Antigas",
     color: "#b45309", bg: "#fffbeb",
     desc: "As carteiras foram divididas em duas tabelas (investimentos e despesas) numa migração. Contas que ficaram sem vínculo desapareceram das telas — este diagnóstico acha e religa.",
@@ -154,7 +169,7 @@ export default function ComoFunciona() {
           <span style={{ fontSize: "clamp(32px, 6vw, 48px)", display: "block", marginBottom: "8px" }}>⚡</span>
           <h1 style={{ fontSize: "clamp(22px, 4vw, 32px)", fontWeight: 800, marginBottom: "8px", letterSpacing: "-1px" }}>Como o FocusLife Funciona</h1>
           <p style={{ fontSize: "clamp(13px, 1.8vw, 16px)", opacity: 0.85, maxWidth: "650px", margin: "0 auto", lineHeight: 1.7 }}>
-            Hub completo de produtividade pessoal: tarefas, estudos, metas e finanças com carteiras de investimento, planejamento de carteira e avaliação de ativos.
+            Hub completo de produtividade pessoal: tarefas, estudos, metas e finanças com carteiras de investimento, compras/vendas com lucro por operação, planejamento (Organização) e avaliação de ativos.
           </p>
         </div>
 
@@ -186,7 +201,7 @@ export default function ComoFunciona() {
           <p style={{ fontSize: "clamp(15px, 2vw, 18px)", fontWeight: 600, color: "#0f172a", marginBottom: "4px" }}>Pronto para começar?</p>
           <p style={{ fontSize: "clamp(12px, 1.5vw, 14px)", color: "#64748b", marginBottom: "clamp(14px, 2vw, 20px)" }}>Navegue pelo menu lateral e explore cada funcionalidade.</p>
           <div style={{ display: "flex", justifyContent: "center", gap: "clamp(6px, 1.5vw, 12px)", flexWrap: "wrap" }}>
-            {[{ label: "Tarefas", path: "/tarefas", bg: "#06b6d4" },{ label: "Metas", path: "/metas", bg: "#f59e0b" },{ label: "Carteiras", path: "/financas", bg: "#10b981" },{ label: "Planejamento", path: "/planejamento", bg: "#6366f1" }].map((btn, i) => (
+            {[{ label: "Tarefas", path: "/tarefas", bg: "#06b6d4" },{ label: "Metas", path: "/metas", bg: "#f59e0b" },{ label: "Compras/Vendas", path: "/financas/compras-vendas", bg: "#0ea5e9" },{ label: "Carteiras", path: "/financas/carteiras", bg: "#10b981" },{ label: "Organização", path: "/planejamento", bg: "#6366f1" }].map((btn, i) => (
               <a key={i} href={btn.path} style={{ padding: "clamp(8px, 1.5vw, 11px) clamp(16px, 3vw, 24px)", background: btn.bg, color: "white", borderRadius: "8px", textDecoration: "none", fontSize: "clamp(13px, 1.5vw, 14px)", fontWeight: 600, transition: "all 0.15s ease", display: "inline-block" }}
                 onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)"; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>{btn.label}</a>
