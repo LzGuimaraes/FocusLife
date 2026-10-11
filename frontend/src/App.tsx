@@ -32,7 +32,7 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Toaster position="top-right" richColors closeButton duration={3500} />
+        <Toaster position="top-right" richColors closeButton duration={3500} theme="dark" />
         <Routes>
           <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/auth/login" element={<Login />} />

@@ -53,7 +53,7 @@ function fieldCss(s: FieldState): React.CSSProperties {
     ...baseInput,
     borderColor: s.isError ? tokens.border.error : s.isSuccess ? tokens.border.success : s.focused ? tokens.border.focus : s.hovered && !s.isDisabled ? tokens.border.hover : s.isDisabled ? tokens.border.disabled : tokens.border.default,
     boxShadow: s.focused && !s.isError ? tokens.ring : "none",
-    background: s.isError ? tokens.bg.error : s.isSuccess ? tokens.bg.success : s.isDisabled ? tokens.bg.disabled : s.focused ? tokens.bg.focus : s.hovered ? tokens.bg.hover : tokens.bg.default,
+    backgroundColor: s.isError ? tokens.bg.error : s.isSuccess ? tokens.bg.success : s.isDisabled ? tokens.bg.disabled : s.focused ? tokens.bg.focus : s.hovered ? tokens.bg.hover : tokens.bg.default,
     color: s.isError ? tokens.text.error : s.isSuccess ? tokens.text.success : s.isDisabled ? tokens.text.disabled : tokens.text.default,
     cursor: s.isDisabled ? "not-allowed" : undefined,
     opacity: s.isDisabled ? 0.6 : undefined,

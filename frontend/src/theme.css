@@ -1,0 +1,183 @@
+/* ══════════════════════════════════════════════════════════════════════
+   FocusLife — BRIDGE do tema escuro ("painel escuro").
+
+   O app usa estilos INLINE (style={{ ... }}) com cores literais
+   (ex.: background "white", color "#0f172a"). Estilo inline ganha da
+   cascata, então a única forma de re-tematizar as ~57 telas SEM reescrever
+   cada arquivo é um "bridge": seletores de atributo + !important.
+
+   Por que os valores são rgb(...): o React serializa
+   `style.color = "#0f172a"` como `color: rgb(15, 23, 42)`; palavras-chave
+   como `background: white` permanecem `white`. Os seletores abaixo casam
+   com essas formas REAIS.
+
+   Por que `background-color` e não `background`: o atalho apagaria
+   `background-image` (os <select> desenham a setinha com um background-image).
+
+   Este arquivo é descartável: quando as telas migrarem para CSS variables,
+   ele pode ser apagado.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Base ─────────────────────────────────────────────────────────── */
+html, body { background: var(--color-bg); color: var(--color-text); }
+
+/* ── 2. Texto ────────────────────────────────────────────────────────── */
+[style^="color: rgb(15, 23, 42)"], [style*=" color: rgb(15, 23, 42)"],
+[style^="color: rgb(30, 41, 59)"], [style*=" color: rgb(30, 41, 59)"],
+[style^="color: rgb(51, 65, 85)"], [style*=" color: rgb(51, 65, 85)"],
+[style^="color: rgb(55, 65, 81)"], [style*=" color: rgb(55, 65, 81)"],
+[style^="color: rgb(31, 41, 55)"], [style*=" color: rgb(31, 41, 55)"],
+[style^="color: rgb(17, 24, 39)"], [style*=" color: rgb(17, 24, 39)"],
+[style^="color: rgb(2, 6, 23)"],   [style*=" color: rgb(2, 6, 23)"] {
+  color: var(--text) !important;
+}
+
+[style^="color: rgb(71, 85, 105)"],  [style*=" color: rgb(71, 85, 105)"],
+[style^="color: rgb(100, 116, 139)"],[style*=" color: rgb(100, 116, 139)"] {
+  color: var(--text-2) !important;
+}
+
+[style^="color: rgb(148, 163, 184)"],[style*=" color: rgb(148, 163, 184)"],
+[style^="color: rgb(203, 213, 225)"],[style*=" color: rgb(203, 213, 225)"],
+[style^="color: rgb(107, 114, 128)"],[style*=" color: rgb(107, 114, 128)"],
+[style^="color: rgb(156, 163, 175)"],[style*=" color: rgb(156, 163, 175)"] {
+  color: var(--text-3) !important;
+}
+
+/* Acento (indigo) — mais claro no fundo escuro */
+[style^="color: rgb(99, 102, 241)"], [style*=" color: rgb(99, 102, 241)"],
+[style^="color: rgb(79, 70, 229)"],  [style*=" color: rgb(79, 70, 229)"],
+[style^="color: rgb(67, 56, 202)"],  [style*=" color: rgb(67, 56, 202)"] {
+  color: var(--color-primary) !important;
+}
+[style^="color: rgb(55, 48, 163)"], [style*=" color: rgb(55, 48, 163)"] { color: #a5b4fc !important; }
+
+/* Textos semânticos sobre chips claros → versões claras */
+[style^="color: rgb(4, 120, 87)"],  [style*=" color: rgb(4, 120, 87)"],
+[style^="color: rgb(6, 95, 70)"],   [style*=" color: rgb(6, 95, 70)"]   { color: #34d399 !important; }
+[style^="color: rgb(22, 101, 52)"], [style*=" color: rgb(22, 101, 52)"] { color: #6ee7b7 !important; }
+[style^="color: rgb(185, 28, 28)"], [style*=" color: rgb(185, 28, 28)"],
+[style^="color: rgb(153, 27, 27)"], [style*=" color: rgb(153, 27, 27)"] { color: #f87171 !important; }
+[style^="color: rgb(180, 83, 9)"],  [style*=" color: rgb(180, 83, 9)"],
+[style^="color: rgb(146, 64, 14)"], [style*=" color: rgb(146, 64, 14)"],
+[style^="color: rgb(161, 98, 7)"],  [style*=" color: rgb(161, 98, 7)"]  { color: #fbbf24 !important; }
+[style^="color: rgb(29, 78, 216)"], [style*=" color: rgb(29, 78, 216)"],
+[style^="color: rgb(30, 64, 175)"], [style*=" color: rgb(30, 64, 175)"] { color: #93c5fd !important; }
+[style^="color: rgb(15, 118, 110)"],[style*=" color: rgb(15, 118, 110)"]{ color: #5eead4 !important; }
+[style^="color: rgb(126, 34, 206)"],[style*=" color: rgb(126, 34, 206)"]{ color: #d8b4fe !important; }
+
+/* ── 3. Superfícies (background-color) ───────────────────────────────── */
+/* Brancos / quase-brancos → cartão */
+[style^="background: white"], [style*=" background: white"],
+[style^="background: rgb(255, 255, 255)"], [style*=" background: rgb(255, 255, 255)"],
+[style^="background: rgb(252, 253, 255)"], [style*=" background: rgb(252, 253, 255)"],
+[style^="background: rgb(253, 253, 255)"], [style*=" background: rgb(253, 253, 255)"] {
+  background-color: var(--surface) !important;
+}
+
+/* Cinzas de fundo (inputs, chips neutros, tabelas) → superfície 2 */
+[style^="background: rgb(248, 250, 252)"], [style*=" background: rgb(248, 250, 252)"],
+[style^="background: rgb(249, 250, 251)"], [style*=" background: rgb(249, 250, 251)"],
+[style^="background: rgb(241, 245, 249)"], [style*=" background: rgb(241, 245, 249)"],
+[style^="background: rgb(243, 244, 246)"], [style*=" background: rgb(243, 244, 246)"] {
+  background-color: var(--surface-2) !important;
+}
+
+/* Cinzas médios (trilhas, faixas) → superfície 3 */
+[style^="background: rgb(238, 242, 247)"], [style*=" background: rgb(238, 242, 247)"],
+[style^="background: rgb(233, 238, 245)"], [style*=" background: rgb(233, 238, 245)"],
+[style^="background: rgb(226, 232, 240)"], [style*=" background: rgb(226, 232, 240)"],
+[style^="background: rgb(203, 213, 225)"], [style*=" background: rgb(203, 213, 225)"] {
+  background-color: var(--surface-3) !important;
+}
+
+/* Sidebar (indigo bem escuro) → quase preto azulado */
+[style^="background: rgb(30, 27, 75)"], [style*=" background: rgb(30, 27, 75)"] {
+  background-color: var(--sidebar-bg) !important;
+}
+
+/* Chips "soft" claros → versões translúcidas */
+[style^="background: rgb(238, 242, 255)"], [style*=" background: rgb(238, 242, 255)"] { background-color: rgba(124, 116, 255, 0.16) !important; }
+[style^="background: rgb(224, 231, 255)"], [style*=" background: rgb(224, 231, 255)"] { background-color: rgba(124, 116, 255, 0.22) !important; }
+[style^="background: rgb(232, 236, 255)"], [style*=" background: rgb(232, 236, 255)"] { background-color: rgba(124, 116, 255, 0.20) !important; }
+[style^="background: rgb(219, 234, 254)"], [style*=" background: rgb(219, 234, 254)"] { background-color: rgba(96, 165, 250, 0.18) !important; }
+[style^="background: rgb(191, 219, 254)"], [style*=" background: rgb(191, 219, 254)"] { background-color: rgba(96, 165, 250, 0.26) !important; }
+[style^="background: rgb(239, 246, 255)"], [style*=" background: rgb(239, 246, 255)"] { background-color: rgba(96, 165, 250, 0.16) !important; }
+[style^="background: rgb(224, 242, 254)"], [style*=" background: rgb(224, 242, 254)"] { background-color: rgba(56, 189, 248, 0.18) !important; }
+[style^="background: rgb(236, 253, 245)"], [style*=" background: rgb(236, 253, 245)"] { background-color: rgba(52, 211, 153, 0.14) !important; }
+[style^="background: rgb(240, 253, 244)"], [style*=" background: rgb(240, 253, 244)"] { background-color: rgba(52, 211, 153, 0.14) !important; }
+[style^="background: rgb(209, 250, 229)"], [style*=" background: rgb(209, 250, 229)"] { background-color: rgba(52, 211, 153, 0.22) !important; }
+[style^="background: rgb(187, 247, 208)"], [style*=" background: rgb(187, 247, 208)"] { background-color: rgba(52, 211, 153, 0.24) !important; }
+[style^="background: rgb(134, 239, 172)"], [style*=" background: rgb(134, 239, 172)"] { background-color: rgba(52, 211, 153, 0.28) !important; }
+[style^="background: rgb(255, 251, 235)"], [style*=" background: rgb(255, 251, 235)"] { background-color: rgba(251, 191, 36, 0.12) !important; }
+[style^="background: rgb(254, 243, 199)"], [style*=" background: rgb(254, 243, 199)"] { background-color: rgba(251, 191, 36, 0.18) !important; }
+[style^="background: rgb(254, 249, 195)"], [style*=" background: rgb(254, 249, 195)"] { background-color: rgba(250, 204, 21, 0.18) !important; }
+[style^="background: rgb(253, 230, 138)"], [style*=" background: rgb(253, 230, 138)"] { background-color: rgba(251, 191, 36, 0.24) !important; }
+[style^="background: rgb(254, 242, 242)"], [style*=" background: rgb(254, 242, 242)"] { background-color: rgba(248, 113, 113, 0.14) !important; }
+[style^="background: rgb(254, 226, 226)"], [style*=" background: rgb(254, 226, 226)"] { background-color: rgba(248, 113, 113, 0.20) !important; }
+[style^="background: rgb(254, 202, 202)"], [style*=" background: rgb(254, 202, 202)"] { background-color: rgba(248, 113, 113, 0.24) !important; }
+[style^="background: rgb(245, 243, 255)"], [style*=" background: rgb(245, 243, 255)"],
+[style^="background: rgb(237, 233, 254)"], [style*=" background: rgb(237, 233, 254)"],
+[style^="background: rgb(243, 240, 255)"], [style*=" background: rgb(243, 240, 255)"] { background-color: rgba(139, 92, 246, 0.16) !important; }
+[style^="background: rgb(240, 249, 255)"], [style*=" background: rgb(240, 249, 255)"] { background-color: rgba(56, 189, 248, 0.14) !important; }
+[style^="background: rgb(236, 254, 255)"], [style*=" background: rgb(236, 254, 255)"] { background-color: rgba(34, 211, 238, 0.14) !important; }
+[style^="background: rgb(253, 242, 248)"], [style*=" background: rgb(253, 242, 248)"],
+[style^="background: rgb(252, 231, 243)"], [style*=" background: rgb(252, 231, 243)"] { background-color: rgba(236, 72, 153, 0.15) !important; }
+[style^="background: rgb(251, 207, 232)"], [style*=" background: rgb(251, 207, 232)"] { background-color: rgba(236, 72, 153, 0.20) !important; }
+[style^="background: rgb(255, 247, 237)"], [style*=" background: rgb(255, 247, 237)"] { background-color: rgba(251, 146, 60, 0.14) !important; }
+
+/* ── 3b. Longhand: quando o React quebra o atalho em `background-color` ──
+   Acontece nos <select> (que também usam background-image para a setinha),
+   então aqui as cores neutras precisam da forma longhand. */
+[style*="background-color: white"],
+[style*="background-color: rgb(255, 255, 255)"] { background-color: var(--surface) !important; }
+[style*="background-color: rgb(248, 250, 252)"],
+[style*="background-color: rgb(241, 245, 249)"],
+[style*="background-color: rgb(243, 244, 246)"] { background-color: var(--surface-2) !important; }
+[style*="background-color: rgb(226, 232, 240)"],
+[style*="background-color: rgb(238, 242, 247)"] { background-color: var(--surface-3) !important; }
+[style*="background-color: rgb(254, 242, 242)"] { background-color: rgba(248, 113, 113, 0.14) !important; }
+[style*="background-color: rgb(240, 253, 244)"] { background-color: rgba(52, 211, 153, 0.14) !important; }
+
+/* Os <select> desenham a setinha com background-image; o navegador re-serializa
+   tudo no atalho `background: url(...) ... rgb(...)`, então casamos pelo prefixo. */
+[style*="background: url("] { background-color: var(--surface-2) !important; }
+
+/* ── 4. Bordas (border-color) ────────────────────────────────────────── */
+[style*="solid rgb(226, 232, 240)"], [style*="solid rgb(241, 245, 249)"],
+[style*="solid rgb(238, 242, 247)"], [style*="solid rgb(203, 213, 225)"],
+[style*="solid rgb(241, 245, 249)"] {
+  border-color: var(--border) !important;
+}
+[style*="dashed rgb(226, 232, 240)"], [style*="dashed rgb(203, 213, 225)"] {
+  border-color: var(--border-subtle) !important;
+}
+[style*="solid rgb(199, 210, 254)"] { border-color: rgba(124, 116, 255, 0.45) !important; }
+[style*="solid rgb(254, 202, 202)"] { border-color: rgba(248, 113, 113, 0.4) !important; }
+[style*="solid rgb(253, 230, 138)"] { border-color: rgba(251, 191, 36, 0.4) !important; }
+[style*="solid rgb(167, 243, 208)"] { border-color: rgba(52, 211, 153, 0.4) !important; }
+[style*="solid rgb(191, 219, 254)"] { border-color: rgba(96, 165, 250, 0.4) !important; }
+
+/* ── 5. Formulários ──────────────────────────────────────────────────── */
+/* Os fundos dos campos já são tratados na seção 3/3b; aqui só o placeholder. */
+input::placeholder, textarea::placeholder { color: var(--text-3) !important; }
+
+/* ── 6. Tabelas ──────────────────────────────────────────────────────── */
+thead th { color: var(--text-3); }
+tbody tr { border-color: var(--border-subtle) !important; }
+
+/* ── 7. Auth (gradientes claros das telas de login/registro) ─────────── */
+[style*="linear-gradient(135deg, rgb(238, 242, 255)"],
+[style*="linear-gradient(135deg, rgb(224, 231, 255)"],
+[style*="linear-gradient(135deg, rgb(240, 244, 255)"],
+[style*="linear-gradient(135deg, rgb(236, 253, 245)"],
+[style*="linear-gradient(135deg, rgb(209, 250, 229)"],
+[style*="linear-gradient(135deg, rgb(248, 250, 252)"],
+[style*="linear-gradient(135deg, rgb(226, 232, 240)"] {
+  background: radial-gradient(circle at 25% 15%, #1b2350 0%, #0b0f22 62%) !important;
+}
+
+/* ── 8. Gráficos SVG (atributos de apresentação) ─────────────────────── */
+svg [stroke="#e2e8f0"], svg [stroke="#cbd5e1"] { stroke: #2a3157; }
+svg [stroke="#f1f5f9"] { stroke: #232a4c; }
+svg [fill="#f8fafc"], svg [fill="#f1f5f9"] { fill: #232a4c; }

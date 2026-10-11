@@ -3,29 +3,42 @@
    ============================================= */
 
 :root {
-  --color-primary: #6366f1;
-  --color-primary-hover: #4f46e5;
-  --color-primary-light: #eef2ff;
-  --color-success: #10b981;
-  --color-success-light: #d1fae5;
-  --color-warning: #f59e0b;
-  --color-warning-light: #fef3c7;
-  --color-danger: #ef4444;
-  --color-danger-light: #fee2e2;
-  --color-info: #3b82f6;
-  --color-info-light: #dbeafe;
-  --color-bg: #f1f5f9;
-  --color-surface: #ffffff;
-  --color-border: #e2e8f0;
-  --color-text: #0f172a;
-  --color-text-secondary: #64748b;
-  --color-text-muted: #94a3b8;
+  color-scheme: dark;
+  /* Acento */
+  --color-primary: #7c74ff;
+  --color-primary-hover: #6a61f5;
+  --color-primary-light: rgba(124, 116, 255, 0.16);
+  --color-success: #34d399;
+  --color-success-light: rgba(52, 211, 153, 0.16);
+  --color-warning: #fbbf24;
+  --color-warning-light: rgba(251, 191, 36, 0.16);
+  --color-danger: #f87171;
+  --color-danger-light: rgba(248, 113, 113, 0.16);
+  --color-info: #60a5fa;
+  --color-info-light: rgba(96, 165, 250, 0.16);
+  /* Superfícies (tema escuro) */
+  --color-bg: #0b0f22;
+  --color-surface: #141a33;
+  --color-border: #262d4d;
+  --color-text: #e8ecff;
+  --color-text-secondary: #a5adce;
+  --color-text-muted: #6f78a0;
+  /* Tokens extras do bridge do tema escuro (theme.css) */
+  --surface: #141a33;
+  --surface-2: #1a2140;
+  --surface-3: #212a4e;
+  --border: #2a3157;
+  --border-subtle: #232a4c;
+  --text: #e8ecff;
+  --text-2: #aab2d4;
+  --text-3: #7b83ab;
   --sidebar-width: 260px;
-  --sidebar-bg: #1e1b4b;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07);
-  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08);
-  --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.1);
+  --sidebar-bg: #0e1330;
+  --ring: rgba(124, 116, 255, 0.35);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.35);
+  --shadow-md: 0 4px 10px rgba(0,0,0,0.4);
+  --shadow-lg: 0 12px 28px rgba(0,0,0,0.5);
+  --shadow-xl: 0 24px 48px rgba(0,0,0,0.55);
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
@@ -53,9 +66,9 @@ body {
   min-height: 100vh;
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: var(--radius-full); }
+::-webkit-scrollbar-thumb { background: #2e3766; border-radius: var(--radius-full); }
 
 :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; border-radius: var(--radius-sm); }
 ::selection { background: var(--color-primary); color: white; }
