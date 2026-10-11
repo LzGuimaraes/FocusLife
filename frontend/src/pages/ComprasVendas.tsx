@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { TrendingUp, TrendingDown, DollarSign, Percent } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, PieChart } from "lucide-react";
 import api from "../api/api";
 import Layout from "../components/Layout";
 import Modal from "../components/Modal";
 import { DateInput, Input, NumberInput, Select } from "../components/Form";
-import { Badge, Button, StatCard } from "../components/Shared";
-import { EmptyState, PageHeader, Spinner } from "../components/UI";
+import { Badge, Button } from "../components/Shared";
+import { EmptyState, Spinner } from "../components/UI";
 import GraficoComprasVendas from "../components/GraficoComprasVendas";
+import ResumoPeriodoDonut from "../components/ResumoPeriodoDonut";
 import PrecosAlvoSection from "../components/PrecosAlvoSection";
 import SeletorAtivo, { type CarteiraOption, type SelecaoAtivo } from "../components/SeletorAtivo";
 import { CATEGORIAS, catInfo } from "../utils/percentual";
@@ -284,6 +285,13 @@ export default function ComprasVendas() {
     id == null ? "—" : (carteiras.find(c => c.id === id)?.nome ?? `#${id}`);
 
   const lucroPositivo = (resumo?.lucro_total ?? 0) >= 0;
+  const serieResumo = resumo?.serie ?? [];
+  const ultimoPonto = serieResumo.length ? serieResumo[serieResumo.length - 1] : null;
+  const maiorBruto = serieResumo.length ? Math.max(...serieResumo.map(s => s.valor_bruto)) : null;
+  const percentuaisResumo = serieResumo
+    .map(s => s.valor_percentual_acumulado)
+    .filter((v): v is number => v != null);
+  const melhorPct = percentuaisResumo.length ? Math.max(...percentuaisResumo) : null;
 
   return (
     <Layout>
@@ -292,8 +300,29 @@ export default function ComprasVendas() {
         ← Finanças
       </button>
 
-      <PageHeader icon="🔄" title="Compras/Vendas" subtitle="Lucro/prejuízo por operação, andamento e preço teto/mínimo"
-        actionLabel="Nova Operação" onAction={abrirNova} />
+      {/* ── Cabeçalho da Visão Geral ── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0 }}>
+          <span style={{ width: "48px", height: "48px", borderRadius: "14px", display: "grid", placeItems: "center", color: "white", flexShrink: 0, background: "linear-gradient(135deg, #7c74ff, #5b54d6)", boxShadow: "0 8px 20px rgba(99,102,241,0.35)" }}>
+            <TrendingUp size={22} />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.02em", lineHeight: 1.15 }}>Visão Geral do Investimento</h1>
+            <p style={{ fontSize: "13px", color: "#64748b", marginTop: "2px" }}>Acompanhe o desenvolvimento da sua carteira em um só lugar.</p>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          {ultimoPonto && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "7px", fontSize: "12.5px", fontWeight: 600, color: "#475569", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "9999px", padding: "8px 14px" }}>
+              📅 Último período: <strong style={{ color: "#0f172a" }}>{fmtDinheiro(ultimoPonto.valor_bruto)}</strong>
+              {ultimoPonto.valor_percentual_acumulado != null && (
+                <span style={{ color: "#047857" }}>· {fmtPct(ultimoPonto.valor_percentual_acumulado)}</span>
+              )}
+            </span>
+          )}
+          <Button onClick={abrirNova}>+ Nova Operação</Button>
+        </div>
+      </div>
 
       {/* ── Filtros ── */}
       <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "flex-end", marginBottom: "20px" }}>
@@ -312,30 +341,70 @@ export default function ComprasVendas() {
         <Button variant="secondary" onClick={limparFiltros}>Limpar</Button>
       </div>
 
-      {/* ── Cards de resumo (valores vêm do servidor) ── */}
+      {/* ── Visão geral: KPIs + andamento + resumo do período + destaques ── */}
       {!loading && resumo && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))", gap: "12px", marginBottom: "24px" }}>
-          <StatCard icon={<DollarSign size={18} />} label="Total investido" value={fmtDinheiro(resumo.total_investido)} color="#6366f1" />
-          <StatCard icon={<TrendingUp size={18} />} label="Total vendido" value={fmtDinheiro(resumo.total_vendido)} color="#0ea5e9" />
-          <StatCard icon={lucroPositivo ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
-            label="Resultado (realizado)" value={fmtDinheiro(resumo.lucro_total)}
-            color={lucroPositivo ? "#10b981" : "#ef4444"} />
-          <StatCard icon={<Percent size={18} />} label="Rentabilidade"
-            value={fmtPct(resumo.rentabilidade_percentual)}
-            color={(resumo.rentabilidade_percentual ?? 0) >= 0 ? "#10b981" : "#ef4444"} />
-        </div>
-      )}
-
-      {!loading && resumo && (
-        <div style={{ background: "white", borderRadius: "16px", padding: "22px 24px", boxShadow: "0 1px 3px rgba(15,23,42,0.05)", border: "1px solid #eef2f7", marginBottom: "24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: "8px", marginBottom: "12px" }}>
-            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: 0 }}>📈 Andamento das operações</h2>
-            <span style={{ fontSize: "12px", color: "#64748b" }}>
-              {resumo.qtd_operacoes} operação(ões) · {resumo.qtd_abertas} aberta(s) · {resumo.qtd_fechadas} fechada(s)
-            </span>
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 210px), 1fr))", gap: "12px", marginBottom: "16px" }}>
+            <KpiCard icone={<DollarSign size={20} />} cor="var(--color-primary)" bg="var(--color-primary-light)"
+              label="Total investido" valor={fmtDinheiro(resumo.total_investido)} nota="desde o início" />
+            <KpiCard icone={<TrendingUp size={20} />} cor="var(--color-info)" bg="var(--color-info-light)"
+              label="Total vendido" valor={fmtDinheiro(resumo.total_vendido)} nota="desde o início" />
+            <KpiCard icone={lucroPositivo ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
+              cor={lucroPositivo ? "var(--color-success)" : "var(--color-danger)"}
+              bg={lucroPositivo ? "var(--color-success-light)" : "var(--color-danger-light)"}
+              label="Resultado (realizado)" valor={fmtDinheiro(resumo.lucro_total)} nota="lucro total" />
+            <KpiCard icone={<Percent size={20} />}
+              cor={(resumo.rentabilidade_percentual ?? 0) >= 0 ? "var(--color-success)" : "var(--color-danger)"}
+              bg={(resumo.rentabilidade_percentual ?? 0) >= 0 ? "var(--color-success-light)" : "var(--color-danger-light)"}
+              label="Rentabilidade" valor={fmtPct(resumo.rentabilidade_percentual)} nota="sobre o capital investido" />
           </div>
-          <GraficoComprasVendas serie={resumo.serie} />
-        </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "flex-start", marginBottom: "24px" }}>
+            {/* Andamento das operações */}
+            <div style={{ flex: "2 1 460px", minWidth: 0, ...cardEstilo }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span style={{ width: "30px", height: "30px", borderRadius: "9px", display: "grid", placeItems: "center", color: "var(--color-primary)", background: "var(--color-primary-light)" }}>
+                    <BarChart3 size={16} />
+                  </span>
+                  <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", margin: 0 }}>Andamento das operações</h2>
+                </div>
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                  <Chip>{resumo.qtd_operacoes} operação(ões)</Chip>
+                  <Chip>{resumo.qtd_abertas} aberta(s)</Chip>
+                  <Chip>{resumo.qtd_fechadas} fechada(s)</Chip>
+                </div>
+              </div>
+              <GraficoComprasVendas serie={resumo.serie} />
+            </div>
+
+            {/* Coluna: resumo do período + destaques */}
+            <div style={{ flex: "1 1 320px", minWidth: 0, display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div style={cardEstilo}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                  <span style={{ width: "30px", height: "30px", borderRadius: "9px", display: "grid", placeItems: "center", color: "#8b5cf6", background: "rgba(139,92,246,0.16)" }}>
+                    <PieChart size={16} />
+                  </span>
+                  <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", margin: 0 }}>Resumo do período</h2>
+                </div>
+                <ResumoPeriodoDonut totalVendido={resumo.total_vendido} lucro={resumo.lucro_total}
+                  rentabilidade={resumo.rentabilidade_percentual} />
+              </div>
+
+              <div style={cardEstilo}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+                  <span style={{ width: "30px", height: "30px", borderRadius: "9px", display: "grid", placeItems: "center", color: "var(--color-primary)", background: "var(--color-primary-light)" }}>
+                    <TrendingUp size={16} />
+                  </span>
+                  <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a", margin: 0 }}>Destaques</h2>
+                </div>
+                <LinhaDestaque rotulo="Maior valor no período" valor={fmtDinheiro(maiorBruto)} />
+                <LinhaDestaque rotulo="Melhor rentabilidade" valor={fmtPct(melhorPct)} />
+                <LinhaDestaque rotulo="Operações no período" valor={String(resumo.qtd_operacoes)} ultima />
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* ── Tabela de operações ── */}
@@ -484,3 +553,43 @@ export default function ComprasVendas() {
 const th: React.CSSProperties = { padding: "10px 12px", fontWeight: 700 };
 const td: React.CSSProperties = { padding: "10px 12px", color: "#0f172a", verticalAlign: "top" };
 const subLinha: React.CSSProperties = { display: "block", fontSize: "11px", color: "#94a3b8", fontWeight: 400 };
+
+/* ── Peças da Visão Geral (KPIs, chips, destaques) ── */
+const cardEstilo: React.CSSProperties = {
+  background: "white", borderRadius: "16px", padding: "20px 22px",
+  boxShadow: "0 1px 3px rgba(15,23,42,0.05)", border: "1px solid #eef2f7",
+};
+
+function KpiCard({ icone, cor, bg, label, valor, nota }: {
+  icone: React.ReactNode; cor: string; bg: string; label: string; valor: string; nota: string;
+}) {
+  return (
+    <div style={{ ...cardEstilo, padding: "16px 18px", display: "flex", alignItems: "flex-start", gap: "13px" }}>
+      <span style={{ width: "44px", height: "44px", borderRadius: "12px", display: "grid", placeItems: "center", flexShrink: 0, color: cor, background: bg }}>
+        {icone}
+      </span>
+      <div style={{ display: "flex", flexDirection: "column", gap: "1px", minWidth: 0 }}>
+        <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#64748b" }}>{label}</span>
+        <span style={{ fontSize: "21px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.02em", lineHeight: 1.2 }}>{valor}</span>
+        <span style={{ fontSize: "11.5px", color: "#94a3b8" }}>{nota}</span>
+      </div>
+    </div>
+  );
+}
+
+function Chip({ children }: { children: React.ReactNode }) {
+  return (
+    <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "9999px", padding: "3px 10px", whiteSpace: "nowrap" }}>
+      {children}
+    </span>
+  );
+}
+
+function LinhaDestaque({ rotulo, valor, ultima }: { rotulo: string; valor: string; ultima?: boolean }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", padding: "9px 0", borderBottom: ultima ? "none" : "1px solid #f1f5f9" }}>
+      <span style={{ fontSize: "12.5px", color: "#64748b" }}>{rotulo}</span>
+      <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a", fontVariantNumeric: "tabular-nums" }}>{valor}</span>
+    </div>
+  );
+}

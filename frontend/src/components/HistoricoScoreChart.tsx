@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 
 /* ══════════════════════════════════════════════════════════════════════
    Gráfico de evolução (linha + área) em SVG puro — sem dependência nova.
@@ -37,6 +37,9 @@ export default function HistoricoScoreChart({
   formatar = v => `${v.toFixed(1)}%`,
   vazioTexto = "Registre a avaliação em dias diferentes para ver a evolução.",
 }: Props) {
+  // Índice do ponto sob o cursor: acende o marcador e mostra o valor — a mesma
+  // interação dos demais gráficos (hover e foco de teclado, cursor de clique).
+  const [ativo, setAtivo] = useState<number | null>(null);
   const validos = pontos.filter(p => p.valor != null) as (PontoGrafico & { valor: number })[];
 
   if (validos.length < 2) {
@@ -85,6 +88,7 @@ export default function HistoricoScoreChart({
         </span>
       </div>
 
+      <div style={{ position: "relative" }}>
       <svg width="100%" height={altura} viewBox={`0 0 ${LARGURA} ${altura}`} preserveAspectRatio="none"
         role="img" aria-label={`Evolução de ${formatar(primeiro.valor)} a ${formatar(ultimo.valor)}`}>
         <title>{titulos}</title>
@@ -104,6 +108,51 @@ export default function HistoricoScoreChart({
         <path d={linha} fill="none" stroke={cor} strokeWidth="2"
           strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
       </svg>
+
+      {/* Marcadores em HTML: círculos perfeitos (o SVG estica na horizontal)
+          e alvo de foco real. Passar o mouse/teclado acende o ponto. */}
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+        {pontos.map((p, i) => {
+          if (p.valor == null) return null;
+          const xPct = pontos.length > 1 ? (i / (pontos.length - 1)) * 100 : 50;
+          const yPct = (paraY(p.valor) / altura) * 100;
+          const destacado = ativo === i;
+          const abaixo = yPct < 32;
+          return (
+            <button key={i} type="button"
+              onMouseEnter={() => setAtivo(i)} onMouseLeave={() => setAtivo(null)}
+              onFocus={() => setAtivo(i)} onBlur={() => setAtivo(null)}
+              title={`${p.label}: ${formatar(p.valor)}${p.detalhe ? ` — ${p.detalhe}` : ""}`}
+              aria-label={`${p.label}: ${formatar(p.valor)}`}
+              style={{
+                position: "absolute", left: `${xPct}%`, top: `${yPct}%`,
+                transform: "translate(-50%, -50%)", width: "22px", height: "22px",
+                padding: 0, border: "none", background: "transparent",
+                cursor: "pointer", pointerEvents: "auto",
+              }}>
+              <span style={{
+                display: "block", margin: "0 auto", borderRadius: "50%", background: cor,
+                width: destacado ? "13px" : "9px", height: destacado ? "13px" : "9px",
+                border: "2px solid white", boxSizing: "border-box",
+                boxShadow: destacado ? `0 0 0 4px ${cor}33` : "none",
+                transition: "width .15s ease, height .15s ease, box-shadow .15s ease",
+              }} />
+              {destacado && (
+                <span style={{
+                  position: "absolute", left: "50%", transform: "translateX(-50%)",
+                  bottom: abaixo ? "auto" : "20px", top: abaixo ? "20px" : "auto",
+                  background: "#0f172a", color: "#fff", fontSize: "11px", fontWeight: 700,
+                  padding: "3px 8px", borderRadius: "7px", whiteSpace: "nowrap",
+                  boxShadow: "0 8px 18px rgba(15,23,42,0.3)",
+                }}>
+                  {p.label}: {formatar(p.valor)}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", fontSize: "11px", color: "#94a3b8" }}>
         <span>{formatar(minimo)}</span>

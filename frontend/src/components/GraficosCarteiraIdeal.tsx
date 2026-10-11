@@ -22,6 +22,10 @@ export function DistribuicaoAtualIdeal({ comparativo, titulo = "Distribuição p
   comparativo: Comparativo;
   titulo?: string;
 }) {
+  // Classe destacada: passar o mouse (ou Tab) numa fatia acende a MESMA classe
+  // nas DUAS barras — atual e ideal —, que é justamente o que se quer comparar.
+  const [ativo, setAtivo] = useState<string | null>(null);
+
   const classes = comparativo.classes;
   const somaAtual = classes.reduce((s, c) => s + c.percentual_atual, 0);
   const somaIdeal = classes.reduce((s, c) => s + c.percentual_ideal, 0);
@@ -34,20 +38,30 @@ export function DistribuicaoAtualIdeal({ comparativo, titulo = "Distribuição p
 
       <BarraEmpilhada
         rotulo="Carteira atual"
-        partes={classes.map(c => ({ label: catInfo(c.classe).label, valor: c.percentual_atual, cor: catInfo(c.classe).color }))}
-        soma={somaAtual}
+        partes={classes.map(c => ({ key: c.classe as string, label: catInfo(c.classe).label, valor: c.percentual_atual, cor: catInfo(c.classe).color }))}
+        soma={somaAtual} ativo={ativo} onAtivo={setAtivo}
       />
       <BarraEmpilhada
         rotulo="Carteira ideal"
-        partes={classes.map(c => ({ label: catInfo(c.classe).label, valor: c.percentual_ideal, cor: catInfo(c.classe).color }))}
-        soma={somaIdeal}
+        partes={classes.map(c => ({ key: c.classe as string, label: catInfo(c.classe).label, valor: c.percentual_ideal, cor: catInfo(c.classe).color }))}
+        soma={somaIdeal} ativo={ativo} onAtivo={setAtivo}
       />
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "14px" }}>
         {classes.map(c => {
           const info = catInfo(c.classe);
+          const destacada = ativo === c.classe;
           return (
-            <span key={c.classe} style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#475569" }}>
+            <span key={c.classe}
+              role="button" tabIndex={0}
+              onMouseEnter={() => setAtivo(c.classe)} onMouseLeave={() => setAtivo(null)}
+              onFocus={() => setAtivo(c.classe)} onBlur={() => setAtivo(null)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12px",
+                color: "#475569", cursor: "pointer", outline: "none", padding: "2px 8px",
+                borderRadius: "9999px", background: destacada ? "#f1f5f9" : "transparent",
+                transition: "background .15s ease",
+              }}>
               <span style={{ width: "10px", height: "10px", borderRadius: "3px", background: info.color, flexShrink: 0 }} />
               {info.icon} {info.label}
             </span>
@@ -58,10 +72,12 @@ export function DistribuicaoAtualIdeal({ comparativo, titulo = "Distribuição p
   );
 }
 
-function BarraEmpilhada({ rotulo, partes, soma }: {
+function BarraEmpilhada({ rotulo, partes, soma, ativo, onAtivo }: {
   rotulo: string;
-  partes: { label: string; valor: number; cor: string }[];
+  partes: { key: string; label: string; valor: number; cor: string }[];
   soma: number;
+  ativo: string | null;
+  onAtivo: (key: string | null) => void;
 }) {
   const visiveis = partes.filter(p => p.valor > 0.005);
   return (
@@ -73,16 +89,32 @@ function BarraEmpilhada({ rotulo, partes, soma }: {
         <span style={{ fontSize: "11px", fontWeight: 700, color: "#475569" }}>{fmtPercentual(soma)}</span>
       </div>
       <div style={{ display: "flex", height: "22px", borderRadius: "8px", overflow: "hidden", background: "#f1f5f9" }}>
-        {visiveis.map(p => (
-          <div key={p.label} title={`${p.label}: ${fmtPercentual(p.valor)}`}
-            style={{ width: `${p.valor}%`, background: p.cor, transition: "width 0.4s ease" }} />
-        ))}
+        {visiveis.map(p => {
+          const aceso = ativo == null || ativo === p.key;
+          return (
+            <div key={p.key}
+              role="button" tabIndex={0}
+              title={`${p.label}: ${fmtPercentual(p.valor)}`}
+              aria-label={`${p.label}: ${fmtPercentual(p.valor)}`}
+              onMouseEnter={() => onAtivo(p.key)} onMouseLeave={() => onAtivo(null)}
+              onFocus={() => onAtivo(p.key)} onBlur={() => onAtivo(null)}
+              style={{
+                width: `${p.valor}%`, background: p.cor, cursor: "pointer", outline: "none",
+                opacity: aceso ? 1 : 0.4,
+                filter: ativo === p.key ? "brightness(1.12)" : "none",
+                transition: "width 0.4s ease, opacity .18s ease, filter .18s ease",
+              }} />
+          );
+        })}
       </div>
     </div>
   );
 }
 
 export function BarrasAtualIdeal({ comparativo }: { comparativo: Comparativo }) {
+  // Classe sob o cursor: acende as DUAS barras dela e apaga as demais —
+  // é a leitura "quanto falta/sobra nesta classe" sem tirar o olho do gráfico.
+  const [ativo, setAtivo] = useState<string | null>(null);
   const classes = comparativo.classes;
   if (classes.length === 0) return null;
 
@@ -112,8 +144,20 @@ export function BarrasAtualIdeal({ comparativo }: { comparativo: Comparativo }) 
           const info = catInfo(c.classe);
           const diferenca = c.percentual_atual - c.percentual_ideal;
           const desvio = Math.abs(diferenca) < 0.005;
+          const destacada = ativo === c.classe;
+          const aceso = ativo == null || destacada;
           return (
-            <div key={c.classe}>
+            <div key={c.classe}
+              role="button" tabIndex={0}
+              aria-label={`${info.label}: atual ${fmtPercentual(c.percentual_atual)}, ideal ${fmtPercentual(c.percentual_ideal)}`}
+              onMouseEnter={() => setAtivo(c.classe)} onMouseLeave={() => setAtivo(null)}
+              onFocus={() => setAtivo(c.classe)} onBlur={() => setAtivo(null)}
+              style={{
+                padding: "6px 8px", margin: "0 -8px", borderRadius: "10px", cursor: "pointer", outline: "none",
+                background: destacada ? "#f8fafc" : "transparent",
+                border: `1px solid ${destacada ? "#e2e8f0" : "transparent"}`,
+                transition: "background .15s ease, border-color .15s ease",
+              }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
                 <span style={{ fontSize: "13px", fontWeight: 700, color: "#334155" }}>
                   {info.icon} {info.label}
@@ -128,8 +172,8 @@ export function BarrasAtualIdeal({ comparativo }: { comparativo: Comparativo }) 
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <LinhaBarra valor={c.percentual_atual} escala={escala} cor="#94a3b8" />
-                <LinhaBarra valor={c.percentual_ideal} escala={escala} cor="#6366f1" />
+                <LinhaBarra valor={c.percentual_atual} escala={escala} cor="#94a3b8" aceso={aceso} />
+                <LinhaBarra valor={c.percentual_ideal} escala={escala} cor="#6366f1" aceso={aceso} />
               </div>
             </div>
           );
@@ -145,10 +189,10 @@ export function BarrasAtualIdeal({ comparativo }: { comparativo: Comparativo }) 
   );
 }
 
-function LinhaBarra({ valor, escala, cor }: { valor: number; escala: number; cor: string }) {
+function LinhaBarra({ valor, escala, cor, aceso = true }: { valor: number; escala: number; cor: string; aceso?: boolean }) {
   const largura = escala > 0 ? Math.min(100, (valor / escala) * 100) : 0;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "8px", opacity: aceso ? 1 : 0.4, transition: "opacity .18s ease" }}>
       <div style={{ flex: 1, height: "10px", background: "#f1f5f9", borderRadius: "5px", overflow: "hidden" }}>
         <div style={{ width: `${largura}%`, height: "100%", background: cor, borderRadius: "5px", transition: "width 0.4s ease" }} />
       </div>
