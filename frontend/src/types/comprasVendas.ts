@@ -77,12 +77,3 @@ export interface OperacaoFormPayload {
   valor_inicial: number;
   valor_venda: number | null;
 }
-
-/** Payload do upsert de preço teto/mínimo. */
-export interface PrecoAlvoPayload {
-  ativo_cadastro_id: string | null;
-  ativo_id: number | null;
-  ticker: string;
-  preco_teto: number | null;
-  preco_minimo: number | null;
-}

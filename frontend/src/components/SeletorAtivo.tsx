@@ -26,7 +26,7 @@ export interface CarteiraOption {
   nome: string;
 }
 
-export interface PosicaoOption {
+interface PosicaoOption {
   id: number;
   nome: string;
   categoriaInvestimento: CategoriaInvestimento | null;
