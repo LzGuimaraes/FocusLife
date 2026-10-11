@@ -307,8 +307,18 @@ public class OperacaoCompraVendaService {
                 op.getTicker(), op.getNome(), op.getClasse(),
                 op.getDataCompra(), op.getDataVenda(),
                 op.getQuantidade(), op.getQuantidadeVendida(), op.getValorInicial(), op.getValorVenda(),
+                unitario(op.getValorInicial(), op.getQuantidade()),
+                unitario(op.getValorVenda(), op.getQuantidade()),
                 r.custoVendido(), r.lucro(), r.rentabilidadePercentual(), r.prazoDias(), r.aberta(),
                 preco, op.getCreatedAt(), op.getUpdatedAt());
+    }
+
+    /** Preço unitário = valor total ÷ quantidade. Sem quantidade não há preço por unidade. */
+    private static BigDecimal unitario(BigDecimal valor, BigDecimal quantidade) {
+        if (valor == null || quantidade == null || quantidade.signum() == 0) {
+            return null;
+        }
+        return valor.divide(quantidade, 2, java.math.RoundingMode.HALF_UP);
     }
 
     private BigDecimal precoAtual(OperacaoCompraVendaModel op, Map<UUID, BigDecimal> catalogo,

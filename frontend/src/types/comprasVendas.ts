@@ -20,6 +20,8 @@ export interface OperacaoCompraVenda {
   quantidade_vendida: number | null;
   valor_inicial: number;
   valor_venda: number | null;
+  valor_unitario_compra: number | null;
+  valor_unitario_venda: number | null;
   custo_vendido: number | null;
   lucro: number | null;
   rentabilidade_percentual: number | null;

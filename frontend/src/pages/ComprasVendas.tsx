@@ -35,6 +35,9 @@ const fmtPct = (v: number | null | undefined) =>
 const fmtData = (iso: string | null) =>
   iso ? iso.split("-").reverse().join("/") : "—";
 
+/** Número → texto pt-BR com 2 casas (para campos de valor/quantidade). */
+const brl = (n: number) => n.toFixed(2).replace(".", ",");
+
 interface FormState {
   data_compra: string;
   data_venda: string;
@@ -42,11 +45,14 @@ interface FormState {
   quantidade_vendida: string;
   valor_inicial: string;
   valor_venda: string;
+  preco_unit_compra: string;
+  preco_unit_venda: string;
 }
 
 const formVazio: FormState = {
   data_compra: "", data_venda: "", quantidade: "",
   quantidade_vendida: "", valor_inicial: "", valor_venda: "",
+  preco_unit_compra: "", preco_unit_venda: "",
 };
 
 const CLASSE_OPCOES = CATEGORIAS.filter(c => c.key !== "OUTROS");
@@ -135,11 +141,66 @@ export default function ComprasVendas() {
       quantidade_vendida: op.quantidade_vendida != null ? String(op.quantidade_vendida) : "",
       valor_inicial: op.valor_inicial != null ? String(op.valor_inicial) : "",
       valor_venda: op.valor_venda != null ? String(op.valor_venda) : "",
+      preco_unit_compra: op.valor_unitario_compra != null ? brl(op.valor_unitario_compra) : "",
+      preco_unit_venda: op.valor_unitario_venda != null ? brl(op.valor_unitario_venda) : "",
     });
     setShowModal(true);
   };
 
   const fechar = () => { setShowModal(false); setEditing(null); };
+
+  /* Preço unitário ↔ total: um campo alimenta o outro pela QUANTIDADE.
+     Assim o usuário digita o preço por unidade (o que vê na corretora) e o
+     total sai na hora (e vice-versa) — e a tela mostra os dois. */
+  const setQuantidade = (v: string) => {
+    setForm(f => {
+      const q = textoParaNumOuNull(v);
+      const uc = textoParaNumOuNull(f.preco_unit_compra);
+      const uv = textoParaNumOuNull(f.preco_unit_venda);
+      return {
+        ...f,
+        quantidade: v,
+        valor_inicial: (q != null && q > 0 && uc != null) ? brl(uc * q) : f.valor_inicial,
+        valor_venda: (q != null && q > 0 && uv != null) ? brl(uv * q) : f.valor_venda,
+      };
+    });
+  };
+
+  const setUnitCompra = (v: string) => {
+    setForm(f => {
+      const q = textoParaNumOuNull(f.quantidade);
+      const u = textoParaNumOuNull(v);
+      return { ...f, preco_unit_compra: v,
+        valor_inicial: (q != null && q > 0 && u != null) ? brl(u * q) : f.valor_inicial };
+    });
+  };
+
+  const setUnitVenda = (v: string) => {
+    setForm(f => {
+      const q = textoParaNumOuNull(f.quantidade);
+      const u = textoParaNumOuNull(v);
+      return { ...f, preco_unit_venda: v,
+        valor_venda: (q != null && q > 0 && u != null) ? brl(u * q) : f.valor_venda };
+    });
+  };
+
+  const setTotalCompra = (v: string) => {
+    setForm(f => {
+      const q = textoParaNumOuNull(f.quantidade);
+      const t = textoParaNumOuNull(v);
+      return { ...f, valor_inicial: v,
+        preco_unit_compra: (q != null && q > 0 && t != null) ? brl(t / q) : f.preco_unit_compra };
+    });
+  };
+
+  const setTotalVenda = (v: string) => {
+    setForm(f => {
+      const q = textoParaNumOuNull(f.quantidade);
+      const t = textoParaNumOuNull(v);
+      return { ...f, valor_venda: v,
+        preco_unit_venda: (q != null && q > 0 && t != null) ? brl(t / q) : f.preco_unit_venda };
+    });
+  };
 
   const handleSalvar = async () => {
     // A referência do ativo vem da nova seleção OU, na edição sem troca, da original.
@@ -293,7 +354,7 @@ export default function ComprasVendas() {
                 <th style={th}>Compra</th>
                 <th style={th}>Venda</th>
                 <th style={th}>Qtd</th>
-                <th style={th}>Valor inicial</th>
+                <th style={th}>Valor compra</th>
                 <th style={th}>Valor venda</th>
                 <th style={th}>Lucro/Prejuízo</th>
                 <th style={th}>Rentab.</th>
@@ -321,8 +382,18 @@ export default function ComprasVendas() {
                     <td style={td}>{fmtData(op.data_compra)}</td>
                     <td style={td}>{fmtData(op.data_venda)}</td>
                     <td style={td}>{op.quantidade ?? "—"}</td>
-                    <td style={td}>{fmtDinheiro(op.valor_inicial)}</td>
-                    <td style={td}>{fmtDinheiro(op.valor_venda)}</td>
+                    <td style={td}>
+                      {fmtDinheiro(op.valor_inicial)}
+                      {op.valor_unitario_compra != null && (
+                        <span style={subLinha}>{fmtDinheiro(op.valor_unitario_compra)}/un.</span>
+                      )}
+                    </td>
+                    <td style={td}>
+                      {fmtDinheiro(op.valor_venda)}
+                      {op.valor_unitario_venda != null && (
+                        <span style={subLinha}>{fmtDinheiro(op.valor_unitario_venda)}/un.</span>
+                      )}
+                    </td>
                     <td style={{ ...td, color: corLucro, fontWeight: 700 }}>{fmtDinheiro(lucro)}</td>
                     <td style={{ ...td, color: corLucro, fontWeight: 700 }}>{fmtPct(op.rentabilidade_percentual)}</td>
                     <td style={td}>{op.aberta ? "—" : op.prazo_dias != null ? `${op.prazo_dias} dias` : "—"}</td>
@@ -368,24 +439,32 @@ export default function ComprasVendas() {
         </div>
 
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-          <div style={{ flex: "1 1 160px" }}>
-            <NumberInput label="Valor inicial (R$)" decimal value={form.valor_inicial}
-              onChange={v => setForm({ ...form, valor_inicial: v })} placeholder="Custo total pago" />
-          </div>
-          <div style={{ flex: "1 1 160px" }}>
+          <div style={{ flex: "1 1 130px" }}>
             <NumberInput label="Quantidade" highPrecision value={form.quantidade}
-              onChange={v => setForm({ ...form, quantidade: v })} placeholder="Ex: 100 (ou 0,0031)" />
+              onChange={setQuantidade} placeholder="Ex: 79" />
+          </div>
+          <div style={{ flex: "1 1 130px" }}>
+            <NumberInput label="Preço unitário (compra)" decimal value={form.preco_unit_compra}
+              onChange={setUnitCompra} placeholder="R$ por unidade" />
+          </div>
+          <div style={{ flex: "1 1 130px" }}>
+            <NumberInput label="Total da compra (R$)" decimal value={form.valor_inicial}
+              onChange={setTotalCompra} placeholder="Custo total pago" />
           </div>
         </div>
 
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-          <div style={{ flex: "1 1 160px" }}>
-            <DateInput label="Data da venda (deixe vazio se ainda aberta)" value={form.data_venda}
+          <div style={{ flex: "1 1 130px" }}>
+            <DateInput label="Data da venda (vazio se aberta)" value={form.data_venda}
               onChange={e => setForm({ ...form, data_venda: e.target.value })} />
           </div>
-          <div style={{ flex: "1 1 160px" }}>
-            <NumberInput label="Valor da venda (R$)" decimal value={form.valor_venda}
-              onChange={v => setForm({ ...form, valor_venda: v })} placeholder="Total recebido" />
+          <div style={{ flex: "1 1 130px" }}>
+            <NumberInput label="Preço unitário (venda)" decimal value={form.preco_unit_venda}
+              onChange={setUnitVenda} placeholder="R$ por unidade" />
+          </div>
+          <div style={{ flex: "1 1 130px" }}>
+            <NumberInput label="Total da venda (R$)" decimal value={form.valor_venda}
+              onChange={setTotalVenda} placeholder="Total recebido" />
           </div>
         </div>
 
@@ -394,8 +473,8 @@ export default function ComprasVendas() {
           placeholder="Preencha só na venda PARCIAL" />
 
         <p style={{ fontSize: "11.5px", color: "#94a3b8", margin: 0 }}>
-          O lucro/prejuízo, a rentabilidade e o prazo são calculados no servidor.
-          Na venda parcial, o custo é rateado pela quantidade vendida.
+          Digite o <strong>preço unitário</strong> e o <strong>total</strong> sai da multiplicação pela quantidade (e vice-versa).
+          O lucro/prejuízo, a rentabilidade e o prazo são calculados no servidor — na venda parcial o custo é rateado pela quantidade vendida.
         </p>
       </Modal>
     </Layout>
@@ -404,3 +483,4 @@ export default function ComprasVendas() {
 
 const th: React.CSSProperties = { padding: "10px 12px", fontWeight: 700 };
 const td: React.CSSProperties = { padding: "10px 12px", color: "#0f172a", verticalAlign: "top" };
+const subLinha: React.CSSProperties = { display: "block", fontSize: "11px", color: "#94a3b8", fontWeight: 400 };

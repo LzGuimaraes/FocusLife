@@ -34,6 +34,12 @@ public record OperacaoCompraVendaResponseDTO(
     BigDecimal valor_inicial,
     BigDecimal valor_venda,
 
+    /** Preço unitário de compra (= valor_inicial ÷ quantidade; null se não houver qtd). */
+    BigDecimal valor_unitario_compra,
+
+    /** Preço unitário de venda (= valor_venda ÷ quantidade; null se não houver qtd/venda). */
+    BigDecimal valor_unitario_venda,
+
     /** Custo da parte vendida (rateado na venda parcial; null se aberta). */
     BigDecimal custo_vendido,
 
