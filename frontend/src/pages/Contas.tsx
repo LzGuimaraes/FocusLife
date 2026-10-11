@@ -188,7 +188,7 @@ export default function Contas() {
 
   const togglePago = async (ativo: Ativo) => {
     const novo = !ativo.pago;
-    try { await api.put(`/despesas/alter/${ativo.id}`, { ...ativo, pago: novo }); setAtivos(prev => prev.map(a => a.id === ativo.id ? { ...a, pago: novo } : a)); toast.success(novo ? "Pago!" : "Desmarcado"); }
+    try { await api.put(`/despesas/alter/${ativo.id}`, { nome: ativo.nome, saldo: ativo.saldo, dataVencimento: ativo.dataVencimento, pago: novo, carteira_dividas_id: ativo.carteira_dividas_id }); setAtivos(prev => prev.map(a => a.id === ativo.id ? { ...a, pago: novo } : a)); toast.success(novo ? "Pago!" : "Desmarcado"); }
     catch { toast.error("Erro"); }
   };
 

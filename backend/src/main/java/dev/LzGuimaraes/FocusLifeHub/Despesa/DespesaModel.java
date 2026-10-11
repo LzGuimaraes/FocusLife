@@ -34,6 +34,15 @@ public class DespesaModel extends ItemFinanceiroModel {
     @Column(name = "tipo", nullable = false, length = 20)
     private TipoLancamento tipo = TipoLancamento.DESPESA;
 
+    /**
+     * Categoria OPCIONAL do gasto (ver {@link CategoriaDespesa}). Fica nula
+     * quando o usuário não descreve a categoria — a despesa continua válida.
+     * Só faz sentido para DESPESA; um SALDO (crédito) não tem categoria.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "categoria", length = 30)
+    private CategoriaDespesa categoria;
+
     private Boolean pago;
 
     @ManyToOne(fetch = FetchType.LAZY)

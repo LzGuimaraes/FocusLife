@@ -69,6 +69,7 @@ public class DespesaService {
             despesa.getDataVencimento(),
             despesa.getPago(),
             despesa.getTipo() != null ? despesa.getTipo() : TipoLancamento.DESPESA,
+            despesa.getCategoria(),
             carteiraId
         );
     }
@@ -136,6 +137,8 @@ public class DespesaService {
         despesa.setSaldo(Math.abs(dto.saldo() != null ? dto.saldo() : 0f));
         despesa.setCarteiraDividas(carteira);
         aplicarTipo(despesa, tipo, dto.dataVencimento(), dto.pago() != null && dto.pago());
+        // Categoria é opcional e só existe para DESPESA (gasto); um SALDO é crédito.
+        despesa.setCategoria(tipo == TipoLancamento.DESPESA ? dto.categoria() : null);
 
         return toResponse(despesaRepository.save(despesa));
     }
@@ -162,6 +165,15 @@ public class DespesaService {
             aplicarTipo(despesa, TipoLancamento.SALDO, null, false);
         } else {
             despesa.setTipo(TipoLancamento.DESPESA);
+            // Categoria (opcional). `categoria` nulo significa "não mexa" (o
+            // outro formulário de despesa não envia categoria); para LIMPAR é
+            // preciso pedir explicitamente. Evita apagar a categoria em
+            // updates parciais (ex.: só alternar "pago").
+            if (Boolean.TRUE.equals(dto.removerCategoria())) {
+                despesa.setCategoria(null);
+            } else if (dto.categoria() != null) {
+                despesa.setCategoria(dto.categoria());
+            }
             // Alterações parciais (ex.: só marcar como pago) não invalidam a data já gravada.
             if (dto.dataVencimento() != null) {
                 despesa.setDataVencimento(dto.dataVencimento());
