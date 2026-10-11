@@ -19,4 +19,10 @@ public interface DespesaRepository extends JpaRepository<DespesaModel, Long> {
     List<DespesaModel> findByCarteiraDividasIsNull();
 
     long countByCarteiraDividasIsNull();
+
+    /**
+     * Lançamentos do usuário. `despesa` NÃO tem coluna user_id: a posse vem da
+     * carteira ({@code despesa.carteira_dividas_id -> carteira_dividas.user_id}).
+     */
+    long countByCarteiraDividas_UserId(Long userId);
 }

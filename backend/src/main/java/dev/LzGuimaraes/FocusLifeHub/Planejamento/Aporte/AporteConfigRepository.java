@@ -10,4 +10,7 @@ public interface AporteConfigRepository extends JpaRepository<AporteConfigModel,
 
     /** Configuração do motor de aporte do usuário (uma só, por construção). */
     Optional<AporteConfigModel> findByUserId(Long userId);
+
+    /** Indica se o usuário já salvou uma configuração de aporte. */
+    boolean existsByUserId(Long userId);
 }

@@ -26,4 +26,10 @@ public interface AtivoRepository extends JpaRepository<AtivoModel, Long> {
     List<AtivoModel> findByCarteiraInvestimentoIsNull();
 
     long countByCarteiraInvestimentoIsNull();
+
+    /**
+     * Posições do usuário. `ativo` NÃO tem coluna user_id: a posse vem da carteira
+     * ({@code ativo.carteira_investimento_id -> carteira_investimento.user_id}).
+     */
+    long countByCarteiraInvestimento_UserId(Long userId);
 }

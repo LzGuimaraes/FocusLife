@@ -15,4 +15,7 @@ public interface OperacaoCompraVendaRepository extends JpaRepository<OperacaoCom
             Long userId, Long carteiraInvestimentoId);
 
     Optional<OperacaoCompraVendaModel> findByIdAndUserId(Long id, Long userId);
+
+    /** Operações de compra/venda do usuário (operacao_compra_venda.user_id, escalar). */
+    long countByUserId(Long userId);
 }

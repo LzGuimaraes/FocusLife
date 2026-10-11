@@ -17,4 +17,7 @@ public interface AtivoPrecoAlvoRepository extends JpaRepository<AtivoPrecoAlvoMo
     Optional<AtivoPrecoAlvoModel> findByUserIdAndAtivoCadastroId(Long userId, UUID ativoCadastroId);
 
     Optional<AtivoPrecoAlvoModel> findByUserIdAndAtivoId(Long userId, Long ativoId);
+
+    /** Preços-alvo do usuário (ativo_preco_alvo.user_id, coluna escalar). */
+    long countByUserId(Long userId);
 }

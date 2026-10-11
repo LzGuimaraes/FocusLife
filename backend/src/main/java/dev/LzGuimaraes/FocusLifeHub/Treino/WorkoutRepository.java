@@ -9,4 +9,7 @@ import org.springframework.stereotype.Repository;
 public interface WorkoutRepository extends JpaRepository<WorkoutModel, Long> {
 
     List<WorkoutModel> findByUserIdOrderByCreatedAtAsc(Long userId);
+
+    /** Treinos cadastrados pelo usuário (workout.user_id). */
+    long countByUserId(Long userId);
 }

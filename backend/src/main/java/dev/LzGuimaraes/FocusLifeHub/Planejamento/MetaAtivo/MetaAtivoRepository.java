@@ -17,4 +17,10 @@ public interface MetaAtivoRepository extends JpaRepository<MetaAtivoModel, Long>
     Optional<MetaAtivoModel> findByCarteiraInvestimentoIdAndAtivoCadastroId(Long carteiraId, UUID ativoCadastroId);
 
     void deleteByCarteiraInvestimentoId(Long carteiraId);
+
+    /**
+     * Metas de ativo do usuário. `meta_ativo` NÃO tem user_id: a posse vem da
+     * carteira ({@code meta_ativo.carteira_investimento_id -> carteira_investimento.user_id}).
+     */
+    long countByCarteiraInvestimento_UserId(Long userId);
 }

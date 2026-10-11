@@ -18,4 +18,7 @@ public interface AporteRegistroRepository extends JpaRepository<AporteRegistroMo
             Long carteiraInvestimentoId, LocalDate desde);
 
     Optional<AporteRegistroModel> findByIdAndUserId(Long id, Long userId);
+
+    /** Aportes registrados pelo usuário (aporte_registro.user_id, coluna escalar). */
+    long countByUserId(Long userId);
 }

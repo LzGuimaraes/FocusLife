@@ -16,4 +16,7 @@ public interface EstrategiaRepository extends JpaRepository<EstrategiaModel, Lon
     List<EstrategiaModel> findByUserIdOrderByNomeAsc(Long userId);
 
     Optional<EstrategiaModel> findByIdAndUserId(Long id, Long userId);
+
+    /** Estratégias de investimento do usuário (estrategia_investimento.user_id). */
+    long countByUserId(Long userId);
 }

@@ -17,4 +17,7 @@ public interface WorkoutSessionRepository extends JpaRepository<WorkoutSessionMo
     Optional<WorkoutSessionModel> findByWorkoutIdAndScheduledDate(Long workoutId, LocalDate date);
 
     boolean existsByWorkoutIdAndScheduledDate(Long workoutId, LocalDate date);
+
+    /** Sessões/ocorrências de treino do usuário (workout_session.user_id, escalar). */
+    long countByUserId(Long userId);
 }

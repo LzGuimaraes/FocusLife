@@ -27,6 +27,8 @@ import Metas from "./pages/Metas";
 import Estudos from "./pages/Estudos";
 import ComoFunciona from "./pages/ComoFunciona";
 import Admin from "./pages/Admin";
+import AdminUsuarioDetalhe from "./pages/AdminUsuarioDetalhe";
+import AdminUsuarioRegistros from "./pages/AdminUsuarioRegistros";
 import { useTema } from "./theme/ThemeProvider";
 
 export default function App() {
@@ -63,6 +65,10 @@ export default function App() {
           <Route path="/estudos" element={<PrivateRoute><Estudos /></PrivateRoute>} />
           <Route path="/como-funciona" element={<PrivateRoute><ComoFunciona /></PrivateRoute>} />
           <Route path="/admin" element={<PrivateRoute requireAdmin><Admin /></PrivateRoute>} />
+          <Route path="/admin/usuarios/:id" element={<PrivateRoute requireAdmin><AdminUsuarioDetalhe /></PrivateRoute>} />
+          <Route path="/admin/usuarios/:id/tarefas" element={<PrivateRoute requireAdmin><AdminUsuarioRegistros key="tarefas" modulo="tarefas" /></PrivateRoute>} />
+          <Route path="/admin/usuarios/:id/metas" element={<PrivateRoute requireAdmin><AdminUsuarioRegistros key="metas" modulo="metas" /></PrivateRoute>} />
+          <Route path="/admin/usuarios/:id/estudos" element={<PrivateRoute requireAdmin><AdminUsuarioRegistros key="estudos" modulo="estudos" /></PrivateRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

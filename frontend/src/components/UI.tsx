@@ -129,3 +129,57 @@ export function FilterBar({ options, selected, onChange }: { options: { value: s
     </div>
   );
 }
+
+/* ── Error State ── */
+export function ErrorState({ title = "Algo deu errado", text = "Não foi possível carregar os dados. Verifique sua conexão e tente novamente.", retryLabel = "Tentar novamente", onRetry }: { title?: string; text?: string; retryLabel?: string; onRetry: () => void }) {
+  return (
+    <div className="animate-fade-in" role="alert" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", textAlign: "center" }}>
+      <span style={{ fontSize: "56px", marginBottom: "16px" }}>⚠️</span>
+      <h3 style={{ fontSize: "20px", fontWeight: 700, color: "var(--color-text)", marginBottom: "8px" }}>{title}</h3>
+      <p style={{ fontSize: "14px", color: "var(--color-text-secondary)", marginBottom: "24px", maxWidth: "400px" }}>{text}</p>
+      <button onClick={onRetry} style={{ padding: "12px 24px", background: "var(--color-primary)", color: "white", border: "none", borderRadius: "var(--radius-md)", cursor: "pointer", fontSize: "14px", fontWeight: 600, transition: "all var(--transition-fast)" }}
+        onMouseEnter={e => { e.currentTarget.style.background = "var(--color-primary-hover)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+        onMouseLeave={e => { e.currentTarget.style.background = "var(--color-primary)"; e.currentTarget.style.transform = "translateY(0)"; }}>
+        {retryLabel}
+      </button>
+    </div>
+  );
+}
+
+/* ── Pagination ──
+   Janela de páginas (primeira, última e vizinhas da atual) para não estourar
+   a largura quando há muitas páginas. Não renderiza nada com 1 página só. */
+function janelaPaginas(pagina: number, totalPaginas: number): (number | "…")[] {
+  if (totalPaginas <= 7) return Array.from({ length: totalPaginas }, (_, i) => i);
+  const manter = new Set<number>([0, totalPaginas - 1, pagina - 1, pagina, pagina + 1]);
+  const validas = [...manter].filter(p => p >= 0 && p < totalPaginas).sort((a, b) => a - b);
+  const itens: (number | "…")[] = [];
+  let anterior = -1;
+  for (const p of validas) {
+    if (anterior !== -1 && p - anterior > 1) itens.push("…");
+    itens.push(p);
+    anterior = p;
+  }
+  return itens;
+}
+
+export function Pagination({ page, totalPages, onChange, ariaLabel = "Paginação" }: { page: number; totalPages: number; onChange: (page: number) => void; ariaLabel?: string }) {
+  if (totalPages <= 1) return null;
+  const btnBase: React.CSSProperties = { minWidth: "36px", height: "36px", padding: "0 10px", borderRadius: "var(--radius-md)", border: "none", cursor: "pointer", fontWeight: 600, fontSize: "13px", transition: "all var(--transition-fast)" };
+  return (
+    <nav aria-label={ariaLabel} style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "6px", marginTop: "24px", flexWrap: "wrap" }}>
+      <button style={{ ...btnBase, background: "var(--surface)", color: "var(--color-text-secondary)", boxShadow: "var(--shadow-sm)", opacity: page === 0 ? 0.45 : 1, cursor: page === 0 ? "not-allowed" : "pointer" }}
+        disabled={page === 0} onClick={() => onChange(page - 1)} aria-label="Página anterior">‹</button>
+      {janelaPaginas(page, totalPages).map((p, i) =>
+        p === "…" ? (
+          <span key={`reticencias-${i}`} aria-hidden="true" style={{ color: "var(--color-text-muted)", fontSize: "13px", padding: "0 2px" }}>…</span>
+        ) : (
+          <button key={p} style={{ ...btnBase, background: p === page ? "var(--color-primary)" : "var(--surface)", color: p === page ? "white" : "var(--color-text-secondary)", boxShadow: "var(--shadow-sm)" }}
+            onClick={() => onChange(p)} aria-label={`Ir para página ${p + 1}`} aria-current={p === page ? "page" : undefined}>{p + 1}</button>
+        )
+      )}
+      <button style={{ ...btnBase, background: "var(--surface)", color: "var(--color-text-secondary)", boxShadow: "var(--shadow-sm)", opacity: page >= totalPages - 1 ? 0.45 : 1, cursor: page >= totalPages - 1 ? "not-allowed" : "pointer" }}
+        disabled={page >= totalPages - 1} onClick={() => onChange(page + 1)} aria-label="Próxima página">›</button>
+    </nav>
+  );
+}

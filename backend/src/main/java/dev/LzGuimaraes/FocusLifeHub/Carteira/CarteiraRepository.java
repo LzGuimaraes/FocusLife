@@ -8,4 +8,7 @@ import org.springframework.data.repository.NoRepositoryBean;
 @NoRepositoryBean
 public interface CarteiraRepository<T extends CarteiraModel> extends JpaRepository<T, Long> {
     Page<T> findByUserId(Long userId, Pageable pageable);
+
+    /** Quantas carteiras o usuário possui (COUNT no banco, sem trazer entidades). */
+    long countByUserId(Long userId);
 }

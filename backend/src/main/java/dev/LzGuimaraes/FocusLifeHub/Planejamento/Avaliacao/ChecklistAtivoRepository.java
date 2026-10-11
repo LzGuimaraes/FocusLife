@@ -51,4 +51,7 @@ public interface ChecklistAtivoRepository extends JpaRepository<ChecklistAtivoMo
                                                           @Param("slug") String slug);
 
     long countByUserIdAndAtivoCadastroId(Long userId, UUID ativoCadastroId);
+
+    /** Checklists aplicados do usuário (checklist_ativo.user_id). */
+    long countByUserId(Long userId);
 }

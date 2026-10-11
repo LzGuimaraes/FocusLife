@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import dev.LzGuimaraes.FocusLifeHub.Admin.dto.AdminUserDetailDTO;
 import dev.LzGuimaraes.FocusLifeHub.Email.DailyNotificationJob;
 import dev.LzGuimaraes.FocusLifeHub.User.dto.response.MessageResponse;
 import dev.LzGuimaraes.FocusLifeHub.User.dto.response.UserResponseDTO;
@@ -22,16 +23,29 @@ import jakarta.validation.Valid;
 public class AdminController {
 
     private final AdminService adminService;
+    private final AdminUserDetailService adminUserDetailService;
     private final DailyNotificationJob dailyNotificationJob;
 
-    public AdminController(AdminService adminService, DailyNotificationJob dailyNotificationJob) {
+    public AdminController(AdminService adminService,
+                           AdminUserDetailService adminUserDetailService,
+                           DailyNotificationJob dailyNotificationJob) {
         this.adminService = adminService;
+        this.adminUserDetailService = adminUserDetailService;
         this.dailyNotificationJob = dailyNotificationJob;
     }
 
     @GetMapping("/users")
     public ResponseEntity<List<UserResponseDTO>> listUsers() {
         return ResponseEntity.ok(adminService.listUsers());
+    }
+
+    /**
+     * Detalhe de um usuário específico (dados cadastrais permitidos + resumo dos
+     * dados dele no sistema). Restrito a ADMIN pelo SecurityConfig (`/admin/**`).
+     */
+    @GetMapping("/users/{id}")
+    public ResponseEntity<AdminUserDetailDTO> getUserDetail(@PathVariable Long id) {
+        return ResponseEntity.ok(adminUserDetailService.getUserDetail(id));
     }
 
     @PutMapping("/users/{id}/role")

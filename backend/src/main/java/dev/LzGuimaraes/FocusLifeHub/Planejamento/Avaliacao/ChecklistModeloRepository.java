@@ -45,4 +45,7 @@ public interface ChecklistModeloRepository extends JpaRepository<ChecklistModelo
             """)
     Optional<ChecklistModeloModel> findDetalheByIdAndUserId(@Param("id") Long id,
                                                             @Param("userId") Long userId);
+
+    /** Modelos de checklist do usuário (checklist_modelo.user_id). */
+    long countByUserId(Long userId);
 }

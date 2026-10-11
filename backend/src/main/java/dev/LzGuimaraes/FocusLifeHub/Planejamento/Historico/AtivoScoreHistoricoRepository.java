@@ -30,4 +30,7 @@ public interface AtivoScoreHistoricoRepository extends JpaRepository<AtivoScoreH
 
     /** Histórico completo do usuário (mais recente primeiro) — base das listagens. */
     List<AtivoScoreHistoricoModel> findByUserIdOrderByDataReferenciaDescIdDesc(Long userId);
+
+    /** Quantidade de retratos de score gravados (ativo_score_historico.user_id). */
+    long countByUserId(Long userId);
 }
