@@ -17,5 +17,6 @@ public enum CategoriaDespesa {
     EDUCACAO,
     LAZER,
     CONTAS,
+    LIBERDADE_FINANCEIRA,
     OUTROS
 }

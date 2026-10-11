@@ -13,7 +13,7 @@
 /** Categorias do sistema (espelham o enum CategoriaDespesa do backend). */
 export type CategoriaDespesa =
   | "MORADIA" | "ALIMENTACAO" | "TRANSPORTE" | "SAUDE"
-  | "EDUCACAO" | "LAZER" | "CONTAS" | "OUTROS";
+  | "EDUCACAO" | "LAZER" | "CONTAS" | "LIBERDADE_FINANCEIRA" | "OUTROS";
 
 /** Rótulo, ícone e cor de cada categoria. */
 export const categoriaDespesaInfo: Record<CategoriaDespesa, { icon: string; label: string; cor: string }> = {
@@ -24,6 +24,7 @@ export const categoriaDespesaInfo: Record<CategoriaDespesa, { icon: string; labe
   EDUCACAO: { icon: "🎓", label: "Educação", cor: "#8b5cf6" },
   LAZER: { icon: "🎉", label: "Lazer", cor: "#ec4899" },
   CONTAS: { icon: "🧾", label: "Contas", cor: "#0ea5e9" },
+  LIBERDADE_FINANCEIRA: { icon: "🕊️", label: "Liberdade Financeira", cor: "#10b981" },
   OUTROS: { icon: "📦", label: "Outros", cor: "#64748b" },
 };
 
