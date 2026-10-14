@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import Layout from "../components/Layout";
 import { Button } from "../components/Shared";
@@ -74,7 +74,9 @@ export default function Admin() {
 
   return (
     <Layout>
-      <PageHeader icon="🛡️" title="Administração" subtitle="Painel administrativo — usuários da plataforma" />
+      <PageHeader icon="🛡️" title="Administração" subtitle="Gerencie os usuários e o catálogo de músicas da plataforma" />
+
+      <Link to="/admin/musicas" style={{ display: "inline-block", padding: "12px 16px", marginBottom: "20px", background: "var(--color-primary-light)", color: "var(--color-primary)", borderRadius: "var(--radius-md)", textDecoration: "none", fontWeight: 600, fontSize: "14px" }}>🎵 Gerenciar músicas e estilos →</Link>
 
       <div style={{ maxWidth: "360px", marginBottom: "14px" }}>
         <Input label="Pesquisar" placeholder="Nome ou e-mail..." value={busca} onChange={(e) => alterarBusca(e.target.value)} />

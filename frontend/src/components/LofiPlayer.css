@@ -1,0 +1,61 @@
+.lofi-player { margin-bottom: 20px; }
+.lofi-player__toggle {
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+.lofi-player__panel {
+  margin-top: 12px;
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lofi-player__settings {
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lofi-player__settings h2 { font-size: 15px; }
+.lofi-player__settings p,
+.lofi-player__now-playing p,
+.lofi-player__hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+.lofi-player__styles { display: flex; flex-wrap: wrap; gap: 8px; }
+.lofi-player__style {
+  padding: 8px 14px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  background: var(--surface-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.lofi-player__style[aria-pressed="true"] {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+.lofi-player__admin { color: var(--color-primary); font-size: 12px; }
+.lofi-player__error { color: var(--color-danger); font-size: 13px; }
+.lofi-player__now-playing { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.lofi-player__video { width: 100%; aspect-ratio: 16 / 9; border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm); }
+.lofi-player__video iframe { border: none; display: block; }

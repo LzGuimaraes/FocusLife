@@ -57,7 +57,7 @@ const sections = [
     description: "Organize matérias, registre sessões e acompanhe o tempo dedicado a cada disciplina.",
     steps: [
       { title: "Organize as matérias", text: "Cadastre suas disciplinas e escolha os dias da semana em que pretende estudar." },
-      { title: "Registre o tempo e as anotações", text: "Use o cronômetro da matéria ou registre uma sessão com data, duração e notas. O player de música ajuda a criar um ambiente de foco." },
+      { title: "Registre o tempo e as anotações", text: "Use o cronômetro da matéria ou registre uma sessão com data, duração e notas. No player de música, escolha um estilo e sorteie um vídeo do catálogo." },
       { title: "Revise sua dedicação", text: "Veja o total de horas por matéria e filtre o histórico das sessões de estudo." },
     ],
     links: [{ label: "Abrir matérias", path: "/materias" }, { label: "Ver estudos", path: "/estudos" }],

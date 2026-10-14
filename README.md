@@ -133,6 +133,7 @@ sequenceDiagram
 ### 🛡️ Administração (role ADMIN)
 - **Lista de usuários**, **alteração de papel (USER ↔ ADMIN)** e **exclusão** de usuários.
 - **Execução manual do job diário** de notificações (`POST /admin/jobs/daily/run`).
+- **Catálogo de músicas** em **Admin → Músicas**: criação e renomeação de estilos, cadastro de até 100 URLs de vídeos do YouTube por lote, edição e remoção de vídeos. As URLs ficam no banco e são compartilhadas com os usuários. Links repetidos no mesmo estilo são ignorados; para excluir um estilo, primeiro remova seus vídeos.
 
 ### 📧 Notificações por e-mail (job diário)
 - `DailyNotificationJob` envia lembretes de **contas atrasadas ou vencendo hoje** e **tarefas ativas/pendentes do dia** via SMTP Gmail. Executa às **08:00 e novamente a cada hora até 23:00 (America/Cuiaba)** para recuperar falhas temporárias e novos lançamentos. Ao iniciar o backend após as 08:00, também verifica os avisos do dia.
@@ -142,8 +143,10 @@ sequenceDiagram
 ### 🎨 Experiência / UX
 - **Design system** próprio: `Form` (Input, Select, DateInput, NumberInput, TextArea), `UI` (PageHeader, CardGrid, Spinner, EmptyState, ProgressBar), `Modal`, `Shared`.
 - **Sidebar responsiva** (fixa no desktop, drawer no mobile), notificações **Sonner** e confirmações não-bloqueantes.
-- **LofiPlayer**: player de foco embutido (YouTube embed) com URL customizável salva no `localStorage`.
+- **LofiPlayer**: em **Matérias → Música para estudar**, o usuário escolhe um estilo (ex.: sertanejo, rock ou lo-fi) e clica em **Sortear**. O backend escolhe um vídeo daquele estilo no catálogo cadastrado pelo admin. **Sortear outro** evita repetir o anterior quando há outras opções; com apenas um vídeo, ele continua disponível. Estilos sem vídeos não aparecem no player.
 - Página **"Como Funciona"** com seis cards expansíveis em ordem sugerida de uso: rotina, contas, investimentos, organização de aportes, estudos e treinos. Os resumos ficam visíveis e apenas um guia de etapas abre por vez, com atalhos para cada área e suporte aos temas claro e escuro.
+
+O catálogo é persistido em `musica_estilo` e `musica_video`, criadas pela migração **V38**. O vídeo anteriormente fixo é cadastrado no estilo **Lo-fi**. O player usa o catálogo do banco; antigas preferências locais ficam sem uso. O cadastro valida vídeos do YouTube no servidor, normaliza a URL e elimina duplicatas por vídeo dentro do estilo. A reprodução começa pelo botão de play do YouTube; disponibilidade e permissão de incorporação dependem do vídeo escolhido.
 
 ---
 
@@ -234,6 +237,13 @@ Base: `/api` não existe — os endpoints são diretos na raiz da aplicação. R
 
 ### Admin — `/admin` (ADMIN)
 `GET /admin/users` · `PUT /admin/users/{id}/role` · `DELETE /admin/users/{id}` · `POST /admin/jobs/daily/run`
+
+### Música — catálogo compartilhado
+**Usuários autenticados:** `GET /musicas/estilos` · `GET /musicas/estilos/{id}/sortear?anteriorId=`. O parâmetro opcional evita repetição imediata no mesmo estilo.
+
+**Somente ADMIN:** `GET|POST /admin/musicas/estilos` · `PUT|DELETE /admin/musicas/estilos/{id}` · `GET|POST /admin/musicas/estilos/{id}/videos` · `PUT|DELETE /admin/musicas/videos/{id}`. Cadastro de estilo: `{ "nome": "Rock" }`; lote de vídeos: `{ "urls": ["https://youtu.be/ID_DO_VIDEO"] }`.
+
+**Validação isolada:** em `backend/`, execute `./mvnw -Dtest='YouTubeVideoUrlTest,MusicaCatalogoTest,MusicaControllerTest,AdminAuthorizationTest' test`. Os testes de catálogo aplicam a V38 e validam as entidades/repositórios em H2, sem acessar a base da aplicação.
 
 ### Tarefas — `/tarefas`
 `GET /all?page=&size=` · `GET /do-dia` · `GET /all/{id}` · `POST /create` · `PUT /alter/{id}` · `DELETE /delete/{id}`
