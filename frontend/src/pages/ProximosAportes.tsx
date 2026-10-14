@@ -48,7 +48,7 @@ export default function ProximosAportes() {
     setMargem(novo);
     try {
       await api.put("/aportes/config", { margem_percentual: novo });
-      toast.success(`Margem operacional: ${String(novo).replace(".", ",")}% (limite do ativo = meta + ${String(novo).replace(".", ",")}%)`);
+      toast.success(`Margem inicial: ${String(novo).replace(".", ",")}% sobre a meta`);
       if (carteiraId != null) carregar(carteiraId, valor);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Erro ao salvar a margem operacional");
@@ -186,10 +186,10 @@ export default function ProximosAportes() {
           </div>
         )}
         <div style={{ marginLeft: top ? undefined : "auto" }}>
-          <label style={miniLabel}>Margem operacional</label>
+          <label style={miniLabel}>Margem inicial</label>
           <select value={margem ?? 5} aria-label="Margem operacional do motor de aporte"
             onChange={e => salvarMargem(Number(e.target.value))}
-            title="O quanto um ativo pode passar da meta antes de o motor considerá-lo cheio (relativo à meta)"
+            title="Margem usada primeiro; o plano pode ampliá-la para aplicar ao menos 95% do aporte, mantendo limites máximos cadastrados"
             style={{ ...controlStyle, minWidth: "130px" }}>
             {[3, 4, 5].map(m => (
               <option key={m} value={m}>{m}% sobre a meta</option>
@@ -197,7 +197,8 @@ export default function ProximosAportes() {
           </select>
           <p style={{ fontSize: "10.5px", color: "#94a3b8", margin: "4px 0 0", maxWidth: "220px" }}>
             Meta de 5% com margem de {margem ?? 5}% → limite de
-            {" "}{(((margem ?? 5) / 100) + 1) * 5}%. Estar na meta não bloqueia o aporte.
+            {" "}{(((margem ?? 5) / 100) + 1) * 5}% inicialmente. Se a sobra passar de 5% do aporte,
+            o plano pode ampliar essa margem.
           </p>
         </div>
       </div>

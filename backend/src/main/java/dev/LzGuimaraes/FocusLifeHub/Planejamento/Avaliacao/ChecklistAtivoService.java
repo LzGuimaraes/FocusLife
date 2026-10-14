@@ -103,6 +103,9 @@ public class ChecklistAtivoService {
         // Agrupa preservando a ordem de primeira aparição.
         Map<String, List<ChecklistAtivoModel>> porAtivo = new LinkedHashMap<>();
         for (ChecklistAtivoModel c : todos) {
+            if (Boolean.FALSE.equals(c.getAtiva())) {
+                continue;
+            }
             porAtivo.computeIfAbsent(chaveDoAtivo(c), k -> new ArrayList<>()).add(c);
         }
 

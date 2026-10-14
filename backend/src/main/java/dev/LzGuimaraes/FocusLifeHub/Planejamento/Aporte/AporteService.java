@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.IntStream;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,6 +54,7 @@ public class AporteService {
     private final CarteiraIdealService carteiraIdealService;
     private final ChecklistAtivoService checklistService;
     private final AlocacaoService alocacaoService;
+    private final UtilizacaoAporteService utilizacaoService;
     private final ElegibilidadeService elegibilidadeService;
     private final AporteConfigService configService;
     private final CarteiraLookup carteiraLookup;
@@ -60,12 +62,14 @@ public class AporteService {
     public AporteService(CarteiraIdealService carteiraIdealService,
                          ChecklistAtivoService checklistService,
                          AlocacaoService alocacaoService,
+                         UtilizacaoAporteService utilizacaoService,
                          ElegibilidadeService elegibilidadeService,
                          AporteConfigService configService,
                          CarteiraLookup carteiraLookup) {
         this.carteiraIdealService = carteiraIdealService;
         this.checklistService = checklistService;
         this.alocacaoService = alocacaoService;
+        this.utilizacaoService = utilizacaoService;
         this.elegibilidadeService = elegibilidadeService;
         this.configService = configService;
         this.carteiraLookup = carteiraLookup;
@@ -78,6 +82,9 @@ public class AporteService {
      */
     @Transactional(readOnly = true)
     public RankingAportesDTO.Response ranking(Long carteiraId, BigDecimal valorAporte) {
+        if (valorAporte != null) {
+            valorAporte = valorAporte.setScale(2, RoundingMode.HALF_UP);
+        }
         CarteiraInvestimentoModel carteira = carteiraLookup.exigirCarteiraDoUsuario(carteiraId);
 
         ComparativoResponseDTO comparativo = carteiraIdealService.comparativo(carteiraId);
@@ -95,16 +102,27 @@ public class AporteService {
         // `meta × (1 + margem)`. Vem da config dele e vale para todas as carteiras.
         double margem = configService.margemPercentual();
 
-        List<AporteCandidato> calculados = candidatos(meus, referencia, margem, notas);
+        UtilizacaoAporteService.Resultado plano = utilizacaoService.calcular(referencia, valorAporte, margem,
+                m -> candidatos(meus, referencia, m, notas));
+        List<AporteCandidato> originais = plano.candidatos();
 
-        // Elegível primeiro (o descartado NÃO concorre), depois NOTA do checklist,
-        // depois nome. É toda a ordenação que existe.
-        calculados.sort(Comparator
+        // Elegíveis em déficit vêm primeiro; dentro de cada etapa, nota e nome.
+        Comparator<AporteCandidato> ordemRanking = Comparator
                 .comparing(AporteCandidato::elegivel, Comparator.reverseOrder())
+                .thenComparing(c -> c.deficit().signum() > 0, Comparator.reverseOrder())
                 .thenComparing(AporteCandidato::nota, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(AporteCandidato::nome, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)));
+                .thenComparing(AporteCandidato::nome, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+        List<Integer> indices = IntStream.range(0, originais.size()).boxed()
+                .sorted(Comparator.comparing(originais::get, ordemRanking)).toList();
+        List<AporteCandidato> calculados = indices.stream().map(originais::get).toList();
 
-        OrcamentoAporte orcamento = alocacaoService.ratear(calculados, referencia, valorAporte);
+        OrcamentoAporte original = plano.orcamento();
+        OrcamentoAporte orcamento = original == null ? null : new OrcamentoAporte(original.porClasse(),
+                original.porSubclasse(), indices.stream().map(original::deCandidato).toList(),
+                indices.stream().map(original::quantidadeDe).toList(),
+                original.alocado(), original.troco());
+        List<BigDecimal> capacidadesRestantes = orcamento != null
+                ? alocacaoService.capacidadesRestantes(calculados, referencia, orcamento) : List.of();
 
         List<RankingAportesDTO.Item> itens = new ArrayList<>();
         int posicao = 0;
@@ -150,13 +168,25 @@ public class AporteService {
                     sugestao,
                     c.precoUnitario(),
                     quantidadeDe(c, sugestao),
-                    motivo(c, sugestao),
+                    motivo(c, sugestao, orcamento != null ? capacidadesRestantes.get(i) : c.capacidade()),
                     acaoDe(c, sugestao)));
         }
 
         BigDecimal alocado = (orcamento != null) ? orcamento.alocado() : null;
         BigDecimal naoAlocado = (orcamento != null) ? valorAporte.subtract(alocado) : null;
         int totalElegiveis = (int) calculados.stream().filter(AporteCandidato::elegivel).count();
+        List<String> avisosPlano = new ArrayList<>(avisos(referencia, calculados, itens));
+        if (plano.ajustada()) {
+            avisosPlano.add("Margem deste plano ampliada de " + percentual(plano.margemConfigurada()) + " para "
+                    + percentual(plano.margemAplicada()) + " para reduzir a sobra e buscar ao menos 95% de aplicação. "
+                    + "Limites máximos cadastrados e bloqueios do checklist foram mantidos; a configuração salva não mudou.");
+        }
+        Boolean metaAtingida = orcamento == null ? null : MetaUtilizacaoAporte.atingida(valorAporte, orcamento);
+        if (Boolean.FALSE.equals(metaAtingida)) {
+            avisosPlano.add("Não foi possível aplicar o mínimo de " + formatar(MetaUtilizacaoAporte.minimoAlocar(valorAporte))
+                    + ": os limites máximos cadastrados, os bloqueios ou as cotas restringem as compras. "
+                    + "O plano manteve essas restrições e informa a sobra real.");
+        }
 
         return new RankingAportesDTO.Response(
                 carteira.getId(),
@@ -164,17 +194,22 @@ public class AporteService {
                 comparativo.valor_total(),
                 (valorAporte != null) ? valorAporte : null,
                 (valorAporte != null && valorAporte.signum() > 0) ? referencia.valor_total() : null,
-                moeda(margem),
+                plano.margemAplicada(),
                 alocado,
                 naoAlocado,
                 totalElegiveis,
                 calculados.size() - totalElegiveis,
-                explicacaoNaoAlocado(naoAlocado, calculados, orcamento),
-                avisos(referencia, calculados, itens),
+                explicacaoNaoAlocado(naoAlocado, calculados, capacidadesRestantes),
+                avisosPlano,
                 alertas(calculados, itens, naoAlocado),
-                classesDto(referencia, calculados, margem, (orcamento != null) ? orcamento.porClasse() : Map.of(),
+                classesDto(referencia, calculados, plano.margemAplicada().doubleValue(), (orcamento != null) ? orcamento.porClasse() : Map.of(),
                         (orcamento != null) ? orcamento.porSubclasse() : Map.of()),
-                itens);
+                itens,
+                plano.margemConfigurada(),
+                MetaUtilizacaoAporte.SOBRA_MAXIMA_PERCENTUAL,
+                orcamento == null ? null : MetaUtilizacaoAporte.sobraMaxima(valorAporte),
+                orcamento == null ? null : MetaUtilizacaoAporte.minimoAlocar(valorAporte),
+                metaAtingida);
     }
 
 
@@ -289,18 +324,17 @@ public class AporteService {
                 limiteOperacionalPct = null;
                 limitePct = null;
                 limiteReais = null;
-                deficit = ReferenciaAporte.moeda(0d);
+                deficit = ReferenciaAporte.moeda(heranca.deficitDe(a));
                 excesso = ReferenciaAporte.moeda(0d);
                 capacidadeBruta = heranca.de(a);
             }
 
-            // Piso de ruído: abaixo dele não há "capacidade" de verdade (metas com 4
-            // casas erram centavos, e o rateio usa o mesmo piso). Sem isto, um ativo
-            // apareceria ELEGÍVEL e nunca receberia nada.
-            double capacidade = (capacidadeBruta > tol) ? capacidadeBruta : 0d;
+            // A tolerância classifica percentuais. Uma capacidade em centavos
+            // continua utilizável, especialmente por quem aceita aplicação fracionada.
+            double capacidade = Math.max(0d, capacidadeBruta);
             BigDecimal percentualProjetado = ReferenciaAporte.percentualAtualProjetado(moeda(valorAtual), r);
             boolean limiteAtingido = limitePct != null && limitePct.signum() > 0
-                    && percentualProjetado.doubleValue() >= limitePct.doubleValue();
+                    && moeda(valorAtual).compareTo(limiteReais) >= 0;
 
             ElegibilidadeService.Veredito veredito = elegibilidadeService.avaliar(
                     new ElegibilidadeService.Entrada(
@@ -346,7 +380,9 @@ public class AporteService {
             Map<Long, Double> capacidadePorSubclasse,
             Map<Long, Double> basePorSubclasse,
             Map<CategoriaInvestimento, Double> capacidadePorClasse,
-            Map<CategoriaInvestimento, Double> basePorClasse) {
+            Map<CategoriaInvestimento, Double> basePorClasse,
+            Map<Long, Double> deficitPorSubclasse,
+            Map<CategoriaInvestimento, Double> deficitPorClasse) {
 
         /** Fatia da posição no espaço herdado (0 quando ela não está na Carteira Ideal). */
         double de(MeusAtivosResponseDTO.MeuAtivoDTO a) {
@@ -356,6 +392,13 @@ public class AporteService {
                         basePorSubclasse.get(a.subclasse_id()), valor);
             }
             return fatia(capacidadePorClasse.get(a.classe()), basePorClasse.get(a.classe()), valor);
+        }
+
+        double deficitDe(MeusAtivosResponseDTO.MeuAtivoDTO a) {
+            double valor = AlocacaoService.nz(a.valor_atual());
+            return a.subclasse_id() != null
+                    ? fatia(deficitPorSubclasse.get(a.subclasse_id()), basePorSubclasse.get(a.subclasse_id()), valor)
+                    : fatia(deficitPorClasse.get(a.classe()), basePorClasse.get(a.classe()), valor);
         }
 
         private static double fatia(Double capacidade, Double base, double valor) {
@@ -373,13 +416,17 @@ public class AporteService {
         Map<Long, Double> baseSubclasse = new HashMap<>();
         Map<CategoriaInvestimento, Double> capClasse = new HashMap<>();
         Map<CategoriaInvestimento, Double> baseClasse = new HashMap<>();
+        Map<Long, Double> deficitSubclasse = new HashMap<>();
+        Map<CategoriaInvestimento, Double> deficitClasse = new HashMap<>();
 
         // 1) Espaço de cada bucket até o LIMITE OPERACIONAL dele.
         for (ComparativoResponseDTO.ClasseComparativoDTO c : comparativo.classes()) {
+            deficitClasse.put(c.classe(), AlocacaoService.nz(c.deficit()));
             capClasse.put(c.classe(), ReferenciaAporte
                     .limite(c.percentual_ideal(), c.limite_maximo(), c.valor_atual(), r, margemPercentual)
                     .capacidade().doubleValue());
             for (ComparativoResponseDTO.SubclasseComparativoDTO s : c.subclasses()) {
+                deficitSubclasse.put(s.id(), AlocacaoService.nz(s.deficit()));
                 // O alvo da subclasse já é uma FATIA da classe, então aplicar a
                 // margem sobre ele dá o limite operacional dela em reais.
                 double limiteEmReais = ReferenciaAporte
@@ -404,7 +451,7 @@ public class AporteService {
                 baseClasse.merge(a.classe(), valor, Double::sum);
             }
         }
-        return new Heranca(capSubclasse, baseSubclasse, capClasse, baseClasse);
+        return new Heranca(capSubclasse, baseSubclasse, capClasse, baseClasse, deficitSubclasse, deficitClasse);
     }
 
     /* ══════════════════════════════════════════════════════════════════
@@ -582,7 +629,7 @@ public class AporteService {
     }
 
     /** Explicação objetiva da decisão (§29), do jeito mais curto que explique. */
-    private String motivo(AporteCandidato c, BigDecimal sugestao) {
+    private String motivo(AporteCandidato c, BigDecimal sugestao, BigDecimal capacidadeRestante) {
         String nota = (c.nota() != null)
                 ? "Nota " + percentual(c.nota()) + " (" + c.respondidas() + "/" + c.perguntas() + " perguntas)"
                 : "Sem nota no checklist";
@@ -604,6 +651,11 @@ public class AporteService {
         }
         if (sugestao == null) {
             return nota + ". Informe o valor do aporte para ver quanto entra.";
+        }
+        if (AlocacaoService.compraEmUnidadesInteiras(c.classe()) && c.precoUnitario() != null
+                && capacidadeRestante.compareTo(c.precoUnitario()) < 0) {
+            return "Não recebe: só comporta " + formatar(capacidadeRestante) + ", menos que uma cota de "
+                    + formatar(c.precoUnitario()) + ". Comprar uma cota ultrapassaria o limite do ativo, classe ou subclasse.";
         }
         return "Nada neste aporte: " + nota.toLowerCase() + ", mas o valor já foi direcionado a quem tem prioridade.";
     }
@@ -637,40 +689,40 @@ public class AporteService {
         return "R$ " + valor.setScale(2, RoundingMode.HALF_UP).toPlainString().replace(".", ",");
     }
 
-    private String explicacaoNaoAlocado(BigDecimal naoAlocado, List<AporteCandidato> candidatos,
-                                        OrcamentoAporte orcamento) {
+    String explicacaoNaoAlocado(BigDecimal naoAlocado, List<AporteCandidato> candidatos,
+                                List<BigDecimal> capacidadesRestantes) {
         if (naoAlocado == null || naoAlocado.signum() <= 0) {
             return null;
         }
-        // Sobrou dinheiro e ALGUÉM ainda tinha espaço? Então o que travou foi a
-        // UNIDADE: o valor não fecha uma cota inteira do que sobrou com espaço.
+        List<String> restricoes = new ArrayList<>();
+        BigDecimal menorPreco = null;
         for (int i = 0; i < candidatos.size(); i++) {
             AporteCandidato c = candidatos.get(i);
+            if (!c.elegivel()) {
+                continue;
+            }
             BigDecimal preco = c.precoUnitario();
-            boolean temEspaco = orcamento != null
-                    && (orcamento.deCandidato(i).doubleValue() + 1e-9) < nz(c.capacidade());
-            if (c.elegivel() && temEspaco && preco != null && preco.signum() > 0) {
-                return "Sobraram " + formatar(naoAlocado) + ": é troco de arredondamento — não fecha uma "
-                        + "cota inteira dos ativos que ainda têm espaço (a cota mais barata deles custa "
-                        + formatar(preco) + "). Guarde para o próximo aporte.";
+            BigDecimal espaco = capacidadesRestantes.get(i);
+            if (espaco.signum() > 0 && AlocacaoService.compraEmUnidadesInteiras(c.classe())
+                    && preco != null && preco.signum() > 0) {
+                if (espaco.compareTo(preco) < 0) {
+                    restricoes.add(c.nome() + " só comporta " + formatar(espaco) + ", menos que uma cota de "
+                            + formatar(preco) + "; comprar uma cota ultrapassaria o limite");
+                } else if (naoAlocado.compareTo(preco) < 0) {
+                    menorPreco = menorPreco == null ? preco : menorPreco.min(preco);
+                }
             }
         }
-        return explicacaoNaoAlocadoGenerica(naoAlocado, candidatos);
-    }
-
-    /** Sobra que não é troco de arredondamento: falta de ESPAÇO até o limite. */
-    private String explicacaoNaoAlocadoGenerica(BigDecimal naoAlocado, List<AporteCandidato> candidatos) {
-        if (naoAlocado == null || naoAlocado.signum() <= 0) {
-            return null;
+        if (menorPreco != null) {
+            restricoes.add("o saldo é menor que a cota mais barata que ainda cabe nos limites (" + formatar(menorPreco) + ")");
         }
         long descartados = candidatos.stream().filter(c -> !c.elegivel()).count();
-        List<String> razoes = new ArrayList<>();
         if (descartados > 0) {
-            razoes.add(descartados + " ativo(s) não podem receber (limite atingido, critério eliminatório do "
-                    + "checklist ou classe fora da Carteira Ideal)");
+            restricoes.add(descartados + " ativo(s) foram descartados; consulte seus motivos");
         }
-        razoes.add("os ativos elegíveis já estão no limite operacional (meta + margem)");
-        return formatar(naoAlocado) + " sem destino neste aporte: " + String.join(" e ", razoes) + ".";
+        return formatar(naoAlocado) + " não alocados. "
+                + (restricoes.isEmpty() ? "Não há capacidade de compra restante dentro dos limites dos ativos, classes e subclasses."
+                        : String.join("; ", restricoes) + ". Os demais destinos não têm capacidade de compra restante dentro dos limites.");
     }
 
     private List<String> avisos(ComparativoResponseDTO comparativo, List<AporteCandidato> candidatos,

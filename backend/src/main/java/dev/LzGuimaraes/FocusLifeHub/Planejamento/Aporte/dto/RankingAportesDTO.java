@@ -199,6 +199,14 @@ public final class RankingAportesDTO {
             List<Alerta> alertas,
             List<ClasseAporteDTO> classes,
             /** TODOS os ativos analisados: elegíveis e descartados (com o motivo). */
-            List<Item> itens
+            List<Item> itens,
+            /** Margem inicial salva, preservada mesmo quando o plano a amplia. */
+            BigDecimal margem_configurada_percentual,
+            /** Limite da sobra como percentual do aporte, independente da margem operacional. */
+            BigDecimal sobra_maxima_percentual,
+            BigDecimal valor_sobra_maxima,
+            BigDecimal valor_minimo_alocar,
+            /** false = limites explícitos, bloqueios ou unidades impedem aplicar ao menos 95%. */
+            Boolean meta_utilizacao_atingida
     ) {}
 }

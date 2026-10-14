@@ -12,8 +12,8 @@ import java.util.Map;
  *
  * Os valores já vêm arredondados para UNIDADES INTEIRAS quando o ativo é
  * comprado em cotas (ação, FII, ETF): ninguém compra 72,7 cotas. A sobra do
- * arredondamento é redistribuída por ORDEM DE NOTA e o que não fecha uma cota
- * fica em `naoAlocado` (é troco, não dinheiro perdido).
+ * arredondamento é redistribuída priorizando os déficits e as notas, respeitando
+ * os limites de todos os níveis. `troco` registra todo o saldo não alocado.
  */
 public record OrcamentoAporte(
         Map<dev.LzGuimaraes.FocusLifeHub.Ativo.CategoriaInvestimento, BigDecimal> porClasse,
@@ -22,7 +22,7 @@ public record OrcamentoAporte(
         /** Unidades por candidato (null = não deu para contar). */
         List<BigDecimal> quantidades,
         BigDecimal alocado,
-        /** Sobra que não fecha uma unidade inteira de ninguém. */
+        /** Todo o saldo não alocado, por limites ou por unidades indivisíveis. */
         BigDecimal troco
 ) {
 

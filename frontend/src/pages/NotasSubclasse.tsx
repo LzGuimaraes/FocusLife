@@ -206,7 +206,8 @@ export default function NotasSubclasse() {
                 {catInfo(painel.classe).icon} {painel.subclasse_nome} · {painel.perguntas.length} perguntas
               </h3>
               <p style={{ fontSize: "12px", color: "#64748b", margin: "4px 0 0" }}>
-                Nota de 0 (pior) a 10 (melhor) em cada pergunta. A nota final é a média das respostas.
+                Nota de 0 (pior) a 10 (melhor) em cada pergunta. Use notas intermediárias para distinguir
+                o quanto cada ativo atende ao critério; perguntas em branco ficam sem avaliação.
               </p>
             </div>
             <Button onClick={salvar} loading={salvando}>Salvar notas</Button>
@@ -257,7 +258,9 @@ export default function NotasSubclasse() {
             {painel.classe_inteira
               ? `As perguntas são o checklist padrão de ${painel.classe_label} (o mesmo para todos os ativos do tipo).`
               : "As perguntas são as mesmas para todas as empresas desta subclasse — é o que permite comparar duas empresas do mesmo setor."}
-            {" "}Quem não tem nota entra depois de quem foi avaliado.
+            {" "}O aporte primeiro atende quem está abaixo da meta. Dentro de cada grupo, a nota divide
+            o valor disponível; quando as notas são iguais, a divisão é igual até algum ativo atingir
+            seu teto. A nota não aumenta os limites de concentração.
           </p>
         </div>
       )}

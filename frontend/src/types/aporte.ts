@@ -96,7 +96,7 @@ export interface ItemRanking {
   /** Alvo projetado em reais = meta × R (a META, não o limite). */
   valor_ideal: number;
   valor_atual: number;
-  /** max(0, alvo − atual): o espaço DESEJÁVEL (diferente da capacidade). */
+  /** Espaço até a meta; sem meta própria, herda uma fatia do déficit do grupo. */
   deficit: number;
   excesso: number;
   tolerancia: number;
@@ -178,6 +178,12 @@ export interface RankingAportes {
   valor_total_com_aporte: number | null;
   /** Margem operacional usada no cálculo (%, relativa à meta). */
   margem_percentual: number;
+  /** Margem inicial salva; a margem do plano pode ser ampliada para atingir a utilização. */
+  margem_configurada_percentual: number;
+  sobra_maxima_percentual: number;
+  valor_sobra_maxima: number | null;
+  valor_minimo_alocar: number | null;
+  meta_utilizacao_atingida: boolean | null;
   valor_alocado: number | null;
   valor_nao_alocado: number | null;
   /** Quantos ativos disputaram o aporte (elegíveis) e quantos foram descartados. */

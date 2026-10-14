@@ -1,6 +1,7 @@
 package dev.LzGuimaraes.FocusLifeHub.Planejamento.Aporte;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
 
@@ -77,4 +78,12 @@ public record AporteCandidato(
          * unidades inteiras, porque não há unidade para contar.
          */
         BigDecimal precoUnitario
-) {}
+) {
+    public AporteCandidato {
+        // Cota negociada em centavos: elimina ruído vindo de preços Float,
+        // como 67,160003662, antes de contar unidades ou comparar capacidade.
+        if (precoUnitario != null && AlocacaoService.compraEmUnidadesInteiras(classe)) {
+            precoUnitario = precoUnitario.setScale(2, RoundingMode.HALF_UP);
+        }
+    }
+}

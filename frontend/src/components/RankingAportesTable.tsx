@@ -41,14 +41,23 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
             )}
           </p>
         </div>
-        {comSugestao && ranking.valor_aporte != null && (
+        {ranking.valor_aporte != null && ranking.valor_aporte > 0 && (
           <div style={{ textAlign: "right", fontSize: "12px", color: "#64748b" }}>
             <div>
               Aporte de <strong>{fmtMoeda(ranking.valor_aporte, moeda)}</strong>
             </div>
-            <div title="Margem operacional: o quanto o ativo pode passar da meta antes de ser considerado cheio">
-              Margem: <strong>{fmtPercentual(ranking.margem_percentual)}</strong>
+            <div title="Margem usada neste plano; pode ser ampliada para aplicar pelo menos 95% do aporte, respeitando limites máximos cadastrados">
+              Margem do plano: <strong>{fmtPercentual(ranking.margem_percentual)}</strong>
+              {ranking.margem_configurada_percentual != null && ranking.margem_percentual > ranking.margem_configurada_percentual && (
+                <> · inicial: {fmtPercentual(ranking.margem_configurada_percentual)}</>
+              )}
             </div>
+            {ranking.valor_minimo_alocar != null && (
+              <div style={{ color: ranking.meta_utilizacao_atingida ? "#047857" : "#b45309" }}>
+                {ranking.meta_utilizacao_atingida ? "✓" : "⚠"} Meta: aplicar ao menos <strong>{fmtMoeda(ranking.valor_minimo_alocar, moeda)}</strong>
+                <div>Sobra máxima de {fmtPercentual(ranking.sobra_maxima_percentual)} do aporte: {fmtMoeda(ranking.valor_sobra_maxima ?? 0, moeda)}</div>
+              </div>
+            )}
             <div>
               Alocado: <strong style={{ color: "#047857" }}>{fmtMoeda(ranking.valor_alocado ?? 0, moeda)}</strong>
               {(ranking.valor_nao_alocado ?? 0) > 0 && (
@@ -106,10 +115,11 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
             <thead>
               <tr style={{ background: "#f8fafc" }}>
                 {["#", "Ativo", "Classe", "Nota", "Status", "Ação",
-                  comSugestao ? "Atual (após)" : "Atual", "Meta (após)", "Déficit", "Limite", "Capacidade"]
+                  comSugestao ? "Antes da compra" : "Atual", "Meta", "Déficit", "Limite", "Capacidade"]
                   .map(h => <th key={h} style={{ ...th, textAlign: ["#", "Ativo", "Classe", "Status", "Ação"].includes(h) ? "left" : "right" }}
-                    title={h.includes("(após)") ? "Percentual considerando o aporte informado (o alvo cresce com o patrimônio final)" : undefined}>{h}</th>)}
+                    title={h === "Antes da compra" ? "Valor atual dividido pelo patrimônio previsto, incluindo todo o aporte" : undefined}>{h}</th>)}
                 {comSugestao && <th style={{ ...th, textAlign: "right" }}>Aporte</th>}
+                {comSugestao && <th style={{ ...th, textAlign: "right" }} title="Valor atual mais a compra sugerida, dividido pelo patrimônio previsto; a sobra permanece como saldo disponível">Após o plano</th>}
               </tr>
             </thead>
             <tbody>
@@ -128,6 +138,9 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
                         ? <span style={{ ...scorePill, color: scoreColor(i.nota), background: scoreBg(i.nota) }}>{fmtScore(i.nota)}</span>
                         : <span style={{ fontSize: "11px", color: "#b45309" }}>sem nota</span>}
                       <div style={{ fontSize: "10.5px", color: "#94a3b8" }}>{i.respondidas}/{i.perguntas} perguntas</div>
+                      {i.nota != null && i.respondidas < i.perguntas && (
+                        <div style={{ fontSize: "10.5px", color: "#b45309" }} title="A nota usa as respostas existentes; complete o checklist para uma avaliação mais completa">avaliação parcial</div>
+                      )}
                     </td>
                     <td style={{ ...td, whiteSpace: "nowrap" }}>
                       <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 9px", borderRadius: "9999px",
@@ -144,7 +157,8 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
                         ? <span title="Posição sem meta própria: o alvo dela é o da subclasse/classe" style={{ color: "#cbd5e1" }}>—</span>
                         : fmtPercentual(i.percentual_ideal)}
                     </td>
-                    <td style={{ ...td, textAlign: "right", color: i.deficit > 0 ? "#1d4ed8" : "#cbd5e1" }}>
+                    <td style={{ ...td, textAlign: "right", color: i.deficit > 0 ? "#1d4ed8" : "#cbd5e1" }}
+                      title={i.meta_id == null ? "Fatia do déficit herdada da classe ou subclasse" : "Quanto falta até a meta sobre o patrimônio previsto"}>
                       {fmtMoeda(i.deficit, moeda)}
                     </td>
                     {/* LIMITE = min(meta × (1+margem), limite cadastrado). É dele que sai
@@ -167,6 +181,13 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
                             {fmtUnidades(i.quantidade, compraEmCotas(i.classe))} × {fmtMoeda(i.preco_unitario ?? 0, moeda)}
                           </div>
                         )}
+                      </td>
+                    )}
+                    {comSugestao && (
+                      <td style={{ ...td, textAlign: "right", color: "#047857", fontWeight: 700 }}>
+                        {fmtPercentual((ranking.valor_total_com_aporte ?? ranking.valor_total) > 0
+                          ? (i.valor_atual + (i.sugestao_aporte ?? 0)) / (ranking.valor_total_com_aporte ?? ranking.valor_total) * 100
+                          : 0)}
                       </td>
                     )}
                   </tr>
@@ -237,18 +258,21 @@ export default function RankingAportesTable({ ranking, titulo }: { ranking: Rank
       )}
 
       <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "14px", marginBottom: 0 }}>
-        A ordem do aporte é a <strong>nota do checklist</strong> (por subclasse, uma nota por ativo) ·
+        Primeiro entram os ativos <strong>abaixo da meta</strong>, com divisão proporcional à
+        <strong> nota do checklist</strong> dentro de cada grupo; depois, o saldo usa a folga até os limites ·
         A compra é em <strong>cotas inteiras</strong> (ação, FII e ETF) pelo preço atual — o valor de cada
         ativo é arredondado para baixo e o que não fecha uma cota volta para o pool do aporte ·
         Ninguém recebe mais do que o espaço até o <strong>limite operacional</strong>
         (meta + margem de <strong>{fmtPercentual(ranking.margem_percentual)}</strong>, ou o limite cadastrado
         quando for menor); o que sobra depois disso fica não alocado.
+        {" "}Se a sobra ultrapassar 5% do aporte, a margem do plano é ampliada para procurar ao menos
+        95% de aplicação, mantendo os limites máximos cadastrados e os bloqueios do checklist.
         {ranking.valor_total_com_aporte != null && (
           <> Os alvos são calculados sobre o patrimônio <strong>depois</strong> do aporte
             ({fmtMoeda(ranking.valor_total, ranking.moeda)} + {fmtMoeda(ranking.valor_aporte ?? 0, ranking.moeda)} ={" "}
-            {fmtMoeda(ranking.valor_total_com_aporte, ranking.moeda)}), então os percentuais da tabela
-            já mostram onde cada ativo ficaria sem o dinheiro novo — e é por isso que um ativo
-            <strong> na meta</strong> continua candidato.</>
+            {fmtMoeda(ranking.valor_total_com_aporte, ranking.moeda)}).
+            <strong> Antes da compra</strong> usa o valor atual; <strong>Após o plano</strong> inclui a
+            compra sugerida. Ambos usam esse patrimônio previsto, com a sobra mantida como saldo disponível.</>
         )}
       </p>
     </div>

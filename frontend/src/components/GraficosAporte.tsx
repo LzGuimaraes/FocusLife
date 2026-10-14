@@ -97,9 +97,8 @@ export default function DonutAporte({ ranking }: { ranking: RankingAportes }) {
         <h3 style={{ fontSize: 16, fontWeight: 800, color: "#0f172a", margin: 0 }}>Onde o aporte entra</h3>
         <p style={{ fontSize: 12.5, color: "#64748b", margin: "6px 0 0" }}>
           {informou
-            ? <>Nada foi alocado neste aporte. Não é “classe sem déficit”: os ativos elegíveis já estão no
-              limite operacional (meta + margem) ou não há ativo elegível — veja o motivo de cada um na
-              tabela abaixo.</>
+            ? <>Nada foi alocado neste aporte. Confira as capacidades, os limites de classe e subclasse
+              e o preço de uma unidade na tabela abaixo.</>
             : <>Informe quanto você pretende aportar para ver a distribuição.</>}
           {informou && (
             <> O valor informado foi {fmtMoeda(ranking.valor_aporte, moeda)}

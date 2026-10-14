@@ -133,7 +133,7 @@ class MotorAportesRefatoradoTest {
        ══════════════════════════════════════════════════════════════════ */
 
     @Test
-    @DisplayName("5. nota 100 com capacidade pequena recebe a capacidade; o resto vai para a nota 50")
+    @DisplayName("5. nota alta preenche a meta; o restante atende outros déficits antes da margem")
     void notaAltaNaoFuraOCapacidade() {
         // R = 21.000. CARO tem meta de 0,4% → limite de 0,42% × 21.000 = R$ 88,20.
         Execucao e = rodar(List.of(
@@ -142,9 +142,9 @@ class MotorAportesRefatoradoTest {
                 T, 1000d, MARGEM);
 
         assertThat(e.candidato("CARO").capacidade()).isEqualByComparingTo("88.20");
-        assertThat(e.recebido("CARO")).isEqualByComparingTo("88.20");
-        assertThat(e.recebido("CARO")).isEqualTo(e.candidato("CARO").capacidade());
-        assertThat(e.recebido("LIVRE")).isEqualByComparingTo("911.80");
+        assertThat(e.recebido("CARO")).isEqualByComparingTo("84.00");
+        assertThat(e.recebido("CARO")).isLessThanOrEqualTo(e.candidato("CARO").capacidade());
+        assertThat(e.recebido("LIVRE")).isEqualByComparingTo("916.00");
     }
 
     /* ══════════════════════════════════════════════════════════════════
@@ -152,7 +152,7 @@ class MotorAportesRefatoradoTest {
        ══════════════════════════════════════════════════════════════════ */
 
     @Test
-    @DisplayName("6. quando o de maior nota bate o limite, a sobra vai para os próximos")
+    @DisplayName("6. quando o de maior nota atinge a meta, o restante atende outros déficits")
     void sobraDoLimiteVaiParaOsProximos() {
         // R = 25.000. TOPO tem meta de 1% → limite de 1,05% × 25.000 = R$ 262,50.
         Execucao e = rodar(List.of(
@@ -160,8 +160,8 @@ class MotorAportesRefatoradoTest {
                 ativo("SEGUE", CategoriaInvestimento.ACOES, 30d, 0d).comNota(50)),
                 T, 5000d, MARGEM);
 
-        assertThat(e.recebido("TOPO")).isEqualByComparingTo("262.50");
-        assertThat(e.recebido("SEGUE")).isEqualByComparingTo("4737.50");
+        assertThat(e.recebido("TOPO")).isEqualByComparingTo("250.00");
+        assertThat(e.recebido("SEGUE")).isEqualByComparingTo("4750.00");
         assertThat(e.alocado()).isEqualByComparingTo("5000.00");
     }
 
