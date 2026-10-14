@@ -135,7 +135,8 @@ sequenceDiagram
 - **Execução manual do job diário** de notificações (`POST /admin/jobs/daily/run`).
 
 ### 📧 Notificações por e-mail (job diário)
-- `DailyNotificationJob` roda **diariamente às 08:00 (America/Cuiaba)** e envia lembretes de **contas vencendo** e **tarefas do dia** via SMTP Gmail.
+- `DailyNotificationJob` envia lembretes de **contas vencendo hoje** e **tarefas ativas/pendentes do dia** via SMTP Gmail. Executa às **08:00 e novamente a cada hora até 23:00 (America/Cuiaba)** para recuperar falhas temporárias e novos lançamentos. Ao iniciar o backend após as 08:00, também verifica os avisos do dia.
+- Contas pagas, saldos, usuários desativados e tarefas canceladas/concluídas ficam de fora. O registro em `email_log` exclui avisos já enviados das próximas tentativas; os destinatários são carregados na consulta para o job funcionar fora de uma requisição HTTP.
 
 ### 🎨 Experiência / UX
 - **Design system** próprio: `Form` (Input, Select, DateInput, NumberInput, TextArea), `UI` (PageHeader, CardGrid, Spinner, EmptyState, ProgressBar), `Modal`, `Shared`.

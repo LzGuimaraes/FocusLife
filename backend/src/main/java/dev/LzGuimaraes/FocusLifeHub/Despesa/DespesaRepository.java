@@ -10,12 +10,33 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import dev.LzGuimaraes.FocusLifeHub.Email.TipoEmailLog;
+
 @Repository
 public interface DespesaRepository extends JpaRepository<DespesaModel, Long> {
     Page<DespesaModel> findByCarteiraDividas_UserId(Long userId, Pageable pageable);
     List<DespesaModel> findByCarteiraDividasId(Long carteiraId);
     List<DespesaModel> findByPagoFalseAndDataVencimento(LocalDate dataVencimento);
     List<DespesaModel> findByCarteiraDividas_UserIdAndPagoFalseAndDataVencimento(Long userId, LocalDate dataVencimento);
+
+    /** Carrega o destinatário antes de encerrar a sessão do job e exclui avisos já enviados. */
+    @Query("""
+            select d from DespesaModel d
+            join fetch d.carteiraDividas c
+            join fetch c.user u
+            where d.dataVencimento = :data
+              and d.tipo = :tipoDespesa
+              and (d.pago = false or d.pago is null)
+              and u.enabled = true
+              and not exists (
+                  select e.id from EmailLogModel e
+                  where e.usuario_id = u.id and e.tipo = :tipoEmail
+                    and e.referencia_id = d.id and e.data_referencia = :data
+              )
+            """)
+    List<DespesaModel> buscarContasParaNotificar(@Param("data") LocalDate data,
+                                               @Param("tipoDespesa") TipoLancamento tipoDespesa,
+                                               @Param("tipoEmail") TipoEmailLog tipoEmail);
 
     /**
      * Consulta ADMIN dos lançamentos (contas/saldos) de UM usuário-alvo.

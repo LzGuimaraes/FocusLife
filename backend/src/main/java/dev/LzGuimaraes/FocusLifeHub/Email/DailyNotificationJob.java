@@ -2,18 +2,26 @@ package dev.LzGuimaraes.FocusLifeHub.Email;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 
 import dev.LzGuimaraes.FocusLifeHub.Auth.MailService;
 import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaModel;
 import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaRepository;
+import dev.LzGuimaraes.FocusLifeHub.Despesa.TipoLancamento;
 import dev.LzGuimaraes.FocusLifeHub.Tarefas.Enum.TarefaStatus;
 import dev.LzGuimaraes.FocusLifeHub.Tarefas.TarefasModel;
 import dev.LzGuimaraes.FocusLifeHub.Tarefas.TarefasRepository;
@@ -28,20 +36,50 @@ public class DailyNotificationJob {
     private final TarefasRepository tarefasRepository;
     private final EmailLogRepository emailLogRepository;
     private final MailService mailService;
+    private final Clock clock;
+    private final AtomicBoolean executando = new AtomicBoolean();
 
+    @Autowired
     public DailyNotificationJob(DespesaRepository despesaRepository,
                                 TarefasRepository tarefasRepository,
                                 EmailLogRepository emailLogRepository,
                                 MailService mailService) {
+        this(despesaRepository, tarefasRepository, emailLogRepository, mailService,
+                Clock.system(ZoneId.of("America/Cuiaba")));
+    }
+
+    DailyNotificationJob(DespesaRepository despesaRepository, TarefasRepository tarefasRepository,
+                         EmailLogRepository emailLogRepository, MailService mailService, Clock clock) {
         this.despesaRepository = despesaRepository;
         this.tarefasRepository = tarefasRepository;
         this.emailLogRepository = emailLogRepository;
         this.mailService = mailService;
+        this.clock = clock;
     }
 
-    @Scheduled(cron = "0 0 8 * * *", zone = "America/Cuiaba")
+    // As consultas excluem os registros já enviados: a repetição recupera
+    // falhas temporárias e lançamentos feitos depois da primeira execução.
+    @Scheduled(cron = "${app.notifications.cron:0 0 8-23 * * *}", zone = "America/Cuiaba")
     public void run() {
-        LocalDate hoje = LocalDate.now();
+        if (!executando.compareAndSet(false, true)) {
+            log.info("Job de notificações já em execução; chamada simultânea ignorada");
+            return;
+        }
+        try {
+            executar(LocalDate.now(clock));
+        } finally {
+            executando.set(false);
+        }
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void recuperarAoIniciar() {
+        if (!LocalTime.now(clock).isBefore(LocalTime.of(8, 0))) {
+            run();
+        }
+    }
+
+    private void executar(LocalDate hoje) {
         log.info("Job diário executado - {}", hoje);
 
         // Blocos independentes: falha em um não impede o outro
@@ -63,15 +101,12 @@ public class DailyNotificationJob {
      * mesma conta/data (evita e-mail duplicado).
      */
     public List<DespesaModel> selecionarContasParaNotificar(LocalDate data) {
-        return despesaRepository.findByPagoFalseAndDataVencimento(data)
-                .stream()
-                .filter(conta -> !emailLogRepository.existsByTipoAndReferenciaIdAndDataReferencia(
-                        TipoEmailLog.CONTA_VENCIMENTO, conta.getId(), data))
-                .collect(Collectors.toList());
+        return despesaRepository.buscarContasParaNotificar(data, TipoLancamento.DESPESA, TipoEmailLog.CONTA_VENCIMENTO);
     }
 
     private void enviarEmailsDeVencimento(LocalDate data) {
         List<DespesaModel> contas = selecionarContasParaNotificar(data);
+        log.info("Notificações de contas: {} lançamento(s) pendente(s) para {}", contas.size(), data);
 
         Map<UserModel, List<DespesaModel>> porUsuario = contas.stream()
                 .filter(c -> c.getCarteiraDividas() != null && c.getCarteiraDividas().getUser() != null)
@@ -97,32 +132,30 @@ public class DailyNotificationJob {
         String subject = "FocusLife Hub — Contas vencendo hoje (" + data + ")";
         mailService.sendHtml(usuario.getEmail(), subject, EmailTemplate.contasVencendo(data, contas));
 
-        for (DespesaModel conta : contas) {
+        List<EmailLogModel> registros = contas.stream().map(conta -> {
             EmailLogModel emailLog = new EmailLogModel();
             emailLog.setUsuario_id(usuario.getId());
             emailLog.setTipo(TipoEmailLog.CONTA_VENCIMENTO);
             emailLog.setReferencia_id(conta.getId());
             emailLog.setData_referencia(data);
-            emailLog.setEnviado_em(LocalDateTime.now());
-            emailLogRepository.save(emailLog);
-            log.info("email_log gravado para conta {}", conta.getId());
-        }
+            emailLog.setEnviado_em(LocalDateTime.now(clock));
+            return emailLog;
+        }).toList();
+        emailLogRepository.saveAll(registros);
     }
 
     /**
-     * Seleciona as tarefas a notificar na data: prazo = data, não concluídas
+     * Seleciona as tarefas a notificar na data: prazo = data, ativas/pendentes
      * e que ainda NÃO possuem email_log (TAREFA_DIA) para a mesma tarefa/data.
      */
     public List<TarefasModel> selecionarTarefasParaNotificar(LocalDate data) {
-        return tarefasRepository.findByPrazoAndStatusNot(data, TarefaStatus.Concluida)
-                .stream()
-                .filter(tarefa -> !emailLogRepository.existsByTipoAndReferenciaIdAndDataReferencia(
-                        TipoEmailLog.TAREFA_DIA, tarefa.getId(), data))
-                .collect(Collectors.toList());
+        return tarefasRepository.buscarTarefasParaNotificar(data,
+                List.of(TarefaStatus.Ativa, TarefaStatus.PENDENTE), TipoEmailLog.TAREFA_DIA);
     }
 
     private void enviarEmailsDeTarefas(LocalDate data) {
         List<TarefasModel> tarefas = selecionarTarefasParaNotificar(data);
+        log.info("Notificações de tarefas: {} tarefa(s) pendente(s) para {}", tarefas.size(), data);
 
         Map<UserModel, List<TarefasModel>> porUsuario = tarefas.stream()
                 .filter(t -> t.getUser() != null)
@@ -147,15 +180,15 @@ public class DailyNotificationJob {
         String subject = "FocusLife Hub — Tarefas do dia (" + data + ")";
         mailService.sendHtml(usuario.getEmail(), subject, EmailTemplate.tarefasDoDia(data, tarefas));
 
-        for (TarefasModel tarefa : tarefas) {
+        List<EmailLogModel> registros = tarefas.stream().map(tarefa -> {
             EmailLogModel emailLog = new EmailLogModel();
             emailLog.setUsuario_id(usuario.getId());
             emailLog.setTipo(TipoEmailLog.TAREFA_DIA);
             emailLog.setReferencia_id(tarefa.getId());
             emailLog.setData_referencia(data);
-            emailLog.setEnviado_em(LocalDateTime.now());
-            emailLogRepository.save(emailLog);
-            log.info("email_log gravado para tarefa {}", tarefa.getId());
-        }
+            emailLog.setEnviado_em(LocalDateTime.now(clock));
+            return emailLog;
+        }).toList();
+        emailLogRepository.saveAll(registros);
     }
 }
