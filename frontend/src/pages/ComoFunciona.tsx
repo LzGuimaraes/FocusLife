@@ -1,214 +1,148 @@
+import { useState, type CSSProperties } from "react";
+import { Link } from "react-router-dom";
+import { ArrowRight, ChevronDown } from "lucide-react";
 import Layout from "../components/Layout";
+import "./ComoFunciona.css";
 
-const features = [
+const sections = [
   {
-    icon: "💰", title: "Carteiras Financeiras",
-    color: "#10b981", bg: "#ecfdf5",
-    desc: "Crie carteiras de Despesas e Investimentos com navegação contextual. Cada carteira tem sua própria página com indicadores exclusivos.",
+    id: "rotina", icon: "✓", title: "Organize sua rotina", label: "Comece aqui",
+    color: "var(--color-info)",
+    description: "Tarefas e metas para saber o que fazer agora e acompanhar seu progresso.",
     steps: [
-      "Carteira de Despesas: contas mensais com checklist Pago/Pendente, totalizadores automáticos",
-      "Carteira de Investimentos: patrimônio total, distribuição por categorias com gráfico de barras %",
-      "Navegação por carteira: seletor dropdown para trocar rapidamente sem voltar à tela inicial",
-      "Suporte a múltiplas moedas: BRL, USD, EUR, GBP, JPY com formatação automática",
+      { title: "Defina seus objetivos", text: "Crie metas com prazo e atualize o progresso conforme avançar." },
+      { title: "Escolha as prioridades do dia", text: "Cadastre tarefas com prioridade e prazo. Filtre por status para focar nas pendências." },
+      { title: "Acompanhe o que foi feito", text: "Atualize o status das tarefas e confira a evolução das metas. Tarefas pendentes ou ativas com prazo hoje recebem lembretes por e-mail." },
     ],
+    links: [{ label: "Abrir tarefas", path: "/tarefas" }, { label: "Ver metas", path: "/metas" }],
   },
   {
-    icon: "🔄", title: "Compras/Vendas (lucro por operação)",
-    color: "#0ea5e9", bg: "#f0f9ff",
-    desc: "Registre a compra e a venda de um ativo e acompanhe, por operação, o lucro/prejuízo em R$ e a rentabilidade %. Fica em Finanças → Compras/Vendas.",
+    id: "contas", icon: "💳", title: "Mantenha as contas em dia", label: "Controle financeiro",
+    color: "var(--color-success)",
+    description: "Reúna despesas, acompanhe vencimentos e receba lembretes de pagamento.",
     steps: [
-      "Cada linha é uma operação: compra (custo total, data, quantidade) e, ao vender, a venda (valor, data)",
-      "Lucro/prejuízo e rentabilidade % calculados no servidor — verde para lucro, vermelho para prejuízo",
-      "Prazo em dias e selo ABERTA/FECHADA; operação só de compra fica ABERTA com o resultado não realizado",
-      "Venda PARCIAL: informe a quantidade vendida e o custo é rateado por ela (o restante mantém o preço unitário)",
-      "Gráfico de andamento: barras do valor bruto movimentado (R$) e linha da rentabilidade acumulada (%) por período",
-      "Puxa os ativos do catálogo (autocomplete de tickers) ou das posições que você JÁ tem na carteira",
-      "Preço teto / preço mínimo por ativo: o sistema avisa quando a cotação está acima do teto ou abaixo do mínimo",
-      "Lista global do usuário, com filtro por carteira e por intervalo de datas",
+      { title: "Crie uma carteira de despesas", text: "Separe suas contas por carteira e escolha a moeda dos lançamentos." },
+      { title: "Registre valores e vencimentos", text: "Consulte os totais e filtre contas pagas, pendentes ou atrasadas." },
+      { title: "Marque as contas pagas", text: "Contas vencendo hoje ou atrasadas recebem um lembrete por e-mail por dia. Ao marcar como paga, a conta sai dos próximos avisos." },
     ],
+    links: [{ label: "Abrir carteiras", path: "/financas/carteiras" }],
   },
   {
-    icon: "🧩", title: "Recuperação de Carteiras Antigas",
-    color: "#b45309", bg: "#fffbeb",
-    desc: "As carteiras foram divididas em duas tabelas (investimentos e despesas) numa migração. Contas que ficaram sem vínculo desapareceram das telas — este diagnóstico acha e religa.",
+    id: "investimentos", icon: "📈", title: "Conheça seu patrimônio", label: "Antes de planejar aportes",
+    color: "var(--color-success)",
+    description: "Veja seus investimentos e acompanhe o resultado de compras e vendas.",
     steps: [
-      "O aviso aparece sozinho em Finanças e na Carteira Ideal quando existe algum registro sem carteira",
-      "O sintoma típico é uma carteira que abre vazia, com 'ainda não tem investimentos cadastrados', mesmo tendo dados",
-      "Diagnóstico por carteira: quantidade de posições e valor somado, para você ver onde está cada coisa",
-      "Recuperação em um clique: escolha para qual carteira as posições (e as despesas) devem voltar, ou deixe no automático",
-      "A recuperação só preenche o vínculo que está vazio — nenhum valor, nome ou data é alterado",
-      "Se nenhuma carteira existir, uma nova ('Investimentos recuperados') é criada para receber os dados",
-      "Sem registros órfãos, o aviso muda de tom: mostra o resumo por carteira e explica que basta cadastrar em Finanças",
+      { title: "Cadastre seus investimentos", text: "Crie uma carteira e inclua renda fixa, Tesouro Direto, ações, FIIs, ETFs ou criptomoedas." },
+      { title: "Confira a distribuição", text: "Visualize o valor e a participação de cada categoria, com quantidade, preço médio e preço atual quando informado." },
+      { title: "Registre as operações", text: "Em Compras/Vendas, acompanhe lucro ou prejuízo, rentabilidade e vendas parciais. Defina preços teto e mínimo para seus ativos." },
     ],
+    links: [{ label: "Abrir carteiras", path: "/financas/carteiras" }, { label: "Compras/Vendas", path: "/financas/compras-vendas" }],
   },
   {
-    icon: "📈", title: "6 Categorias de Investimento",
-    color: "#8b5cf6", bg: "#f5f3ff",
-    desc: "Sistema escalável com formulários condicionais — cada categoria exibe apenas os campos relevantes.",
+    id: "organizacao", icon: "📐", title: "Planeje os próximos aportes", label: "Depois de cadastrar a carteira",
+    color: "var(--color-primary)",
+    description: "Defina a carteira ideal, avalie os ativos e distribua o aporte com prioridades claras.",
     steps: [
-      "📊 Renda Fixa: instituição, data da aplicação, rentabilidade %, vencimento",
-      "🏛️ Tesouro Direto: título, data da compra, vencimento, quantidade de títulos",
-      "📈 Ações: ticker, empresa, preço médio × quantidade, preço atual (opcional)",
-      "🏢 FIIs: ticker, quantidade de cotas, preço médio, preço atual",
-      "📦 ETFs: ticker, quantidade, preço médio, preço atual",
-      "₿ Criptomoedas: ativo (BTC, ETH, etc.), preço médio, quantidade com até 8 casas decimais, preço atual",
+      { title: "Defina suas metas de distribuição", text: "Na Carteira Ideal, configure classes, subclasses e metas por ativo. Compare a distribuição desejada com a carteira atual." },
+      { title: "Monte os critérios de avaliação", text: "Crie checklists por subclasse e escolha as perguntas e os pesos que fazem sentido para sua estratégia." },
+      { title: "Atribua as notas", text: "Responda às mesmas perguntas para comparar ativos da mesma subclasse. A nota ponderada vai de 0 a 100 e tem histórico de evolução." },
+      { title: "Simule e confira o aporte", text: "Informe o valor em Próximos Aportes. O plano prioriza quem está abaixo da meta e usa as notas para dividir entre eles, respeitando os limites e bloqueios. Exporte o resultado em CSV." },
     ],
+    note: "O plano busca aplicar pelo menos 95% do aporte e pode ampliar a margem operacional. Limites máximos, bloqueios e cotas inteiras ainda podem deixar uma sobra; confira o motivo nos alertas.",
+    links: [{ label: "Abrir organização", path: "/planejamento" }, { label: "Simular aporte", path: "/planejamento/aportes" }],
   },
   {
-    icon: "📊", title: "Distribuição de Patrimônio",
-    color: "#6366f1", bg: "#eef2ff",
-    desc: "Visualize a composição da sua carteira de investimentos com gráficos de barra e percentuais.",
+    id: "estudos", icon: "📝", title: "Estude com mais foco", label: "Aprendizado",
+    color: "var(--color-info)",
+    description: "Organize matérias, registre sessões e acompanhe o tempo dedicado a cada disciplina.",
     steps: [
-      "Gráfico de barras horizontal por categoria na página da carteira (Finanças → abrir a carteira)",
-      "Percentual de participação calculado automaticamente",
-      "Valor total por categoria em tempo real",
-      "Cálculo automático da posição: Preço Médio × Quantidade",
-      "Preço atual opcional com indicador visual (🟢 acima do PM / 🔴 abaixo)",
+      { title: "Organize as matérias", text: "Cadastre suas disciplinas e escolha os dias da semana em que pretende estudar." },
+      { title: "Registre o tempo e as anotações", text: "Use o cronômetro da matéria ou registre uma sessão com data, duração e notas. O player de música ajuda a criar um ambiente de foco." },
+      { title: "Revise sua dedicação", text: "Veja o total de horas por matéria e filtre o histórico das sessões de estudo." },
     ],
+    links: [{ label: "Abrir matérias", path: "/materias" }, { label: "Ver estudos", path: "/estudos" }],
   },
   {
-    icon: "📐", title: "Planejamento de Carteira",
-    color: "#6366f1", bg: "#eef2ff",
-    desc: "Defina a carteira que você quer ter e compare com a que você tem — sem recadastrar nada e sem metodologia imposta.",
+    id: "treinos", icon: "💪", title: "Crie constância nos treinos", label: "Bem-estar",
+    color: "var(--color-primary)",
+    description: "Planeje exercícios e acompanhe sua execução e consistência semana a semana.",
     steps: [
-      "Classes com percentual alvo (Ações, FIIs, Renda Fixa...): o sistema valida que a soma dá 100%",
-      "Subclasses para detalhar dentro da classe (ex.: Ações → Bancos 10%, Energia 8%)",
-      "Metas por ativo partem dos ATIVOS QUE VOCÊ JÁ TEM: cada linha já mostra o valor e o % atuais",
-      "Modelos prontos de partida (Conservador, Moderado, Arrojado, Dividendos) e botão 'Ajustar para 100%' quando faltar ou sobrar",
-      "Atalho 'usar minha distribuição atual como alvo' preenche tudo de uma vez — depois você ajusta só o que discordar",
-      "Gráficos de distribuição atual × ideal e de barras por classe, além do comparativo em tabela",
-      "O comparativo inclui os ativos que ainda NÃO têm meta (marcados como 'sem meta'), para a leitura ser da carteira inteira",
-      "Renda fixa, Tesouro e caixinhas (sem ticker) são classificados numa SUBCLASSE: assim entram no alvo da classe",
+      { title: "Monte a rotina semanal", text: "Cadastre treinos por dia da semana e organize exercícios com séries, repetições e outras medidas." },
+      { title: "Marque a execução", text: "Use o checklist de cada sessão para acompanhar os exercícios feitos e a conclusão do treino." },
+      { title: "Acompanhe sua constância", text: "Consulte o resumo semanal, as sequências de treinos e o histórico das semanas anteriores." },
     ],
-  },
-  {
-    icon: "✅", title: "Avaliação de Ativos",
-    color: "#8b5cf6", bg: "#f5f3ff",
-    desc: "Um checklist por SUBCLASSE e uma nota para cada empresa: quem tem a melhor nota recebe primeiro.",
-    steps: [
-      "Um checklist por SUBCLASSE (ex.: Bancos, Energia): várias empresas do mesmo setor respondem às MESMAS perguntas — é o que permite comparar duas delas",
-      "A nota final (0 a 100) normaliza as respostas pela nota máxima e considera os pesos das perguntas e dos checklists",
-      "Primeiro o aporte preenche déficits até a meta; dentro de cada grupo, a divisão é proporcional à nota",
-      "Crie subclasses na Carteira Ideal para avaliar por setor",
-      "Responder pelo celular sem sofrer: a tela de notas é uma tabela — empresas nas linhas, perguntas nas colunas, uma nota por célula",
-      "Se você ainda não fez o checklist, o ativo não trava: a divisão do nível cai para o tamanho do déficit, e o sistema avisa",
-      "Histórico com gráfico de evolução (por ativo e por carteira) e registro idempotente: registrar duas vezes no mesmo dia atualiza o dia",
-      "Próximos Aportes: o dinheiro é rateado por CLASSE → SUBCLASSE → ativo, respeitando os limites de todos os níveis",
-      "Depois dos déficits, o saldo pode usar a margem até o limite operacional; quem já está no limite não recebe",
-      "Meta de utilização: aplicar pelo menos 95% do aporte. Quando necessário, a margem do plano cresce mantendo limites máximos cadastrados e bloqueios do checklist",
-      "Sem nota nenhuma no nível, a divisão mantém a proporção que você já tem (rateio pelo próprio espaço)",
-      "O que não cabe em nenhuma classe fica como valor não alocado, em vez de ser empurrado para quem não precisa",
-      "Exportação do plano em CSV (o que aportar e quanto) para registrar ou conferir fora do sistema",
-    ],
-  },
-  {
-    icon: "✓", title: "Tarefas",
-    color: "#06b6d4", bg: "#ecfeff",
-    desc: "Organize seu dia a dia com um sistema completo de gerenciamento de tarefas com validações.",
-    steps: [
-      "Crie tarefas com título, prioridade (🔵 Baixa, 🟡 Média, 🔴 Alta) e prazo",
-      "Acompanhe o status: Pendente → Ativa → Concluída (ou Cancelada)",
-      "Filtre por status para focar no que importa agora",
-      "Validação de campos obrigatórios com mensagens inline",
-      "Confirmação de exclusão via toast (Sonner) — sem alert() bloqueante",
-    ],
-  },
-  {
-    icon: "🎯", title: "Metas",
-    color: "#f59e0b", bg: "#fffbeb",
-    desc: "Defina objetivos e acompanhe o progresso com barras coloridas e indicadores visuais.",
-    steps: [
-      "Crie metas com título, descrição, prazo e progresso (0-100%)",
-      "Barra de progresso animada: 🔴 <50%, 🟡 50-80%, 🟢 >80%",
-      "Filtro por status: Pendente, Ativa, Concluída, Cancelada",
-      "Validação de progresso entre 0 e 100",
-    ],
-  },
-  {
-    icon: "📝", title: "Matérias + Estudos",
-    color: "#ec4899", bg: "#fdf2f8",
-    desc: "Gerencie disciplinas e registre cada sessão de estudo com controle de tempo.",
-    steps: [
-      "Cadastre matérias com nome e descrição",
-      "Registre estudos vinculados com data, duração em minutos e anotações",
-      "Duração com cor variável: 🟢 2h+, 🔵 1h+, 🟡 30min+, 🔴 <30min",
-      "Acompanhe total de horas por matéria automaticamente",
-      "Filtre estudos por matéria para ver seu histórico",
-    ],
-  },
-  {
-    icon: "🎨", title: "Design System & UX",
-    color: "#ec4899", bg: "#fdf2f8",
-    desc: "Interface moderna com componentes padronizados, responsividade e notificações elegantes.",
-    steps: [
-      "Componentes de formulário padronizados: Input, Select, DateInput, NumberInput, TextArea",
-      "Estados visuais consistentes: foco (anel indigo), erro (borda + fundo vermelho), disabled",
-      "Notificações via Sonner: toast.promise para loading/sucesso/erro em operações assíncronas",
-      "Sidebar responsiva: fixa no desktop, drawer com overlay no mobile",
-      "Modal com backdrop blur, formulários condicionais e validação inline",
-    ],
-  },
-  {
-    icon: "🔐", title: "Autenticação Segura",
-    color: "#6366f1", bg: "#eef2ff",
-    desc: "Sistema de login com JWT, cookies HttpOnly e proteção de dados por usuário.",
-    steps: [
-      "Registre-se com nome, e-mail e senha (com confirmação)",
-      "Login com feedback visual de erro e loading state",
-      "Token JWT armazenado em cookie seguro",
-      "Todas as requisições autenticadas automaticamente",
-      "Logout com limpeza de sessão e redirecionamento",
-    ],
+    links: [{ label: "Abrir treinos", path: "/treinos" }],
   },
 ];
 
 export default function ComoFunciona() {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
   return (
     <Layout>
-      <div className="animate-fade-in" style={{ maxWidth: "900px", margin: "0 auto" }}>
-        <div style={{ textAlign: "center", padding: "clamp(24px, 5vw, 40px) clamp(16px, 4vw, 24px)", background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)", borderRadius: "14px", color: "white", marginBottom: "clamp(16px, 3vw, 32px)" }}>
-          <span style={{ fontSize: "clamp(32px, 6vw, 48px)", display: "block", marginBottom: "8px" }}>⚡</span>
-          <h1 style={{ fontSize: "clamp(22px, 4vw, 32px)", fontWeight: 800, marginBottom: "8px", letterSpacing: "-1px" }}>Como o FocusLife Funciona</h1>
-          <p style={{ fontSize: "clamp(13px, 1.8vw, 16px)", opacity: 0.85, maxWidth: "650px", margin: "0 auto", lineHeight: 1.7 }}>
-            Hub completo de produtividade pessoal: tarefas, estudos, metas e finanças com carteiras de investimento, compras/vendas com lucro por operação, planejamento (Organização) e avaliação de ativos.
-          </p>
+      <div className="how-it-works animate-fade-in">
+        <header className="how-it-works__hero">
+          <span className="how-it-works__eyebrow">⚡ FocusLife</span>
+          <h1>Menos pendências. Mais direção.</h1>
+          <p>Organize sua rotina, cuide das finanças e acompanhe sua evolução em um só lugar.</p>
+          <Link to="/tarefas" className="how-it-works__start">Começar pelas tarefas <ArrowRight size={16} aria-hidden="true" /></Link>
+        </header>
+
+        <div className="how-it-works__intro">
+          <h2>Como funciona</h2>
+          <p>Siga a ordem sugerida ou abra só o que precisa agora.</p>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "clamp(14px, 2.5vw, 24px)" }}>
-          {features.map((f, i) => (
-            <div key={i} style={{ background: "white", borderRadius: "12px", padding: "clamp(16px, 3vw, 28px)", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", borderLeft: `5px solid ${f.color}`, transition: "all 0.25s ease" }} className="animate-fade-in"
-              onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 10px 25px rgba(0,0,0,0.1)"; }}
-              onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.05)"; }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: "clamp(8px, 2vw, 14px)", marginBottom: "clamp(10px, 2vw, 16px)" }}>
-                <div style={{ width: "clamp(40px, 5vw, 50px)", height: "clamp(40px, 5vw, 50px)", borderRadius: "10px", background: f.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "clamp(18px, 2.5vw, 24px)", flexShrink: 0 }}>{f.icon}</div>
-                <div>
-                  <h2 style={{ fontSize: "clamp(16px, 2vw, 20px)", fontWeight: 700, color: "#0f172a", margin: "0 0 2px" }}>{f.title}</h2>
-                  <p style={{ fontSize: "clamp(12px, 1.4vw, 14px)", color: "#64748b", margin: 0 }}>{f.desc}</p>
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "clamp(8px, 1.5vw, 10px)" }}>
-                {f.steps.map((step, j) => (
-                  <div key={j} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "clamp(8px, 1.5vw, 12px) clamp(10px, 1.5vw, 14px)", background: f.bg, borderRadius: "8px" }}>
-                    <span style={{ width: "clamp(20px, 2.5vw, 24px)", height: "clamp(20px, 2.5vw, 24px)", borderRadius: "50%", background: f.color, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 700, flexShrink: 0 }}>{j + 1}</span>
-                    <span style={{ fontSize: "clamp(12px, 1.3vw, 13px)", color: "#0f172a", lineHeight: 1.5 }}>{step}</span>
+        <div className="how-it-works__cards">
+          {sections.map((section, index) => {
+            const expanded = expandedId === section.id;
+            return (
+              <section key={section.id} className="how-it-works__card" style={{ "--guide-accent": section.color } as CSSProperties}>
+                <h3>
+                  <button
+                    type="button"
+                    id={`guide-toggle-${section.id}`}
+                    className="how-it-works__toggle"
+                    aria-expanded={expanded}
+                    aria-controls={`guide-panel-${section.id}`}
+                    onClick={() => setExpandedId(expanded ? null : section.id)}
+                  >
+                    <span className="how-it-works__icon" aria-hidden="true">{section.icon}</span>
+                    <span className="how-it-works__summary">
+                      <span className="how-it-works__label">{String(index + 1).padStart(2, "0")} · {section.label}</span>
+                      <span className="how-it-works__title">{section.title}</span>
+                      <span className="how-it-works__description">{section.description}</span>
+                    </span>
+                    <ChevronDown size={20} className="how-it-works__chevron" aria-hidden="true" />
+                  </button>
+                </h3>
+                <div
+                  id={`guide-panel-${section.id}`}
+                  className="how-it-works__panel"
+                  role="region"
+                  aria-labelledby={`guide-toggle-${section.id}`}
+                  hidden={!expanded}
+                >
+                  <ol className="how-it-works__steps">
+                    {section.steps.map(step => (
+                      <li key={step.title}>
+                        <h4>{step.title}</h4>
+                        <p>{step.text}</p>
+                      </li>
+                    ))}
+                  </ol>
+                  {"note" in section && <p className="how-it-works__note">{section.note}</p>}
+                  <div className="how-it-works__links">
+                    {section.links.map(link => (
+                      <Link key={link.path} to={link.path}>{link.label} <ArrowRight size={15} aria-hidden="true" /></Link>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          ))}
+                </div>
+              </section>
+            );
+          })}
         </div>
-
-        <div style={{ textAlign: "center", padding: "clamp(24px, 5vw, 40px) 16px", marginTop: "8px" }}>
-          <p style={{ fontSize: "clamp(15px, 2vw, 18px)", fontWeight: 600, color: "#0f172a", marginBottom: "4px" }}>Pronto para começar?</p>
-          <p style={{ fontSize: "clamp(12px, 1.5vw, 14px)", color: "#64748b", marginBottom: "clamp(14px, 2vw, 20px)" }}>Navegue pelo menu lateral e explore cada funcionalidade.</p>
-          <div style={{ display: "flex", justifyContent: "center", gap: "clamp(6px, 1.5vw, 12px)", flexWrap: "wrap" }}>
-            {[{ label: "Tarefas", path: "/tarefas", bg: "#06b6d4" },{ label: "Metas", path: "/metas", bg: "#f59e0b" },{ label: "Compras/Vendas", path: "/financas/compras-vendas", bg: "#0ea5e9" },{ label: "Carteiras", path: "/financas/carteiras", bg: "#10b981" },{ label: "Organização", path: "/planejamento", bg: "#6366f1" }].map((btn, i) => (
-              <a key={i} href={btn.path} style={{ padding: "clamp(8px, 1.5vw, 11px) clamp(16px, 3vw, 24px)", background: btn.bg, color: "white", borderRadius: "8px", textDecoration: "none", fontSize: "clamp(13px, 1.5vw, 14px)", fontWeight: 600, transition: "all 0.15s ease", display: "inline-block" }}
-                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)"; }}
-                onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>{btn.label}</a>
-            ))}
-          </div>
-        </div>
+        <p className="how-it-works__footer">Comece por uma área e avance no seu ritmo. Você pode voltar a este guia quando precisar.</p>
       </div>
     </Layout>
   );

@@ -143,7 +143,7 @@ sequenceDiagram
 - **Design system** próprio: `Form` (Input, Select, DateInput, NumberInput, TextArea), `UI` (PageHeader, CardGrid, Spinner, EmptyState, ProgressBar), `Modal`, `Shared`.
 - **Sidebar responsiva** (fixa no desktop, drawer no mobile), notificações **Sonner** e confirmações não-bloqueantes.
 - **LofiPlayer**: player de foco embutido (YouTube embed) com URL customizável salva no `localStorage`.
-- Página **"Como Funciona"** que documenta cada área da plataforma.
+- Página **"Como Funciona"** com seis cards expansíveis em ordem sugerida de uso: rotina, contas, investimentos, organização de aportes, estudos e treinos. Os resumos ficam visíveis e apenas um guia de etapas abre por vez, com atalhos para cada área e suporte aos temas claro e escuro.
 
 ---
 
@@ -336,7 +336,7 @@ Como conferir se o deploy pegou:
 
 | Verificação | Onde | O que mostra |
 |---|---|---|
-| Bundle do frontend | *Como Funciona* | Seções novas (ex.: "🧩 Recuperação de Carteiras Antigas") |
+| Bundle do frontend | *Como Funciona* | Seis cards expansíveis, incluindo "Planeje os próximos aportes" e "Crie constância nos treinos" |
 | Backend | DevTools → Network → `GET /financeiro/diagnostico` | `200` (rota existe) ou `404` (backend antigo) |
 
 ---
