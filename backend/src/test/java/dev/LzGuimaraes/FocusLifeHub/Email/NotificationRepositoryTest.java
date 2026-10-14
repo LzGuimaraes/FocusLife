@@ -92,15 +92,15 @@ class NotificationRepositoryTest {
     }
 
     @Test
-    void selecionaSomenteDespesasNaoPagasDoDiaDeUsuariosAtivos() {
+    void selecionaDespesasVencidasOuVencendoHojeNaoPagasDeUsuariosAtivos() {
         var esperada = inserirConta(false, TipoLancamento.DESPESA, DIA, true);
         var legado = inserirConta(null, TipoLancamento.DESPESA, DIA, true);
         inserirConta(true, TipoLancamento.DESPESA, DIA, true);
         inserirConta(false, TipoLancamento.SALDO, DIA, true);
         inserirConta(false, TipoLancamento.DESPESA, DIA.plusDays(1), true);
-        inserirConta(false, TipoLancamento.DESPESA, DIA.minusDays(1), true);
+        var atrasada = inserirConta(false, TipoLancamento.DESPESA, DIA.minusDays(1), true);
         inserirConta(false, TipoLancamento.DESPESA, DIA, false);
-        assertThat(contas()).extracting(DespesaModel::getId).containsExactlyInAnyOrder(esperada.getId(), legado.getId());
+        assertThat(contas()).extracting(DespesaModel::getId).containsExactlyInAnyOrder(esperada.getId(), legado.getId(), atrasada.getId());
     }
 
     @Test
@@ -132,6 +132,22 @@ class NotificationRepositoryTest {
         registrar(TipoEmailLog.CONTA_VENCIMENTO, conta.getId(), conta.getCarteiraDividas().getUser().getId(), DIA.minusDays(1));
         registrar(TipoEmailLog.CONTA_VENCIMENTO, conta.getId(), 9999L, DIA);
         assertThat(contas()).hasSize(1);
+    }
+
+    @Test
+    void contaAtrasadaApareceUmaVezPorDiaEAoSerPagaSaiDosAvisos() {
+        var conta = inserirConta(false, TipoLancamento.DESPESA, DIA.minusDays(3), true);
+        assertThat(contas()).hasSize(1);
+        registrar(TipoEmailLog.CONTA_VENCIMENTO, conta.getId(), conta.getCarteiraDividas().getUser().getId(), DIA);
+        assertThat(contas()).isEmpty();
+        try (var em = banco.createEntityManager()) {
+            var repository = new JpaRepositoryFactory(em).getRepository(DespesaRepository.class);
+            assertThat(repository.buscarContasParaNotificar(DIA.plusDays(1), TipoLancamento.DESPESA, TipoEmailLog.CONTA_VENCIMENTO)).hasSize(1);
+            em.getTransaction().begin();
+            em.find(DespesaModel.class, conta.getId()).setPago(true);
+            em.getTransaction().commit();
+            assertThat(repository.buscarContasParaNotificar(DIA.plusDays(1), TipoLancamento.DESPESA, TipoEmailLog.CONTA_VENCIMENTO)).isEmpty();
+        }
     }
 
     private List<DespesaModel> contas() {

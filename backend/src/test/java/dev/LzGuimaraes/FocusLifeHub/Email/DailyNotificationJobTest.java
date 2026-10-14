@@ -172,6 +172,7 @@ class DailyNotificationJobTest {
         var conta = new DespesaModel();
         conta.setId(id);
         conta.setNome("Conta " + id);
+        conta.setDataVencimento(DIA);
         conta.setCarteiraDividas(carteira);
         return conta;
     }

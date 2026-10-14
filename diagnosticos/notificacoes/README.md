@@ -16,7 +16,7 @@ Esse é um defeito confirmado no código. Não houve acesso aos logs da VPS nem 
 
 - Consultas próprias de notificações carregam conta → carteira → usuário e tarefa → usuário na mesma consulta, com `join fetch`.
 - A seleção exclui contas pagas, saldos, usuários desativados, tarefas canceladas/concluídas e avisos já registrados para o mesmo usuário, tipo, referência e data.
-- Despesas antigas com `pago` nulo são tratadas como não pagas; a seleção continua limitada à data do vencimento.
+- Despesas antigas com `pago` nulo são tratadas como não pagas. Na correção inicial, a seleção era limitada à data do vencimento; a ampliação para contas atrasadas foi solicitada e implementada na etapa descrita ao final.
 - O envio começa às 08:00 e é repetido a cada hora até 23:00, no fuso America/Cuiaba. A repetição busca apenas referências ainda não notificadas.
 - Ao iniciar o backend depois das 08:00, há uma tentativa de recuperar os avisos do dia. Uma inicialização antes das 08:00 aguarda o agendamento.
 - O relógio do job usa explicitamente America/Cuiaba para a data e os registros, inclusive se o relógio UTC já estiver no dia seguinte.
@@ -57,3 +57,30 @@ No banco, `email_log` registra quais referências foram notificadas. Não é nec
 A deduplicação cobre os envios registrados e as chamadas concorrentes na mesma instância. Se o SMTP aceitar a mensagem e o banco falhar ao gravar o registro, uma tentativa posterior ainda pode repetir o aviso. A confirmação de aceitação pelo SMTP também não comprova a chegada à caixa de entrada.
 
 As correções permanecem locais nesta etapa; não houve publicação nem execução de envios reais para usuários.
+
+## Estilização e inclusão de contas atrasadas
+
+Após a correção inicial, o usuário pediu o e-mail com as cores do sistema e escolheu incluir contas já vencidas nos avisos.
+
+- A seleção de contas usa `dataVencimento <= data do aviso`. Futuras, pagas, saldos e usuários desativados continuam excluídos.
+- O log usa a data do **aviso**, não a data de vencimento. Isso permite lembrar uma conta atrasada uma vez por dia até o pagamento, sem repetir a mensagem a cada execução horária.
+- O assunto diferencia **Contas atrasadas**, **Contas vencendo hoje** e **Contas pendentes** quando há ambos os casos.
+- O HTML usa indigo `#6366f1`, fundo `#f1f5f9`, cartão branco, alertas de atraso em vermelho e contas que vencem hoje em âmbar, seguindo os tokens de `frontend/src/index.css`.
+- O e-mail mostra totais por moeda, nome da conta, carteira, vencimento em `dd/MM/yyyy`, dias de atraso e botão **Ver minhas contas**. O link usa `app.frontend.url` e abre `/contas`.
+- O formato usa tabelas e estilos inline. Nomes de contas e carteiras são escapados para não serem interpretados como HTML.
+
+Prévias com dados fictícios:
+
+- [Contas atrasadas](previa-contas-atrasadas.html)
+- [Atrasadas e contas vencendo hoje](previa-contas-pendentes.html)
+
+Para regenerar as prévias a partir do código, execute na raiz do repositório após compilar o backend:
+
+```sh
+javac -cp backend/target/classes -d /tmp/previa-email-contas diagnosticos/notificacoes/PreviaEmailContas.java
+java -cp backend/target/classes:/tmp/previa-email-contas dev.LzGuimaraes.FocusLifeHub.Email.PreviaEmailContas
+```
+
+Validação desta etapa: **20 testes passaram** (8 do job, 7 dos repositórios e 5 do template). Os testes verificam a seleção de atrasadas, exclusão de futuras/pagas, um aviso por dia até o pagamento, assuntos, datas, valores, escape de HTML e totais separados por moeda. As prévias foram renderizadas no Chrome em largura de 900px e 390px; isso não substitui a conferência em clientes de e-mail específicos.
+
+Nenhum e-mail real foi enviado durante os testes. A estilização e a ampliação para contas atrasadas estão locais nesta etapa.

@@ -24,7 +24,7 @@ public interface DespesaRepository extends JpaRepository<DespesaModel, Long> {
             select d from DespesaModel d
             join fetch d.carteiraDividas c
             join fetch c.user u
-            where d.dataVencimento = :data
+            where d.dataVencimento <= :data
               and d.tipo = :tipoDespesa
               and (d.pago = false or d.pago is null)
               and u.enabled = true

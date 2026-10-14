@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 
@@ -38,6 +39,8 @@ public class DailyNotificationJob {
     private final MailService mailService;
     private final Clock clock;
     private final AtomicBoolean executando = new AtomicBoolean();
+    @Value("${app.frontend.url:https://focus.lzguimaraes.com.br}")
+    private String frontendUrl = "https://focus.lzguimaraes.com.br";
 
     @Autowired
     public DailyNotificationJob(DespesaRepository despesaRepository,
@@ -97,8 +100,8 @@ public class DailyNotificationJob {
 
     /**
      * Seleciona as contas a notificar na data: não pagas, com dataVencimento
-     * na data e que ainda NÃO possuem email_log (CONTA_VENCIMENTO) para a
-     * mesma conta/data (evita e-mail duplicado).
+     * até a data e que ainda NÃO possuem email_log (CONTA_VENCIMENTO) para a
+     * mesma conta/data do aviso. Vencidas são lembradas uma vez por dia até o pagamento.
      */
     public List<DespesaModel> selecionarContasParaNotificar(LocalDate data) {
         return despesaRepository.buscarContasParaNotificar(data, TipoLancamento.DESPESA, TipoEmailLog.CONTA_VENCIMENTO);
@@ -129,8 +132,8 @@ public class DailyNotificationJob {
     }
 
     private void enviarEmailParaUsuario(UserModel usuario, List<DespesaModel> contas, LocalDate data) throws Exception {
-        String subject = "FocusLife Hub — Contas vencendo hoje (" + data + ")";
-        mailService.sendHtml(usuario.getEmail(), subject, EmailTemplate.contasVencendo(data, contas));
+        String subject = EmailTemplate.assuntoContas(data, contas);
+        mailService.sendHtml(usuario.getEmail(), subject, EmailTemplate.contasVencendo(data, contas, frontendUrl));
 
         List<EmailLogModel> registros = contas.stream().map(conta -> {
             EmailLogModel emailLog = new EmailLogModel();
