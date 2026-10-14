@@ -26,6 +26,7 @@ import Treinos from "./pages/Treinos";
 import Metas from "./pages/Metas";
 import Estudos from "./pages/Estudos";
 import ComoFunciona from "./pages/ComoFunciona";
+import Suporte from "./pages/Suporte";
 import Admin from "./pages/Admin";
 import AdminMusicas from "./pages/AdminMusicas";
 import AdminUsuarioDetalhe from "./pages/AdminUsuarioDetalhe";
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="/metas" element={<PrivateRoute><Metas /></PrivateRoute>} />
           <Route path="/estudos" element={<PrivateRoute><Estudos /></PrivateRoute>} />
           <Route path="/como-funciona" element={<PrivateRoute><ComoFunciona /></PrivateRoute>} />
+          <Route path="/suporte" element={<PrivateRoute><Suporte /></PrivateRoute>} />
           <Route path="/admin" element={<PrivateRoute requireAdmin><Admin /></PrivateRoute>} />
           <Route path="/admin/musicas" element={<PrivateRoute requireAdmin><AdminMusicas /></PrivateRoute>} />
           <Route path="/admin/usuarios/:id" element={<PrivateRoute requireAdmin><AdminUsuarioDetalhe /></PrivateRoute>} />

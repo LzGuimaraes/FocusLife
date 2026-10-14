@@ -101,6 +101,7 @@ export default function LofiPlayer() {
               </div>
             )}
             {isAdmin && <Link className="lofi-player__admin" to="/admin/musicas">Gerenciar estilos e vídeos</Link>}
+            <Link className="lofi-player__admin" to="/suporte?tipo=NOVA_MUSICA">Solicitar uma nova música</Link>
           </div>
           {!carregando && !falhaCatalogo && estilos.length > 0 && (
             <div className="lofi-player__now-playing">

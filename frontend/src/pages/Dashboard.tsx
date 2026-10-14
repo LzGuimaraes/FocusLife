@@ -10,6 +10,7 @@ const cards = [
   { path: "/financas", icon: "💰", title: "Finanças", desc: "Controle suas carteiras e contas", color: "#10b981", bg: "#ecfdf5", stat: "Carteiras" },
   { path: "/planejamento", icon: "📐", title: "Planejamento", desc: "Carteira ideal, avaliações e prioridade de aportes", color: "#6366f1", bg: "#eef2ff", stat: "Metodologia" },
   { path: "/como-funciona", icon: "❓", title: "Como Funciona", desc: "Aprenda a usar todas as funcionalidades", color: "#8b5cf6", bg: "#f5f3ff", stat: "Guia" },
+  { path: "/suporte", icon: "💬", title: "Suporte", desc: "Solicite músicas, ativos e melhorias ou tire suas dúvidas", color: "#6366f1", bg: "#eef2ff", stat: "Chamados" },
 ];
 
 export default function Dashboard() {

@@ -14,6 +14,7 @@ const baseNavItems = [
   { path: "/metas",     label: "Metas",     icon: "🎯", color: "#f59e0b" },
   { path: "/financas",  label: "Finanças",  icon: "💰", color: "#10b981" },
   { path: "/como-funciona", label: "Como Funciona", icon: "❓", color: "#8b5cf6" },
+  { path: "/suporte", label: "Suporte", icon: "💬", color: "#6366f1" },
 ];
 
 export default function Layout({ children }: LayoutProps) {

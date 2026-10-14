@@ -24,6 +24,10 @@ public class MailService {
     }
 
     public void sendHtml(String to, String subject, String htmlBody) throws MessagingException {
+        sendHtml(to, subject, htmlBody, null);
+    }
+
+    public void sendHtml(String to, String subject, String htmlBody, String replyTo) throws MessagingException {
         if (fromAddress == null || fromAddress.isBlank()) {
             throw new IllegalStateException("spring.mail.from or spring.mail.username must be configured");
         }
@@ -33,6 +37,7 @@ public class MailService {
         MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
         helper.setFrom(fromAddress);
         helper.setTo(to);
+        if (replyTo != null && !replyTo.isBlank()) helper.setReplyTo(replyTo);
         helper.setSubject(subject);
         helper.setText(htmlBody, true);
         mailSender.send(message);

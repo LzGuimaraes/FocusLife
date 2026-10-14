@@ -140,6 +140,13 @@ sequenceDiagram
 - Contas pagas, saldos, usuários desativados e tarefas canceladas/concluídas ficam de fora. O registro em `email_log` exclui avisos já enviados das próximas tentativas; os destinatários são carregados na consulta para o job funcionar fora de uma requisição HTTP.
 - Contas atrasadas continuam no lembrete uma vez por dia até serem marcadas como pagas. O e-mail usa as cores do sistema, mostra valores, vencimentos e dias de atraso, separa totais por moeda e oferece acesso à tela de contas.
 
+### 💬 Suporte e sugestões
+- **Suporte** no menu e no Dashboard: chamados de **nova música**, **novo ativo**, **melhoria do sistema** ou **dúvida/problema**, com assunto e descrição. O player de estudos também oferece o atalho **Solicitar uma nova música**.
+- O chamado recebe um protocolo `SUP-000001`, fica salvo no banco e aparece no histórico paginado do próprio usuário. Outros usuários não conseguem consultar esse registro.
+- O aviso é enviado para **luizsantosleventi19901@gmail.com**, usando o remetente SMTP do sistema e **Reply-To** com o e-mail da conta que abriu o chamado. O corpo inclui categoria, protocolo, nome, e-mail, data e solicitação, com o conteúdo escapado para HTML.
+- Falha de SMTP mantém o pedido registrado e o aviso pendente. A cada **10 minutos**, um job tenta reenviar até 20 avisos pendentes. O usuário pode atualizar o histórico para conferir o envio; respostas ao pedido seguem por e-mail. Repetir a mesma solicitação com o mesmo identificador não cria outro protocolo.
+- A migração **V39** cria `suporte_chamado`. `APP_SUPORTE_EMAIL` permite configurar outro destinatário; o padrão é o e-mail indicado acima. Como em qualquer envio SMTP, a confirmação indica aceitação pelo servidor de e-mail, não leitura pelo destinatário. Uma interrupção após a transmissão e antes da gravação do resultado pode gerar um aviso repetido no reenvio.
+
 ### 🎨 Experiência / UX
 - **Design system** próprio: `Form` (Input, Select, DateInput, NumberInput, TextArea), `UI` (PageHeader, CardGrid, Spinner, EmptyState, ProgressBar), `Modal`, `Shared`.
 - **Sidebar responsiva** (fixa no desktop, drawer no mobile), notificações **Sonner** e confirmações não-bloqueantes.
@@ -244,6 +251,11 @@ Base: `/api` não existe — os endpoints são diretos na raiz da aplicação. R
 **Somente ADMIN:** `GET|POST /admin/musicas/estilos` · `PUT|DELETE /admin/musicas/estilos/{id}` · `GET|POST /admin/musicas/estilos/{id}/videos` · `PUT|DELETE /admin/musicas/videos/{id}`. Cadastro de estilo: `{ "nome": "Rock" }`; lote de vídeos: `{ "urls": ["https://youtu.be/ID_DO_VIDEO"] }`.
 
 **Validação isolada:** em `backend/`, execute `./mvnw -Dtest='YouTubeVideoUrlTest,MusicaCatalogoTest,MusicaControllerTest,AdminAuthorizationTest' test`. Os testes de catálogo aplicam a V38 e validam as entidades/repositórios em H2, sem acessar a base da aplicação.
+
+### Suporte — `/suporte/chamados`
+**Usuário autenticado:** `POST /suporte/chamados` · `GET /suporte/chamados?page=` · `GET /suporte/chamados/{id}`. O backend identifica o usuário pela sessão. O cadastro recebe `solicitacaoId` (UUID para evitar repetição), `tipo` (`NOVA_MUSICA`, `NOVO_ATIVO`, `MELHORIA` ou `DUVIDA_PROBLEMA`), `titulo` (até 120 caracteres) e `descricao` (até 4.000). A listagem devolve somente os chamados da conta autenticada, oito por página.
+
+**Validação isolada:** `./mvnw -Dtest='Suporte*Test,MailServiceTest,DailyNotificationJobTest,EmailTemplateTest' test`, em `backend/`. Banco H2 e SMTP simulado; nenhum e-mail real é enviado.
 
 ### Tarefas — `/tarefas`
 `GET /all?page=&size=` · `GET /do-dia` · `GET /all/{id}` · `POST /create` · `PUT /alter/{id}` · `DELETE /delete/{id}`
@@ -366,6 +378,7 @@ Como conferir se o deploy pegou:
 | `SPRING_MAIL_FROM` | ❌ | Remetente (default = username) |
 | `APP_FRONTEND_URL` | ❌ | URL pública do frontend (links dos e-mails) |
 | `APP_BACKEND_URL` | ❌ | URL pública da API |
+| `APP_SUPORTE_EMAIL` | ❌ | Destinatário dos chamados (padrão: luizsantosleventi19901@gmail.com) |
 | `VITE_API_URL` | ✅ (frontend) | Base URL da API no build do frontend |
 
 ---
