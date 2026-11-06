@@ -17,3 +17,7 @@ node diagnosticos/jornadas/browser-smoke.cjs
 Se Playwright estiver disponível no `node_modules`, omita `PLAYWRIGHT_PATH`. Se usar o Chromium instalado pelo Playwright, omita `CHROME_PATH`. Capturas ficam em `/tmp`; altere com `JORNADAS_ARTIFACTS`.
 
 Resultados e regras de negócio: [JORNADAS.md](../../JORNADAS.md). O teste de navegador usa dados de outubro/novembro de 2026; as previsões exatas são verificadas no backend com relógio fixo.
+
+## Calendários, seletores e exclusão
+
+Com as mesmas variáveis de ambiente, execute `node diagnosticos/jornadas/controls-smoke.cjs` para verificar os calendários por mouse e teclado, limites de datas, seletores, dias planejados e exclusão pelo card. O roteiro cria uma atividade identificada como teste e remove apenas essa atividade ao terminar. Também verifica o cancelamento da exclusão e captura os controles nos temas claro/escuro e em celular.

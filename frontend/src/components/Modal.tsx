@@ -8,10 +8,11 @@ interface ModalProps {
   onSubmit?: (e: FormEvent) => void;
   submitLabel?: string;
   submitDisabled?: boolean;
+  submitVariant?: "primary" | "danger";
   width?: string;
 }
 
-export default function Modal({ open, onClose, title, children, onSubmit, submitLabel, submitDisabled, width = "480px" }: ModalProps) {
+export default function Modal({ open, onClose, title, children, onSubmit, submitLabel, submitDisabled, submitVariant = "primary", width = "480px" }: ModalProps) {
   const titleId = useId();
   const dialog = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
@@ -24,7 +25,7 @@ export default function Modal({ open, onClose, title, children, onSubmit, submit
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close.current();
       if (e.key !== 'Tab') return;
-      const items = Array.from(panel?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]') || []);
+      const items = Array.from(panel?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]') || []).filter(item => item.tabIndex >= 0 && item.getClientRects().length > 0);
       const first = items[0], last = items[items.length - 1];
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
@@ -68,9 +69,9 @@ export default function Modal({ open, onClose, title, children, onSubmit, submit
                 Cancelar
               </button>
               <button type="submit" disabled={submitDisabled}
-                style={{ padding: "10px 24px", background: "#6366f1", color: "white", border: "none", borderRadius: "10px", cursor: "pointer", fontSize: "14px", fontWeight: 600, transition: "all 0.15s ease" }}
-                onMouseEnter={e => { e.currentTarget.style.background = "#4f46e5"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "#6366f1"; e.currentTarget.style.transform = "translateY(0)"; }}>
+                style={{ padding: "10px 24px", background: submitVariant === "danger" ? "var(--color-danger)" : "#6366f1", color: "white", border: "none", borderRadius: "10px", cursor: "pointer", fontSize: "14px", fontWeight: 600, transition: "all 0.15s ease" }}
+                onMouseEnter={e => { e.currentTarget.style.background = submitVariant === "danger" ? "var(--color-danger)" : "#4f46e5"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = submitVariant === "danger" ? "var(--color-danger)" : "#6366f1"; e.currentTarget.style.transform = "translateY(0)"; }}>
                 {submitLabel || "Salvar"}
               </button>
             </div>

@@ -164,3 +164,7 @@ A verificação de navegador reutilizável está em [diagnosticos/jornadas](diag
 - Navegador com backend real: cadastro, acumulado, correção, links, anotações, recuperação/pausa de cronômetro, desktop claro, celular escuro sem transbordamento, Escape e quatro rotas antigas aprovados.
 - ESLint dos arquivos alterados: aprovado. O lint global ainda encontra **61 erros preexistentes**, confirmados na versão anterior; não foi realizada limpeza geral de outros módulos.
 - Migração aplicada e verificada somente em bancos descartáveis. Nenhuma conexão foi feita ao banco configurado no `.env` para aplicar alterações, e nenhum e-mail real foi enviado.
+
+### Controles da interface
+
+A listagem também permite excluir uma atividade diretamente no card, com confirmação explícita. Os campos de data usam calendário estilizado com navegação por teclado e limites de início/prazo; seletores e dias planejados acompanham os temas claro/escuro. Os componentes estão em `frontend/src/components/PickerFields.tsx`, sem nova dependência. O roteiro `diagnosticos/jornadas/controls-smoke.cjs` verifica esses controles e a exclusão real de uma atividade de teste local.
