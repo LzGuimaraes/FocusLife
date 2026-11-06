@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "./auth/AuthProvider";
 import { PrivateRoute } from "./auth/PrivateRoute";
@@ -7,6 +7,7 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ActivateAccount from "./pages/ActivateAccount";
+import Jornadas from "./pages/Jornadas";
 import Dashboard from "./pages/Dashboard";
 import Financas from "./pages/Financas";
 import FinancasCarteiras from "./pages/FinancasCarteiras";
@@ -20,11 +21,7 @@ import AvaliacaoAtivoDetalhe from "./pages/AvaliacaoAtivoDetalhe";
 import ChecklistModelos from "./pages/ChecklistModelos";
 import NotasSubclasse from "./pages/NotasSubclasse";
 import ProximosAportes from "./pages/ProximosAportes";
-import Tarefas from "./pages/Tarefas";
-import Materias from "./pages/Materias";
 import Treinos from "./pages/Treinos";
-import Metas from "./pages/Metas";
-import Estudos from "./pages/Estudos";
 import ComoFunciona from "./pages/ComoFunciona";
 import Suporte from "./pages/Suporte";
 import Admin from "./pages/Admin";
@@ -60,19 +57,23 @@ export default function App() {
           <Route path="/avaliacao/notas" element={<PrivateRoute><NotasSubclasse /></PrivateRoute>} />
           <Route path="/avaliacao/:ref" element={<PrivateRoute><AvaliacaoAtivoDetalhe /></PrivateRoute>} />
           <Route path="/planejamento/aportes" element={<PrivateRoute><ProximosAportes /></PrivateRoute>} />
-          <Route path="/tarefas" element={<PrivateRoute><Tarefas /></PrivateRoute>} />
-          <Route path="/materias" element={<PrivateRoute><Materias /></PrivateRoute>} />
+          <Route path="/jornadas" element={<PrivateRoute><Jornadas /></PrivateRoute>} />
+          <Route path="/jornadas/:id" element={<PrivateRoute><Jornadas /></PrivateRoute>} />
+          <Route path="/admin/usuarios/:usuarioId/jornadas" element={<PrivateRoute requireAdmin><Jornadas admin /></PrivateRoute>} />
+          <Route path="/admin/usuarios/:usuarioId/jornadas/:id" element={<PrivateRoute requireAdmin><Jornadas admin /></PrivateRoute>} />
+          <Route path="/tarefas" element={<PrivateRoute><Navigate to="/jornadas" replace /></PrivateRoute>} />
+          <Route path="/materias" element={<PrivateRoute><Navigate to="/jornadas" replace /></PrivateRoute>} />
           <Route path="/treinos" element={<PrivateRoute><Treinos /></PrivateRoute>} />
-          <Route path="/metas" element={<PrivateRoute><Metas /></PrivateRoute>} />
-          <Route path="/estudos" element={<PrivateRoute><Estudos /></PrivateRoute>} />
+          <Route path="/metas" element={<PrivateRoute><Navigate to="/jornadas" replace /></PrivateRoute>} />
+          <Route path="/estudos" element={<PrivateRoute><Navigate to="/jornadas" replace /></PrivateRoute>} />
           <Route path="/como-funciona" element={<PrivateRoute><ComoFunciona /></PrivateRoute>} />
           <Route path="/suporte" element={<PrivateRoute><Suporte /></PrivateRoute>} />
           <Route path="/admin" element={<PrivateRoute requireAdmin><Admin /></PrivateRoute>} />
           <Route path="/admin/musicas" element={<PrivateRoute requireAdmin><AdminMusicas /></PrivateRoute>} />
           <Route path="/admin/usuarios/:id" element={<PrivateRoute requireAdmin><AdminUsuarioDetalhe /></PrivateRoute>} />
-          <Route path="/admin/usuarios/:id/tarefas" element={<PrivateRoute requireAdmin><AdminUsuarioRegistros key="tarefas" modulo="tarefas" /></PrivateRoute>} />
-          <Route path="/admin/usuarios/:id/metas" element={<PrivateRoute requireAdmin><AdminUsuarioRegistros key="metas" modulo="metas" /></PrivateRoute>} />
-          <Route path="/admin/usuarios/:id/estudos" element={<PrivateRoute requireAdmin><AdminUsuarioRegistros key="estudos" modulo="estudos" /></PrivateRoute>} />
+          <Route path="/admin/usuarios/:id/tarefas" element={<PrivateRoute requireAdmin><AdminJornadasRedirect /></PrivateRoute>} />
+          <Route path="/admin/usuarios/:id/metas" element={<PrivateRoute requireAdmin><AdminJornadasRedirect /></PrivateRoute>} />
+          <Route path="/admin/usuarios/:id/estudos" element={<PrivateRoute requireAdmin><AdminJornadasRedirect /></PrivateRoute>} />
           <Route path="/admin/usuarios/:id/investimentos" element={<PrivateRoute requireAdmin><AdminUsuarioRegistros key="investimentos" modulo="investimentos" /></PrivateRoute>} />
           <Route path="/admin/usuarios/:id/contas" element={<PrivateRoute requireAdmin><AdminUsuarioRegistros key="contas" modulo="contas" /></PrivateRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -81,3 +82,5 @@ export default function App() {
     </AuthProvider>
   );
 }
+
+function AdminJornadasRedirect() { const { id } = useParams(); return <Navigate to={`/admin/usuarios/${id}/jornadas`} replace />; }

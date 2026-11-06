@@ -10,6 +10,8 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface SessaoEstudoRepository extends JpaRepository<SessaoEstudo, Long> {
+    java.util.List<SessaoEstudo> findByAtividadeId(Long id);
+    void deleteByAtividadeId(Long id);
     Optional<SessaoEstudo> findFirstByMateriaIdAndFimIsNull(Long materiaId);
     List<SessaoEstudo> findByMateriaId(Long materiaId);
     Optional<SessaoEstudo> findByIdAndMateriaId(Long id, Long materiaId);
@@ -20,6 +22,6 @@ public interface SessaoEstudoRepository extends JpaRepository<SessaoEstudo, Long
      * query (sem N+1).
      */
     @Query("select count(s) from SessaoEstudo s "
-            + "where s.materiaId in (select m.id from MateriaModel m where m.user.id = :userId)")
+            + "where s.atividadeId in (select a.id from Atividade a where a.userId = :userId) or (s.atividadeId is null and s.materiaId in (select m.id from MateriaModel m where m.user.id = :userId))")
     long countDoUsuario(@Param("userId") Long userId);
 }

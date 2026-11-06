@@ -19,6 +19,7 @@ public class SessaoEstudo {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    private Long atividadeId;
 
     private Long materiaId;
 

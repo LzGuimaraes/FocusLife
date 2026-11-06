@@ -70,6 +70,9 @@ class AdminAuthorizationTest {
     private DailyNotificationJob dailyNotificationJob;
 
     @MockitoBean
+    private dev.LzGuimaraes.FocusLifeHub.Jornadas.JornadasNotificationJob jornadasNotificationJob;
+
+    @MockitoBean
     private AtivoService ativoService;
 
     private UserModel user(Long id, Role role, boolean enabled, int tokenVersion) {

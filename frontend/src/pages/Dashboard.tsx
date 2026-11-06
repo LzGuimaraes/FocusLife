@@ -1,12 +1,11 @@
 import { useAuth } from "../auth/AuthProvider";
 import { useNavigate } from "react-router-dom";
+import { ResumoJornadas } from "./Jornadas";
 import Layout from "../components/Layout";
 import ResumoCarteiraIdealCard from "../components/ResumoCarteiraIdealCard";
 
 const cards = [
-  { path: "/tarefas", icon: "✓", title: "Tarefas", desc: "Organize seu dia a dia com listas inteligentes", color: "#06b6d4", bg: "#ecfeff", stat: "Prioridades" },
-  { path: "/materias", icon: "📝", title: "Matérias", desc: "Gerencie disciplinas e acompanhe estudos", color: "#ec4899", bg: "#fdf2f8", stat: "Disciplinas" },
-  { path: "/metas", icon: "🎯", title: "Metas", desc: "Defina e acompanhe seus objetivos", color: "#f59e0b", bg: "#fffbeb", stat: "Progresso" },
+  { path: "/jornadas", icon: "🧭", title: "Jornadas", desc: "Planeje atividades, registre avanços e acompanhe seu ritmo", color: "#06b6d4", bg: "#ecfeff", stat: "Progresso e previsão" },
   { path: "/financas", icon: "💰", title: "Finanças", desc: "Controle suas carteiras e contas", color: "#10b981", bg: "#ecfdf5", stat: "Carteiras" },
   { path: "/planejamento", icon: "📐", title: "Planejamento", desc: "Carteira ideal, avaliações e prioridade de aportes", color: "#6366f1", bg: "#eef2ff", stat: "Metodologia" },
   { path: "/como-funciona", icon: "❓", title: "Como Funciona", desc: "Aprenda a usar todas as funcionalidades", color: "#8b5cf6", bg: "#f5f3ff", stat: "Guia" },
@@ -36,23 +35,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Quick Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "clamp(8px, 2vw, 16px)", marginBottom: "clamp(16px, 3vw, 28px)" }}>
-          {[
-            { icon: "📋", label: "Tarefas", value: "Gerir" },
-            { icon: "📚", label: "Estudos", value: "Acompanhar" },
-            { icon: "🎯", label: "Metas", value: "Alcançar" },
-            { icon: "💳", label: "Contas", value: "Controlar" },
-          ].map((s, i) => (
-            <div key={i} style={{ background: "white", borderRadius: "12px", padding: "clamp(12px, 2vw, 18px) clamp(14px, 2vw, 20px)", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", display: "flex", alignItems: "center", gap: "clamp(8px, 1.5vw, 14px)" }}>
-              <span style={{ fontSize: "clamp(20px, 3vw, 28px)", flexShrink: 0 }}>{s.icon}</span>
-              <div style={{ minWidth: 0 }}>
-                <p style={{ fontSize: "clamp(11px, 1.2vw, 12px)", color: "#64748b", fontWeight: 500, margin: 0 }}>{s.label}</p>
-                <p style={{ fontSize: "clamp(14px, 1.8vw, 16px)", fontWeight: 700, color: "#0f172a", margin: 0 }}>{s.value}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+        <ResumoJornadas />
 
         {/* Carteira Atual × Ideal (planejamento) */}
         <ResumoCarteiraIdealCard />

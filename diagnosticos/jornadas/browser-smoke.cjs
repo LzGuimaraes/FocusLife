@@ -1,0 +1,78 @@
+const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
+const assert = require('node:assert/strict');
+// Execute somente contra serviços locais e uma conta de teste, nunca a base de produção.
+const appUrl = process.env.JORNADAS_APP_URL || 'http://localhost:5179';
+const apiUrl = process.env.JORNADAS_API_URL || 'http://localhost:18089';
+for (const url of [appUrl, apiUrl]) assert.ok(['localhost', '127.0.0.1'].includes(new URL(url).hostname), 'Use serviços locais de teste');
+assert.ok(process.env.JORNADAS_TEST_EMAIL && process.env.JORNADAS_TEST_PASSWORD, 'Informe as credenciais da conta de teste');
+const artifacts = process.env.JORNADAS_ARTIFACTS || '/tmp';
+require('node:fs').mkdirSync(artifacts, { recursive: true });
+(async () => {
+ const browser = await chromium.launch({executablePath:process.env.CHROME_PATH || undefined,headless:true,args:['--no-sandbox']});
+ const page = await browser.newPage({viewport:{width:1440,height:1000}});
+ const title=`Livro no navegador ${Date.now()}`;
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ page.setDefaultTimeout(15000);
+ try {
+  await page.addInitScript(() => { if (!localStorage.getItem('fl-theme')) localStorage.setItem('fl-theme','light'); });
+ await page.goto(`${appUrl}/auth/login`);
+  await page.getByLabel('E-mail').fill(process.env.JORNADAS_TEST_EMAIL);
+  await page.getByLabel('Senha').fill(process.env.JORNADAS_TEST_PASSWORD);
+  await page.getByRole('button',{name:'Entrar',exact:true}).click();
+  await page.waitForURL('**/dashboard');
+  await page.getByRole('button',{name:'Abrir Jornadas →',exact:true}).click();
+  await page.getByRole('button',{name:/Nova atividade/}).first().click();
+  let dialog=page.getByRole('dialog');
+  await dialog.getByLabel('Título').fill(title);
+  await dialog.getByLabel('Data de início').fill('2026-10-15');
+  await dialog.getByLabel('Prazo previsto').fill('2026-11-15');
+  await dialog.getByLabel('Unidade de medida').fill('páginas');
+  await dialog.getByLabel('Total de páginas').fill('350');
+  const created=page.waitForResponse(r=>r.url().endsWith('/jornadas')&&r.request().method()==='POST');
+  await dialog.getByRole('button',{name:'Salvar atividade',exact:true}).click();
+  const activity=await (await created).json();assert.ok(activity.id,JSON.stringify(activity));
+  await page.locator('article').filter({has:page.getByRole('button',{name:`${title} →`,exact:true})}).getByRole('button',{name:'Ver detalhes',exact:true}).click();
+  await page.waitForURL(`**/jornadas/${activity.id}`);
+  await page.getByRole('heading',{name:title,exact:true}).waitFor();
+  await page.getByRole('button',{name:'Registrar progresso',exact:true}).click();
+  dialog=page.getByRole('dialog');
+  await dialog.getByLabel('Total realizado até esta data / página atual').fill('120');
+  await dialog.getByLabel(/^Data\s*\*?$/).fill('2026-11-04');
+  const progressed=page.waitForResponse(r=>r.url().endsWith(`/jornadas/${activity.id}/progresso`)&&r.request().method()==='POST');
+  await dialog.getByRole('button',{name:'Salvar progresso',exact:true}).click();
+  let result=await (await progressed).json();assert.equal(result.indicadores.realizado,120);
+  await page.getByRole('button',{name:'Corrigir',exact:true}).click();
+  dialog=page.getByRole('dialog');await dialog.getByLabel('Total realizado até esta data / página atual').fill('125');
+  const corrected=page.waitForResponse(r=>r.url().includes(`/jornadas/${activity.id}/progresso/`)&&r.request().method()==='PUT');
+  await dialog.getByRole('button',{name:'Salvar progresso',exact:true}).click();
+  result=await (await corrected).json();assert.equal(result.indicadores.realizado,125);
+  await page.getByRole('button',{name:'Adicionar link',exact:true}).click();
+  dialog=page.getByRole('dialog');await dialog.getByLabel('Título').fill('Material salvo');await dialog.getByLabel('URL HTTP ou HTTPS').fill('https://example.test/material');
+  await dialog.getByRole('button',{name:'Salvar link',exact:true}).click();
+  await page.getByRole('link',{name:'Material salvo ↗',exact:true}).waitFor();
+  assert.equal(await page.getByRole('link',{name:'Material salvo ↗',exact:true}).getAttribute('rel'),'noopener noreferrer');
+  await page.getByRole('button',{name:'Registrar sessão e anotações',exact:true}).click();
+  dialog=page.getByRole('dialog');await dialog.getByLabel('Nome da sessão').fill('Revisão no navegador');await dialog.getByLabel('Duração (minutos)').fill('45');await dialog.getByLabel('Anotações').fill('Anotação persistida pelo fluxo real.');
+  await dialog.getByRole('button',{name:'Salvar sessão',exact:true}).click();
+  await page.getByRole('heading',{name:'Revisão no navegador',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Iniciar cronômetro',exact:true}).click();
+  await page.getByRole('button',{name:/Pausar sessão #/}).waitFor();
+  await page.reload();await page.getByRole('button',{name:/Pausar sessão #/}).click();
+  await page.getByRole('button',{name:'Iniciar cronômetro',exact:true}).waitFor();
+  const response=await page.request.get(`${apiUrl}/jornadas/${activity.id}`);
+  result=await response.json();assert.equal(result.indicadores.realizado,125);assert.equal(result.estudos[0].duracaoMin,45);assert.equal(result.materiais.length,1);assert.equal(result.sessoes.length,1);assert.ok(result.sessoes[0].fim);
+  await page.evaluate(() => window.scrollTo(0,0));
+  await page.screenshot({path:`${artifacts}/jornadas-desktop.png`,fullPage:true});
+  await page.getByRole('button',{name:'Alternar tema claro/escuro',exact:true}).click();
+  await page.setViewportSize({width:390,height:844});
+  await page.waitForTimeout(350);
+  await page.screenshot({path:`${artifacts}/jornadas-mobile-dark.png`,fullPage:true});
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'Layout transbordou no celular');
+  await page.getByRole('button',{name:'Editar atividade',exact:true}).click();await page.getByRole('dialog').waitFor();
+  await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'hidden'});
+  for(const route of ['/tarefas','/materias','/metas','/estudos']) {await page.goto(`${appUrl}${route}`);await page.waitForURL('**/jornadas');}
+  assert.deepEqual(errors,[]);
+  console.log(JSON.stringify({ok:true,activityId:activity.id,flows:['login','cadastro de livro','página acumulada','correção','material persistido','anotações','cronômetro recuperado após recarga','desktop','celular escuro sem transbordamento','modal Escape','4 redirecionamentos'],screenshots:[`${artifacts}/jornadas-desktop.png`,`${artifacts}/jornadas-mobile-dark.png`]}));
+ } catch(e) {await page.screenshot({path:`${artifacts}/jornadas-browser-failure.png`,fullPage:true});throw e;}
+ finally {await browser.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});

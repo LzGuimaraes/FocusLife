@@ -26,10 +26,12 @@ public class EstudosModel {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    private Long atividadeId;
     private String nome;
     private int duracao_min;
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate data;
+    @jakarta.persistence.Column(length=10000)
     private String notas;
 
     @ManyToOne(fetch = FetchType.LAZY)

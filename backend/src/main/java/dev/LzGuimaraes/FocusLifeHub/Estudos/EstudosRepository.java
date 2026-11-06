@@ -11,13 +11,16 @@ import org.springframework.data.domain.Page;
 
 @Repository
 public interface EstudosRepository extends JpaRepository<EstudosModel, Long> {
+    java.util.List<EstudosModel> findByAtividadeId(Long id);
+    void deleteByAtividadeId(Long id);
     Page<EstudosModel> findByMateria_UserId(Long userId, Pageable pageable);
 
     /**
      * Registros de estudo do usuário. `tb-estudos` NÃO tem user_id: a posse vem da
      * matéria ({@code tb-estudos.materia_id -> tb_materia.user_id}).
      */
-    long countByMateria_UserId(Long userId);
+    @Query("select count(e) from EstudosModel e left join e.materia m where e.atividadeId in (select a.id from Atividade a where a.userId=:userId) or (e.atividadeId is null and m.user.id=:userId)")
+    long countByMateria_UserId(@Param("userId") Long userId);
 
     /**
      * Consulta ADMIN dos registros de estudo de UM usuário-alvo.
@@ -32,7 +35,7 @@ public interface EstudosRepository extends JpaRepository<EstudosModel, Long> {
      * teste {@code is null}).
      */
     @Query("select e from EstudosModel e "
-            + "where e.materia.user.id = :userId "
+            + "left join e.materia m where (e.atividadeId in (select a.id from Atividade a where a.userId = :userId) or (e.atividadeId is null and m.user.id = :userId)) "
             + "and (:temMateria = false or e.materia.id = :materiaId) "
             + "and (:temDe = false or e.data >= :de) "
             + "and (:temAte = false or e.data <= :ate)")

@@ -6,15 +6,17 @@ import "./ComoFunciona.css";
 
 const sections = [
   {
-    id: "rotina", icon: "✓", title: "Organize sua rotina", label: "Comece aqui",
+    id: "jornadas", icon: "🧭", title: "Planeje e acompanhe suas jornadas", label: "Comece aqui",
     color: "var(--color-info)",
-    description: "Tarefas e metas para saber o que fazer agora e acompanhar seu progresso.",
+    description: "Cursos, livros, exercícios e objetivos pessoais no mesmo lugar. Cada item é uma atividade.",
     steps: [
-      { title: "Defina seus objetivos", text: "Crie metas com prazo e atualize o progresso conforme avançar." },
-      { title: "Escolha as prioridades do dia", text: "Cadastre tarefas com prioridade e prazo. Filtre por status para focar nas pendências." },
-      { title: "Acompanhe o que foi feito", text: "Atualize o status das tarefas e confira a evolução das metas. Tarefas pendentes ou ativas com prazo hoje recebem lembretes por e-mail." },
+      { title: "Cadastre uma atividade", text: "Informe o título, o período, a unidade e a quantidade desejada. Para uma atividade simples, use uma unidade e total 1. Agrupe por curso, assunto ou projeto se quiser." },
+      { title: "Registre seu avanço", text: "Adicione o que fez ou informe o acumulado, como a página atual. Você pode lançar dias anteriores, corrigir registros e informar sua motivação de 1 a 5, se desejar. O saldo inicial preserva o que você já fez sem inventar histórico." },
+      { title: "Compare posição e tendência", text: "Veja quanto deveria ter feito até hoje, seu ritmo observado e o esforço necessário. Estar adiantado hoje e manter um ritmo suficiente são informações diferentes. Sem histórico, a previsão fica indisponível." },
+      { title: "Guarde seus materiais", text: "Salve links gerais ou vinculados à atividade. Use o cronômetro, as anotações e o player de música na experiência de estudo. Tempo dedicado não vira automaticamente páginas ou aulas concluídas." },
     ],
-    links: [{ label: "Abrir tarefas", path: "/tarefas" }, { label: "Ver metas", path: "/metas" }],
+    note: "Os indicadores usam o fim do dia em America/Cuiaba: hoje é observado e os dias futuros começam amanhã. Dias planejados limitam as oportunidades de execução. Pausas não alteram o prazo e seus dias permanecem na média ao retomar. Com horário, os lembretes são enviados na primeira verificação após esse horário; sem horário, no dia do prazo.",
+    links: [{ label: "Abrir Jornadas", path: "/jornadas" }],
   },
   {
     id: "contas", icon: "💳", title: "Mantenha as contas em dia", label: "Controle financeiro",
@@ -52,17 +54,6 @@ const sections = [
     links: [{ label: "Abrir organização", path: "/planejamento" }, { label: "Simular aporte", path: "/planejamento/aportes" }],
   },
   {
-    id: "estudos", icon: "📝", title: "Estude com mais foco", label: "Aprendizado",
-    color: "var(--color-info)",
-    description: "Organize matérias, registre sessões e acompanhe o tempo dedicado a cada disciplina.",
-    steps: [
-      { title: "Organize as matérias", text: "Cadastre suas disciplinas e escolha os dias da semana em que pretende estudar." },
-      { title: "Registre o tempo e as anotações", text: "Use o cronômetro da matéria ou registre uma sessão com data, duração e notas. No player de música, escolha um estilo e sorteie um vídeo do catálogo." },
-      { title: "Revise sua dedicação", text: "Veja o total de horas por matéria e filtre o histórico das sessões de estudo." },
-    ],
-    links: [{ label: "Abrir matérias", path: "/materias" }, { label: "Ver estudos", path: "/estudos" }],
-  },
-  {
     id: "treinos", icon: "💪", title: "Crie constância nos treinos", label: "Bem-estar",
     color: "var(--color-primary)",
     description: "Planeje exercícios e acompanhe sua execução e consistência semana a semana.",
@@ -85,7 +76,7 @@ export default function ComoFunciona() {
           <span className="how-it-works__eyebrow">⚡ FocusLife</span>
           <h1>Menos pendências. Mais direção.</h1>
           <p>Organize sua rotina, cuide das finanças e acompanhe sua evolução em um só lugar.</p>
-          <Link to="/tarefas" className="how-it-works__start">Começar pelas tarefas <ArrowRight size={16} aria-hidden="true" /></Link>
+          <Link to="/jornadas" className="how-it-works__start">Começar por Jornadas <ArrowRight size={16} aria-hidden="true" /></Link>
         </header>
 
         <div className="how-it-works__intro">

@@ -41,6 +41,7 @@ public record AdminUserDetailDTO(
             PlanejamentoDTO planejamento,
             EstudosDTO estudos,
             long tarefas,
+            long jornadas,
             TreinoDTO treino
     ) {}
 

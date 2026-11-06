@@ -1,6 +1,6 @@
 # ⚡ FocusLife Hub
 
-Hub completo de produtividade pessoal: **tarefas, metas, matérias, estudos com cronômetro, treinos semanais e finanças com carteiras de investimento e despesas** — tudo em um monorepo com backend em Java/Spring Boot e frontend em React/TypeScript.
+Hub completo de produtividade pessoal: **Jornadas (atividades, progresso, materiais e estudos com cronômetro), treinos semanais e finanças com carteiras de investimento e despesas** — tudo em um monorepo com backend em Java/Spring Boot e frontend em React/TypeScript.
 
 > Este documento descreve **exatamente** como o projeto funciona hoje: arquitetura, tecnologias, funcionalidades, modelo de dados, autenticação/segurança, execução local e deploy.
 
@@ -66,7 +66,7 @@ sequenceDiagram
 | Framework | Spring Boot 3.5.7 |
 | Segurança | Spring Security + **java-jwt 4.4.0** (HMAC256) |
 | Persistência | Spring Data JPA / Hibernate + **PostgreSQL 15** |
-| Migrações | **Flyway** (`db/migration/V1..V18`) |
+| Migrações | **Flyway** (`db/migration/V1..V40`) |
 | E-mail | Spring Boot Starter Mail (SMTP Gmail) |
 | Validação | Bean Validation (`spring-boot-starter-validation`) |
 | Build | Maven (wrapper `mvnw`) + Lombok |
@@ -99,20 +99,13 @@ sequenceDiagram
 - **Logout** que revoga o token atual na denylist e limpa o cookie.
 - Edição de perfil (`PUT /users/me`): nome, e-mail e senha (troca de senha invalida todos os tokens antigos).
 
-### ✅ Tarefas
-- CRUD completo com **título, prioridade (Baixa/Média/Alta) e prazo**.
-- **Status**: Pendente → Ativa → Concluída (ou Cancelada).
-- Paginação, filtro por status e atalho **"Do dia"** (`GET /tarefas/do-dia`).
-
-### 🎯 Metas
-- CRUD com **título, descrição, prazo e progresso (0–100%)**.
-- Barra de progresso animada com cor por faixa (🔴 <50%, 🟡 50–80%, 🟢 >80%) e filtro por status.
-
-### 📝 Matérias + Estudos
-- Cadastro de **matérias** (nome, descrição).
-- Registro de **estudos** vinculados a uma matéria (data, duração em minutos, anotações).
-- **Cronômetro de estudo** por matéria (`/materias/{id}/sessoes/iniciar|pausar`) com acumulação do total de horas (fonte da verdade = backend).
-- Total de horas por matéria e filtro por disciplina.
+### 🧭 Jornadas
+- Um único domínio para tarefas, metas pessoais, livros, cursos e exercícios. Cada registro é uma **atividade**, com período, quantidade/unidade, saldo inicial datado, status, prioridade, agrupamento livre e dias planejados opcionais.
+- Progresso por incremento ou acumulado, inclusive retroativo, com correção, exclusão, observação e motivação opcional (1–5). Uma única fonte da verdade: saldo inicial + reprodução cronológica do histórico.
+- Posição no planejamento e tendência de conclusão separadas, ritmo observado, esforço diário/semanal, projeção no prazo e gráfico real × planejado. Regras, exemplos e API em [JORNADAS.md](JORNADAS.md).
+- Links e materiais persistidos por usuário, gerais ou vinculados à atividade. Cronômetro recuperável, sessões, anotações e player de música no detalhe.
+- Menu, Dashboard, guia e consultas administrativas integrados; rotas antigas da SPA redirecionam para `/jornadas`. APIs antigas pessoais respondem **410 Gone**, impedindo novas escritas nas tabelas arquivadas.
+- **V40** migra os três módulos e vincula as sessões existentes. Nenhuma migração anterior é alterada. Quantidades, datas e produção desconhecidas permanecem desconhecidas; metas financeiras de Planejamento continuam independentes.
 
 ### 💪 Treinos (Workouts)
 - **Treinos recorrentes por dia da semana** com exercícios (séries, repetições, peso, duração, distância, anotações e ordem).
@@ -136,9 +129,11 @@ sequenceDiagram
 - **Catálogo de músicas** em **Admin → Músicas**: criação e renomeação de estilos, cadastro de até 100 URLs de vídeos do YouTube por lote, edição e remoção de vídeos. As URLs ficam no banco e são compartilhadas com os usuários. Links repetidos no mesmo estilo são ignorados; para excluir um estilo, primeiro remova seus vídeos.
 
 ### 📧 Notificações por e-mail (job diário)
-- `DailyNotificationJob` envia lembretes de **contas atrasadas ou vencendo hoje** e **tarefas ativas/pendentes do dia** via SMTP Gmail. Executa às **08:00 e novamente a cada hora até 23:00 (America/Cuiaba)** para recuperar falhas temporárias e novos lançamentos. Ao iniciar o backend após as 08:00, também verifica os avisos do dia.
-- Contas pagas, saldos, usuários desativados e tarefas canceladas/concluídas ficam de fora. O registro em `email_log` exclui avisos já enviados das próximas tentativas; os destinatários são carregados na consulta para o job funcionar fora de uma requisição HTTP.
+- `DailyNotificationJob` envia lembretes de **contas atrasadas ou vencendo hoje**  via SMTP Gmail. Executa às **08:00 e novamente a cada hora até 23:00 (America/Cuiaba)** para recuperar falhas temporárias e novos lançamentos. Ao iniciar o backend após as 08:00, também verifica os avisos do dia.
+- Contas pagas e saldos ficam de fora. O registro em `email_log` exclui avisos já enviados das próximas tentativas; os destinatários são carregados na consulta para o job funcionar fora de uma requisição HTTP.
 - Contas atrasadas continuam no lembrete uma vez por dia até serem marcadas como pagas. O e-mail usa as cores do sistema, mostra valores, vencimentos e dias de atraso, separa totais por moeda e oferece acesso à tela de contas.
+
+- `JornadasNotificationJob` verifica atividades a cada 15 minutos em America/Cuiaba. Sem horário: lembrete a partir das 08h no dia do prazo; com horário: nos dias planejados, após o horário e dentro do período. Pausadas, canceladas, concluídas e usuários inativos ficam de fora. O log usa `ATIVIDADE_DIA`; a V40 preserva avisos de tarefas já enviados. A execução manual administrativa chama os dois jobs.
 
 ### 💬 Suporte e sugestões
 - **Suporte** no menu e no Dashboard: chamados de **nova música**, **novo ativo**, **melhoria do sistema** ou **dúvida/problema**, com assunto e descrição. O player de estudos também oferece o atalho **Solicitar uma nova música**.
@@ -150,8 +145,8 @@ sequenceDiagram
 ### 🎨 Experiência / UX
 - **Design system** próprio: `Form` (Input, Select, DateInput, NumberInput, TextArea), `UI` (PageHeader, CardGrid, Spinner, EmptyState, ProgressBar), `Modal`, `Shared`.
 - **Sidebar responsiva** (fixa no desktop, drawer no mobile), notificações **Sonner** e confirmações não-bloqueantes.
-- **LofiPlayer**: em **Matérias → Música para estudar**, o usuário escolhe um estilo (ex.: sertanejo, rock ou lo-fi) e clica em **Sortear**. O backend escolhe um vídeo daquele estilo no catálogo cadastrado pelo admin. **Sortear outro** evita repetir o anterior quando há outras opções; com apenas um vídeo, ele continua disponível. Estilos sem vídeos não aparecem no player.
-- Página **"Como Funciona"** com seis cards expansíveis em ordem sugerida de uso: rotina, contas, investimentos, organização de aportes, estudos e treinos. Os resumos ficam visíveis e apenas um guia de etapas abre por vez, com atalhos para cada área e suporte aos temas claro e escuro.
+- **LofiPlayer**: em **Jornadas → detalhe da atividade → Música para estudar**, o usuário escolhe um estilo (ex.: sertanejo, rock ou lo-fi) e clica em **Sortear**. O backend escolhe um vídeo daquele estilo no catálogo cadastrado pelo admin. **Sortear outro** evita repetir o anterior quando há outras opções; com apenas um vídeo, ele continua disponível. Estilos sem vídeos não aparecem no player.
+- Página **"Como Funciona"** com cinco cards expansíveis em ordem sugerida de uso: jornadas, contas, investimentos, organização de aportes e treinos. Os resumos ficam visíveis e apenas um guia de etapas abre por vez, com atalhos para cada área e suporte aos temas claro e escuro.
 
 O catálogo é persistido em `musica_estilo` e `musica_video`, criadas pela migração **V38**. O vídeo anteriormente fixo é cadastrado no estilo **Lo-fi**. O player usa o catálogo do banco; antigas preferências locais ficam sem uso. O cadastro valida vídeos do YouTube no servidor, normaliza a URL e elimina duplicatas por vídeo dentro do estilo. A reprodução começa pelo botão de play do YouTube; disponibilidade e permissão de incorporação dependem do vídeo escolhido.
 
@@ -187,10 +182,12 @@ Tabelas gerenciadas pelo Hibernate (`ddl-auto=update`) + evoluções explícitas
 
 ```mermaid
 erDiagram
-    TB_USER ||--o{ TB_TAREFAS : "user"
-    TB_USER ||--o{ TB_METAS : "user"
-    TB_USER ||--o{ TB_MATERIA : "user"
-    TB_MATERIA ||--o{ ESTUDOS : "estudos"
+    TB_USER ||--o{ JORNADA_ATIVIDADE : "user_id"
+    JORNADA_ATIVIDADE ||--o{ JORNADA_PROGRESSO : "atividade_id"
+    JORNADA_ATIVIDADE ||--o{ ESTUDOS : "atividade_id"
+    JORNADA_ATIVIDADE ||--o{ SESSAO_ESTUDO : "atividade_id"
+    TB_USER ||--o{ JORNADA_MATERIAL : "user_id"
+    JORNADA_ATIVIDADE |o--o{ JORNADA_MATERIAL : "opcional"
     TB_USER ||--o{ CARTEIRA_INVESTIMENTO : "user"
     TB_USER ||--o{ CARTEIRA_DIVIDAS : "user"
     CARTEIRA_INVESTIMENTO ||--o{ ATIVO : "carteiraInvestimento"
@@ -205,10 +202,11 @@ erDiagram
 | Entidade | Tabela | Destaques |
 |---|---|---|
 | `UserModel` | `tb_user` | `nome`, `email`, `password` (BCrypt), `enabled`, `activationCode` + `activationCodeExpiration`, `resetPasswordToken` + `resetPasswordTokenExpiration`, `tokenVersion`, `role` (USER/ADMIN) |
-| `TarefasModel` | `tb_tarefas` | `titulo`, `status` (enum), `prioridade` (enum), `prazo` |
-| `MetasModel` | `tb_metas` | `titulo`, `descricao`, `progresso` (0–100), `prazo`, `status` (enum) |
-| `MateriaModel` | `tb_materia` | `nome`, `descricao`; `OneToMany` de estudos e sessões |
-| `EstudosModel` | `tb-estudos` | `nome`, `duracaoMin`, `data`, `notas`, `materia` |
+| `Atividade` | `jornada_atividade`, `jornada_dia` | usuário, título, datas, unidade, total, saldo inicial com referência, status, agrupamento e versão |
+| `Progresso` | `jornada_progresso` | incremento/acumulado ordenado por data e ID, UUID idempotente, observação e motivação opcional |
+| `Material` | `jornada_material` | usuário, atividade opcional, título, URL HTTP/HTTPS e descrição |
+| `EstudosModel`, `SessaoEstudo` | `tb-estudos`, `sessao_estudo` | vínculo `atividade_id`, duração e histórico preservados; tempo não vira produção |
+| Arquivo dos módulos anteriores | `tb_tarefas`, `tb_metas`, `tb_materia`, `materia_dias_semana` | preservado para conferência da V40; sem API pessoal de escrita |
 | `CarteiraModel` (base) | — | `id`, `nome`, `moeda`, `user` |
 | `CarteiraInvestimentoModel` | `carteira_investimento` | herda base |
 | `CarteiraDividasModel` | `carteira_dividas` | herda base |
@@ -257,17 +255,10 @@ Base: `/api` não existe — os endpoints são diretos na raiz da aplicação. R
 
 **Validação isolada:** `./mvnw -Dtest='Suporte*Test,MailServiceTest,DailyNotificationJobTest,EmailTemplateTest' test`, em `backend/`. Banco H2 e SMTP simulado; nenhum e-mail real é enviado.
 
-### Tarefas — `/tarefas`
-`GET /all?page=&size=` · `GET /do-dia` · `GET /all/{id}` · `POST /create` · `PUT /alter/{id}` · `DELETE /delete/{id}`
+### Jornadas — `/jornadas`
+`GET|POST /jornadas` · `GET|PUT|DELETE /jornadas/{id}` · `POST /jornadas/{id}/progresso` · `PUT|DELETE /jornadas/{id}/progresso/{progressoId}` · `GET|POST /jornadas/materiais` · `PUT|DELETE /jornadas/materiais/{id}` · `POST /jornadas/{id}/sessoes` · `PUT /jornadas/{id}/sessoes/{sessaoId}/pausar` · `POST /jornadas/{id}/estudos` · `PUT|DELETE /jornadas/{id}/estudos/{notaId}`.
 
-### Metas — `/metas`
-`GET /all?page=&size=` · `GET /all/{id}` · `POST /create` · `PUT /alter/{id}` · `DELETE /delete/{id}`
-
-### Matérias — `/materias`
-`GET /all?page=&size=` · `GET /all/{id}` · `POST create` · `PUT alter/{id}` · `DELETE delete/{id}` · `POST /{id}/sessoes/iniciar` · `PUT /{id}/sessoes/{sessaoId}/pausar` · `GET /{id}/tempo-total`
-
-### Estudos — `/estudos`
-`GET /all?page=&size=` · `GET /all/{id}` · `POST /create` · `PUT /alter/{id}` · `DELETE /delete/{id}`
+Admin somente leitura: `GET /admin/users/{usuarioId}/jornadas` e `GET /admin/users/{usuarioId}/jornadas/{id}`. Veja os contratos e a convenção de datas em [JORNADAS.md](JORNADAS.md). As antigas APIs `/tarefas`, `/metas`, `/materias` e `/estudos` respondem 410 para usuários autenticados.
 
 ### Carteiras
 **Investimento** — `/carteiras-investimento`: `GET /all` · `GET /all/{id}` · `POST /create` · `POST /duplicar/{id}` · `PUT /alter/{id}` · `DELETE /delete/{id}`
@@ -399,7 +390,8 @@ FocusLife/
 │       ├── java/dev/LzGuimaraes/FocusLifeHub/
 │       │   ├── Auth/            # AuthController, MailService
 │       │   ├── User/            # UserModel, UserRepository, UserService, DTOs
-│       │   ├── Tarefas/ Metas/ Materia/ Estudos/
+│       │   ├── Jornadas/        # Atividades, progresso, cálculos, materiais e estudos
+│       │   ├── Tarefas/ Metas/ Materia/ Estudos/ # Arquivo e sessões preservadas
 │       │   ├── Carteira/        # Investimento e Dívidas
 │       │   ├── Despesa/ Financeiro/ Ativo/ AtivoCadastro/
 │       │   ├── Treino/          # Workout, sessões, execução
@@ -408,7 +400,7 @@ FocusLife/
 │       │                        # TokenBlacklistService, RateLimitService, JWTUserData
 │       └── resources/
 │           ├── application.properties
-│           └── db/migration/    # Flyway V1..V18
+│           └── db/migration/    # Flyway V1..V40
 └── frontend/
     ├── Dockerfile               # Build Node 22 → nginx 1.27
     ├── nginx.conf               # SPA + security headers
@@ -416,7 +408,7 @@ FocusLife/
     └── src/
         ├── api/api.ts           # Cliente Axios (withCredentials)
         ├── auth/                # AuthProvider, PrivateRoute
-        ├── pages/               # 16 páginas (Dashboard..Admin)
+        ├── pages/               # Páginas (Jornadas, Dashboard, Finanças, Admin...)
         ├── components/          # Layout, Form, UI, Modal, Shared,
         │                        # LofiPlayer, EstudoTimer, Treino*, InvestInfo...
         ├── types/               # Tipos espelhando os DTOs do backend

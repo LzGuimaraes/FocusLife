@@ -71,6 +71,7 @@ class AdminUserDetailServiceTest {
     private WorkoutRepository workoutRepository;
     private WorkoutSessionRepository workoutSessionRepository;
 
+    private dev.LzGuimaraes.FocusLifeHub.Jornadas.AtividadeRepository atividades;
     private AdminUserDetailService service;
 
     @BeforeEach
@@ -96,7 +97,9 @@ class AdminUserDetailServiceTest {
         workoutRepository = mock(WorkoutRepository.class);
         workoutSessionRepository = mock(WorkoutSessionRepository.class);
 
+        atividades = mock(dev.LzGuimaraes.FocusLifeHub.Jornadas.AtividadeRepository.class);
         service = new AdminUserDetailService(
+                atividades,
                 userRepository,
                 carteiraInvestimentoRepository,
                 carteiraDividasRepository,
@@ -155,6 +158,7 @@ class AdminUserDetailServiceTest {
         when(sessaoEstudoRepository.countDoUsuario(id)).thenReturn(30L);
 
         when(tarefasRepository.countByUserId(id)).thenReturn(12L);
+        when(atividades.countByUserId(id)).thenReturn(18L);
         when(workoutRepository.countByUserId(id)).thenReturn(5L);
         when(workoutSessionRepository.countByUserId(id)).thenReturn(40L);
 
@@ -186,6 +190,7 @@ class AdminUserDetailServiceTest {
         assertThat(dto.resumo().estudos().sessoesEstudo()).isEqualTo(30L);
 
         assertThat(dto.resumo().tarefas()).isEqualTo(12L);
+        assertThat(dto.resumo().jornadas()).isEqualTo(18L);
         assertThat(dto.resumo().treino().treinos()).isEqualTo(5L);
         assertThat(dto.resumo().treino().sessoes()).isEqualTo(40L);
     }

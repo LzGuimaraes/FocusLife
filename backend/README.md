@@ -1,6 +1,6 @@
 # FocusLifeHub
 
-Backend em Java com Spring Boot para gerenciar estudos, tarefas, metas, finanças, contas e matérias, com autenticação JWT e PostgreSQL.
+Backend em Java com Spring Boot para gerenciar Jornadas (atividades, progresso e estudos), finanças e contas, com autenticação JWT e PostgreSQL.
 
 ## Tecnologias
 - Spring Boot
@@ -56,33 +56,16 @@ Variáveis de ambiente necessárias (application.properties):
 - PUT /contas/alter/{id}
 - DELETE /contas/delete/{id}
 
-### Matérias (/materias)
-- GET /materias/all
-- GET /materias/all/{id}
-- POST /materias/create
-- PUT /materias/alter/{id}
-- DELETE /materias/delete/{id}
+### Jornadas (/jornadas)
+Modelo, cálculos, migração V40 e contratos completos em [JORNADAS.md](../JORNADAS.md).
 
-### Estudos (/estudos)
-- GET /estudos/all
-- GET /estudos/all/{id}
-- POST /estudos/create
-- PUT /estudos/alter/{id}
-- DELETE /estudos/delete/{id}
-
-### Metas (/metas)
-- GET /metas/all
-- GET /metas/all/{id}
-- POST /metas/create
-- PUT /metas/alter/{id}
-- DELETE /metas/delete/{id}
-
-### Tarefas (/tarefas)
-- GET /tarefas/all
-- GET /tarefas/all/{id}
-- POST /tarefas/create
-- PUT /tarefas/alter/{id}
-- DELETE /tarefas/delete/{id}
+- `GET|POST /jornadas`; `GET|PUT|DELETE /jornadas/{id}`.
+- `POST /jornadas/{id}/progresso`; `PUT|DELETE /jornadas/{id}/progresso/{progressoId}`.
+- `GET|POST /jornadas/materiais`; `PUT|DELETE /jornadas/materiais/{id}`.
+- `POST /jornadas/{id}/sessoes`; `PUT /jornadas/{id}/sessoes/{sessaoId}/pausar`.
+- `POST /jornadas/{id}/estudos`; `PUT|DELETE /jornadas/{id}/estudos/{notaId}`.
+- ADMIN somente leitura: `GET /admin/users/{usuarioId}/jornadas[/{id}]`.
+- APIs pessoais antigas `/tarefas`, `/metas`, `/materias`, `/estudos`: **410 Gone**. Tabelas anteriores preservadas como arquivo.
 
 ## Modelos e Tabelas (JPA)
 
@@ -106,16 +89,23 @@ Variáveis de ambiente necessárias (application.properties):
 - saldo (Float)
 - financas (ManyToOne -> FinancasModel, FK financas_id)
 
-### MateriaModel (tb_materia)
+### Arquivo legado: MateriaModel (tb_materia)
 - Campos conforme entidade (id, nome, etc.)
 
 ### EstudosModel (tb-estudos)
-- Campos conforme entidade
+- Anotações e duração manual vinculadas por `atividade_id`; associação antiga preservada para conferência.
 
-### MetasModel (tb_metas)
+### Jornadas
+- `jornada_atividade`: único domínio ativo, com versão para concorrência.
+- `jornada_dia`: dias planejados.
+- `jornada_progresso`: lançamentos que, com o saldo inicial, determinam o realizado.
+- `jornada_material`: recursos isolados por usuário.
+- `sessao_estudo`: cronômetro, agora com `atividade_id`.
+
+### Arquivo legado: MetasModel (tb_metas)
 - Campos conforme entidade (inclui relação com User)
 
-### TarefasModel (tb_tarefas)
+### Arquivo legado: TarefasModel (tb_tarefas)
 - Campos conforme entidade
 
 Obs.: As entidades Materia, Estudos, Metas e Tarefas possuem mapeamentos complementares (enums e relações) conforme pacote.

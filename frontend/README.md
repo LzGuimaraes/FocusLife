@@ -61,3 +61,9 @@ Crie branches, abra PRs e mantenha o padrão de código e organização.
 
 ## Licença
 Defina a licença do projeto (ex.: MIT) conforme necessidade.
+
+## Jornadas
+
+`/jornadas` reúne as atividades e materiais; `/jornadas/:id` apresenta histórico, previsões calculadas pelo backend, gráfico SVG, sessões, anotações e player. Os antigos caminhos de Tarefas, Matérias, Metas e Estudos redirecionam para essa seção. O Dashboard mostra contagens reais de atividades. ADMIN consulta o usuário-alvo em `/admin/usuarios/:usuarioId/jornadas[/:id]`, somente leitura.
+
+A interface usa `types/jornadas.ts`, os formulários compartilhados e `Jornadas.css`, com temas e layout responsivo. Não calcula regras de planejamento no navegador. Datas de entrada e do cronômetro respeitam America/Cuiaba. Veja [JORNADAS.md](../JORNADAS.md).

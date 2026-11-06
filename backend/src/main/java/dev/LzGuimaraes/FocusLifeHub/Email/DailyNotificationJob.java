@@ -23,9 +23,6 @@ import dev.LzGuimaraes.FocusLifeHub.Auth.MailService;
 import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaModel;
 import dev.LzGuimaraes.FocusLifeHub.Despesa.DespesaRepository;
 import dev.LzGuimaraes.FocusLifeHub.Despesa.TipoLancamento;
-import dev.LzGuimaraes.FocusLifeHub.Tarefas.Enum.TarefaStatus;
-import dev.LzGuimaraes.FocusLifeHub.Tarefas.TarefasModel;
-import dev.LzGuimaraes.FocusLifeHub.Tarefas.TarefasRepository;
 import dev.LzGuimaraes.FocusLifeHub.User.UserModel;
 
 @Component
@@ -34,7 +31,6 @@ public class DailyNotificationJob {
     private static final Logger log = LoggerFactory.getLogger(DailyNotificationJob.class);
 
     private final DespesaRepository despesaRepository;
-    private final TarefasRepository tarefasRepository;
     private final EmailLogRepository emailLogRepository;
     private final MailService mailService;
     private final Clock clock;
@@ -44,17 +40,15 @@ public class DailyNotificationJob {
 
     @Autowired
     public DailyNotificationJob(DespesaRepository despesaRepository,
-                                TarefasRepository tarefasRepository,
                                 EmailLogRepository emailLogRepository,
                                 MailService mailService) {
-        this(despesaRepository, tarefasRepository, emailLogRepository, mailService,
+        this(despesaRepository, emailLogRepository, mailService,
                 Clock.system(ZoneId.of("America/Cuiaba")));
     }
 
-    DailyNotificationJob(DespesaRepository despesaRepository, TarefasRepository tarefasRepository,
+    DailyNotificationJob(DespesaRepository despesaRepository,
                          EmailLogRepository emailLogRepository, MailService mailService, Clock clock) {
         this.despesaRepository = despesaRepository;
-        this.tarefasRepository = tarefasRepository;
         this.emailLogRepository = emailLogRepository;
         this.mailService = mailService;
         this.clock = clock;
@@ -91,11 +85,7 @@ public class DailyNotificationJob {
         } catch (Exception ex) {
             log.error("Falha no bloco de contas vencendo", ex);
         }
-        try {
-            enviarEmailsDeTarefas(hoje);
-        } catch (Exception ex) {
-            log.error("Falha no bloco de tarefas do dia", ex);
-        }
+
     }
 
     /**
@@ -147,51 +137,4 @@ public class DailyNotificationJob {
         emailLogRepository.saveAll(registros);
     }
 
-    /**
-     * Seleciona as tarefas a notificar na data: prazo = data, ativas/pendentes
-     * e que ainda NÃO possuem email_log (TAREFA_DIA) para a mesma tarefa/data.
-     */
-    public List<TarefasModel> selecionarTarefasParaNotificar(LocalDate data) {
-        return tarefasRepository.buscarTarefasParaNotificar(data,
-                List.of(TarefaStatus.Ativa, TarefaStatus.PENDENTE), TipoEmailLog.TAREFA_DIA);
-    }
-
-    private void enviarEmailsDeTarefas(LocalDate data) {
-        List<TarefasModel> tarefas = selecionarTarefasParaNotificar(data);
-        log.info("Notificações de tarefas: {} tarefa(s) pendente(s) para {}", tarefas.size(), data);
-
-        Map<UserModel, List<TarefasModel>> porUsuario = tarefas.stream()
-                .filter(t -> t.getUser() != null)
-                .collect(Collectors.groupingBy(TarefasModel::getUser));
-
-        for (Map.Entry<UserModel, List<TarefasModel>> entry : porUsuario.entrySet()) {
-            try {
-                UserModel usuario = entry.getKey();
-                List<TarefasModel> tarefasDoUsuario = entry.getValue();
-                log.info("Enviando e-mail de tarefas do dia para {} ({} tarefas)", usuario.getEmail(), tarefasDoUsuario.size());
-                enviarEmailTarefasParaUsuario(usuario, tarefasDoUsuario, data);
-            } catch (Exception ex) {
-                log.error("Falha ao enviar e-mail de tarefas do dia para o usuário {} (tarefas: {})",
-                        entry.getKey().getEmail(),
-                        entry.getValue().stream().map(TarefasModel::getId).collect(Collectors.toList()),
-                        ex);
-            }
-        }
-    }
-
-    private void enviarEmailTarefasParaUsuario(UserModel usuario, List<TarefasModel> tarefas, LocalDate data) throws Exception {
-        String subject = "FocusLife Hub — Tarefas do dia (" + data + ")";
-        mailService.sendHtml(usuario.getEmail(), subject, EmailTemplate.tarefasDoDia(data, tarefas));
-
-        List<EmailLogModel> registros = tarefas.stream().map(tarefa -> {
-            EmailLogModel emailLog = new EmailLogModel();
-            emailLog.setUsuario_id(usuario.getId());
-            emailLog.setTipo(TipoEmailLog.TAREFA_DIA);
-            emailLog.setReferencia_id(tarefa.getId());
-            emailLog.setData_referencia(data);
-            emailLog.setEnviado_em(LocalDateTime.now(clock));
-            return emailLog;
-        }).toList();
-        emailLogRepository.saveAll(registros);
-    }
 }

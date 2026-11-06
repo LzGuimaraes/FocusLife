@@ -28,6 +28,7 @@ interface ResumoDTO {
   };
   estudos: { materias: number; estudos: number; sessoesEstudo: number };
   tarefas: number;
+  jornadas: number;
   treino: { treinos: number; sessoes: number };
 }
 
@@ -80,9 +81,7 @@ export default function AdminUsuarioDetalhe() {
 
   const modulos = usuario
     ? [
-        { chave: "tarefas", icone: "✓", nome: "Tarefas", descricao: "Tarefas cadastradas", contagem: usuario.resumo.tarefas },
-        { chave: "metas", icone: "🎯", nome: "Metas", descricao: "Metas cadastradas", contagem: null },
-        { chave: "estudos", icone: "📖", nome: "Estudos", descricao: "Registros de estudo", contagem: usuario.resumo.estudos.estudos },
+        { chave: "jornadas", icone: "🧭", nome: "Jornadas", descricao: "Atividades, progresso e estudos", contagem: usuario.resumo.jornadas },
         { chave: "investimentos", icone: "📈", nome: "Investimentos", descricao: "Posições nas carteiras de investimento", contagem: usuario.resumo.financas.ativos },
         { chave: "contas", icone: "🧾", nome: "Contas", descricao: "Contas e saldos das carteiras de dívidas", contagem: usuario.resumo.financas.despesas },
       ]
@@ -155,12 +154,12 @@ export default function AdminUsuarioDetalhe() {
               { label: "Registros de histórico", valor: usuario.resumo.planejamento.registrosHistorico },
             ]} />
             <GrupoResumo titulo="📖 Estudos" itens={[
-              { label: "Matérias", valor: usuario.resumo.estudos.materias },
+
               { label: "Registros de estudo", valor: usuario.resumo.estudos.estudos },
               { label: "Sessões de estudo", valor: usuario.resumo.estudos.sessoesEstudo },
             ]} />
-            <GrupoResumo titulo="✓ Tarefas" itens={[
-              { label: "Tarefas", valor: usuario.resumo.tarefas },
+            <GrupoResumo titulo="🧭 Jornadas" itens={[
+              { label: "Atividades", valor: usuario.resumo.jornadas },
             ]} />
             <GrupoResumo titulo="💪 Treino" itens={[
               { label: "Treinos", valor: usuario.resumo.treino.treinos },

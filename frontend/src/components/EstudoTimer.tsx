@@ -1,77 +1,45 @@
-import { useEffect, useRef, useState } from "react";
-import api from "../api/api";
+import { useEffect, useState } from 'react';
+import api from '../api/api';
+import type { Atividade } from '../types/jornadas';
 
 interface Props {
-  materiaId: number;
-  totalSegundosIniciais: number;
+  atividade: Atividade;
+  readonly?: boolean;
+  busy: boolean;
+  executar: (acao: () => Promise<unknown>, sucesso?: string) => Promise<void>;
 }
 
-function fmtHHMMSS(segundos: number): string {
-  const s = Math.max(0, Math.floor(segundos));
-  const h = String(Math.floor(s / 3600)).padStart(2, "0");
-  const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
-  const sec = String(s % 60).padStart(2, "0");
-  return `${h}:${m}:${sec}`;
-}
+/** O backend preserva e recupera sessões abertas; o contador local apenas atualiza a exibição. */
+export default function EstudoTimer({ atividade, readonly = false, busy, executar }: Props) {
+  const [agora, setAgora] = useState(Date.now());
+  const abertas = atividade.sessoes.filter(sessao => !sessao.fim);
 
-export default function EstudoTimer({ materiaId, totalSegundosIniciais }: Props) {
-  const [totalSegundos, setTotalSegundos] = useState<number>(totalSegundosIniciais);
-  const [sessaoId, setSessaoId] = useState<number | null>(null);
-  const [running, setRunning] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const startRef = useRef<number | null>(null);
-
-  // Cronômetro a cada 1s; clearInterval no cleanup (desmontar ou ao parar)
   useEffect(() => {
-    if (!running) return;
-    startRef.current = Date.now();
-    setElapsed(0);
-    const id = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - (startRef.current ?? Date.now())) / 1000));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [running]);
+    if (!abertas.length) return;
+    const timer = setInterval(() => setAgora(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [abertas.length]);
 
-  const iniciar = async () => {
-    try {
-      const r = await api.post(`/materias/${materiaId}/sessoes/iniciar`);
-      setSessaoId(r.data.sessaoId);
-      setRunning(true);
-    } catch {
-      // falha silenciosa (ex.: já existe sessão aberta)
-    }
-  };
-
-  const pausar = async () => {
-    if (sessaoId == null) return;
-    try {
-      const r = await api.put(`/materias/${materiaId}/sessoes/${sessaoId}/pausar`);
-      setTotalSegundos(r.data.totalSegundosMateria); // fonte da verdade = backend
-    } catch {
-      // falha silenciosa
-    }
-    setRunning(false);
-    setSessaoId(null);
-  };
-
-  // Enquanto roda: total acumulado + tempo da sessão atual
-  const displaySegundos = totalSegundos + elapsed;
+  // O deslocamento de America/Cuiaba vem explícito na API, independente do fuso do navegador.
+  const segundos = atividade.totalSegundos + abertas.reduce((soma, sessao) =>
+    soma + Math.max(0, Math.floor((agora - Date.parse(sessao.inicio)) / 1000)), 0);
+  const duracao = [Math.floor(segundos / 3600), Math.floor(segundos / 60) % 60, segundos % 60]
+    .map(n => String(n).padStart(2, '0')).join(':');
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-      <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700, fontSize: "14px", color: "var(--color-text)" }}>
-        ⏱ {fmtHHMMSS(displaySegundos)}
-      </span>
-      <button
-        type="button"
-        onClick={running ? pausar : iniciar}
-        style={{ padding: "6px 12px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: 600, fontSize: "12px", background: running ? "#fef3c7" : "#d1fae5", color: running ? "#b45309" : "#047857" }}
-      >
-        {running ? "⏸ Pausar" : "▶ Iniciar"}
-      </button>
+    <div className="jornada-timer">
+      <strong>⏱ {duracao}</strong>
+      {!readonly && (abertas.length ? abertas.map(sessao => (
+        <button key={sessao.id} className="jornada-button" disabled={busy}
+          onClick={() => void executar(() => api.put(`/jornadas/${atividade.id}/sessoes/${sessao.id}/pausar`), 'Cronômetro pausado')}>
+          Pausar sessão #{sessao.id}
+        </button>
+      )) : (
+        <button className="jornada-button primary" disabled={busy || ['PAUSADA', 'CANCELADA'].includes(atividade.status)}
+          onClick={() => void executar(() => api.post(`/jornadas/${atividade.id}/sessoes`), 'Cronômetro iniciado')}>
+          Iniciar cronômetro
+        </button>
+      ))}
     </div>
   );
 }
-
-// ── Exemplo de uso (componente plugado na tela de matérias) ──
-// <EstudoTimer materiaId={materia.id} totalSegundosIniciais={materia.totalSegundos ?? 0} />

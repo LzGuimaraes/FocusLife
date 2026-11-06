@@ -41,6 +41,7 @@ import dev.LzGuimaraes.FocusLifeHub.User.UserRepository;
 @Service
 public class AdminUserDetailService {
 
+    private final dev.LzGuimaraes.FocusLifeHub.Jornadas.AtividadeRepository atividades;
     private final UserRepository userRepository;
     private final CarteiraInvestimentoRepository carteiraInvestimentoRepository;
     private final CarteiraDividasRepository carteiraDividasRepository;
@@ -62,7 +63,7 @@ public class AdminUserDetailService {
     private final WorkoutRepository workoutRepository;
     private final WorkoutSessionRepository workoutSessionRepository;
 
-    public AdminUserDetailService(UserRepository userRepository,
+    public AdminUserDetailService(dev.LzGuimaraes.FocusLifeHub.Jornadas.AtividadeRepository atividades, UserRepository userRepository,
                                   CarteiraInvestimentoRepository carteiraInvestimentoRepository,
                                   CarteiraDividasRepository carteiraDividasRepository,
                                   AtivoRepository ativoRepository,
@@ -82,6 +83,7 @@ public class AdminUserDetailService {
                                   TarefasRepository tarefasRepository,
                                   WorkoutRepository workoutRepository,
                                   WorkoutSessionRepository workoutSessionRepository) {
+        this.atividades = atividades;
         this.userRepository = userRepository;
         this.carteiraInvestimentoRepository = carteiraInvestimentoRepository;
         this.carteiraDividasRepository = carteiraDividasRepository;
@@ -140,6 +142,7 @@ public class AdminUserDetailService {
                 planejamento,
                 estudos,
                 tarefasRepository.countByUserId(userId),
+                atividades.countByUserId(userId),
                 treino);
 
         String role = user.getRole() != null ? user.getRole().name() : "USER";

@@ -65,6 +65,9 @@ class AdminUserDetailControllerTest {
     @MockitoBean
     private DailyNotificationJob dailyNotificationJob;
 
+    @MockitoBean
+    private dev.LzGuimaraes.FocusLifeHub.Jornadas.JornadasNotificationJob jornadasNotificationJob;
+
     private UserModel user(Long id, Role role, boolean enabled) {
         UserModel u = new UserModel();
         u.setId(id);
@@ -89,6 +92,7 @@ class AdminUserDetailControllerTest {
                         new AdminUserDetailDTO.PlanejamentoDTO(3, 5, 2, 1, true, 10, 7),
                         new AdminUserDetailDTO.EstudosDTO(4, 20, 30),
                         12,
+                        8,
                         new AdminUserDetailDTO.TreinoDTO(5, 40)));
     }
 

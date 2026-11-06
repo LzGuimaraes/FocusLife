@@ -25,13 +25,16 @@ public class AdminController {
     private final AdminService adminService;
     private final AdminUserDetailService adminUserDetailService;
     private final DailyNotificationJob dailyNotificationJob;
+    private final dev.LzGuimaraes.FocusLifeHub.Jornadas.JornadasNotificationJob jornadasNotificationJob;
 
     public AdminController(AdminService adminService,
                            AdminUserDetailService adminUserDetailService,
-                           DailyNotificationJob dailyNotificationJob) {
+                           DailyNotificationJob dailyNotificationJob,
+                           dev.LzGuimaraes.FocusLifeHub.Jornadas.JornadasNotificationJob jornadasNotificationJob) {
         this.adminService = adminService;
         this.adminUserDetailService = adminUserDetailService;
         this.dailyNotificationJob = dailyNotificationJob;
+        this.jornadasNotificationJob = jornadasNotificationJob;
     }
 
     @GetMapping("/users")
@@ -62,6 +65,7 @@ public class AdminController {
     @PostMapping("/jobs/daily/run")
     public ResponseEntity<MessageResponse> runDailyJob() {
         dailyNotificationJob.run();
+        jornadasNotificationJob.run();
         return ResponseEntity.ok(new MessageResponse("Job diário executado."));
     }
 }

@@ -8,10 +8,8 @@ interface LayoutProps { children: ReactNode; }
 
 const baseNavItems = [
   { path: "/dashboard", label: "Dashboard", icon: "🏠", color: "#6366f1" },
-  { path: "/tarefas",   label: "Tarefas",   icon: "✓",  color: "#06b6d4" },
-  { path: "/materias",  label: "Matérias",  icon: "📝", color: "#ec4899" },
+  { path: "/jornadas", label: "Jornadas", icon: "🧭", color: "#06b6d4" },
   { path: "/treinos",   label: "Treinos",   icon: "💪", color: "#8b5cf6" },
-  { path: "/metas",     label: "Metas",     icon: "🎯", color: "#f59e0b" },
   { path: "/financas",  label: "Finanças",  icon: "💰", color: "#10b981" },
   { path: "/como-funciona", label: "Como Funciona", icon: "❓", color: "#8b5cf6" },
   { path: "/suporte", label: "Suporte", icon: "💬", color: "#6366f1" },
@@ -68,6 +66,7 @@ export default function Layout({ children }: LayoutProps) {
             const active = location.pathname === item.path
               || (item.path === "/dashboard" && location.pathname === "/")
               || (item.path === "/financas" && location.pathname.startsWith("/financas"))
+              || (item.path === "/jornadas" && location.pathname.startsWith("/jornadas"))
               || (item.path === "/admin" && location.pathname.startsWith("/admin"));
             return (
               <button key={item.path} onClick={() => { navigate(item.path); setSidebarOpen(false); }}
